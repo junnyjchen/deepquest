@@ -50,7 +50,8 @@ export const adminApi = {
 };
 
 // ============ Users API ============
-// 区块链DAPP标准：用户数据通过钱包地址标识，无需注册
+// BSC区块链DAPP标准：用户数据通过钱包地址标识，无需注册
+// BSC使用以太坊格式地址（0x开头，40位十六进制）
 export const usersApi = {
   // 获取用户列表
   getList: (params: {
@@ -101,8 +102,8 @@ export const usersApi = {
   // 获取用户团队（直接推荐人）
   getTeam: (address: string) => request<any[]>(`/api/v1/users/${address}/team`),
   
-  // ============ 区块链DAPP标准：用户同步API ============
-  // 从链上同步单个用户
+  // ============ BSC区块链DAPP标准：用户同步API ============
+  // 从BSC链上同步单个用户
   syncUser: (wallet_address: string) =>
     request<any>('/api/v1/users/sync', {
       method: 'POST',
@@ -114,7 +115,7 @@ export const usersApi = {
       method: 'POST',
       body: JSON.stringify({ wallet_addresses }),
     }),
-  // 获取用户链上信息
+  // 获取用户BSC链上信息
   getChainInfo: (address: string) => request<any>(`/api/v1/users/${address}/chain-info`),
 };
 

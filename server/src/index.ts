@@ -176,8 +176,8 @@ app.get('/api/v1/users/:address/team', async (req, res) => {
   }
 });
 
-// ============ Blockchain DAPP: User Sync ============
-// 区块链DAPP标准：同步单个用户（模拟从链上获取）
+// ============ BSC Blockchain DAPP: User Sync ============
+// BSC区块链DAPP标准：同步单个用户（模拟从链上获取）
 app.post('/api/v1/users/sync', async (req, res) => {
   try {
     const { wallet_address } = req.body;
@@ -186,10 +186,10 @@ app.post('/api/v1/users/sync', async (req, res) => {
       return res.status(400).json({ error: '钱包地址必填' });
     }
     
-    // 验证钱包地址格式（Solana地址以A-F或数字开头，长度32-44）
-    const isValidSolanaAddress = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet_address);
-    if (!isValidSolanaAddress) {
-      return res.status(400).json({ error: '无效的钱包地址格式' });
+    // 验证BSC钱包地址格式（以太坊格式：0x开头，40位十六进制）
+    const isValidBSCAddress = /^0x[0-9a-fA-F]{40}$/.test(wallet_address);
+    if (!isValidBSCAddress) {
+      return res.status(400).json({ error: '无效的BSC钱包地址格式（应为 0x 开头，40位十六进制字符）' });
     }
     
     const result = await syncUserFromChain(wallet_address);
@@ -200,7 +200,7 @@ app.post('/api/v1/users/sync', async (req, res) => {
   }
 });
 
-// 区块链DAPP标准：批量同步用户
+// BSC区块链DAPP标准：批量同步用户
 app.post('/api/v1/users/sync/batch', async (req, res) => {
   try {
     const { wallet_addresses } = req.body;
@@ -221,12 +221,12 @@ app.post('/api/v1/users/sync/batch', async (req, res) => {
   }
 });
 
-// 区块链DAPP标准：获取用户链上信息（模拟）
+// BSC区块链DAPP标准：获取用户链上信息（模拟）
 app.get('/api/v1/users/:address/chain-info', async (req, res) => {
   try {
     const { address } = req.params;
     
-    // 模拟从区块链获取用户信息
+    // 模拟从BSC区块链获取用户信息
     // 在真实场景中，这里会调用合约方法
     const chainInfo = {
       wallet_address: address,

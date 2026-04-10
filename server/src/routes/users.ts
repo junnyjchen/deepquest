@@ -3,13 +3,27 @@ import { getSupabaseClient } from '../storage/database/supabase-client';
 const supabase = getSupabaseClient();
 
 /**
- * 区块链DAPP标准：模拟从链上同步用户数据
+ * BSC区块链DAPP标准：模拟从链上同步用户数据
+ * BSC使用以太坊格式地址（0x开头，40位十六进制）
  * 在真实的DAPP中，这会调用合约的 getUserInfo 或类似方法来获取链上数据
  * 这里我们提供两种同步方式：
  * 1. 同步单个用户（通过钱包地址）
  * 2. 批量同步（从链上事件中获取）
  */
+
+// BSC地址验证正则（以太坊格式）
+const BSC_ADDRESS_REGEX = /^0x[0-9a-fA-F]{40}$/;
+
+export function isValidBSCAddress(address: string): boolean {
+  return BSC_ADDRESS_REGEX.test(address);
+}
+
 export async function syncUserFromChain(walletAddress: string) {
+  // 验证BSC地址格式
+  if (!isValidBSCAddress(walletAddress)) {
+    throw new Error('无效的BSC钱包地址格式（应为 0x 开头，40位十六进制）');
+  }
+  
   // 模拟从区块链合约获取用户数据
   // 在真实场景中，这里会调用合约方法
   // const chainUser = await contract.getUserInfo(walletAddress);

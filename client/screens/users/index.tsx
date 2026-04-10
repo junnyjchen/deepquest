@@ -178,9 +178,9 @@ export default function UsersScreen() {
           <View style={styles.headerRow}>
             <View>
               <Text style={styles.headerTitle}>USER MANAGEMENT</Text>
-              <Text style={styles.headerSubtitle}>用户管理</Text>
+              <Text style={styles.headerSubtitle}>BSC Chain 用户管理</Text>
             </View>
-            {/* 区块链DAPP标准：同步按钮 */}
+            {/* BSC区块链DAPP标准：同步按钮 */}
             <TouchableOpacity
               style={styles.syncButton}
               onPress={() => setSyncModalVisible(true)}
@@ -188,9 +188,9 @@ export default function UsersScreen() {
               <Text style={styles.syncButtonText}>SYNC FROM CHAIN</Text>
             </TouchableOpacity>
           </View>
-          {/* 区块链DAPP说明 */}
+          {/* BSC区块链DAPP说明 */}
           <Text style={styles.chainInfo}>
-            Blockchain DAPP: Users identified by wallet address
+            BSC DAPP: Users identified by wallet address (0x...)
           </Text>
         </View>
 
@@ -235,7 +235,7 @@ export default function UsersScreen() {
         />
       </View>
 
-      {/* 区块链DAPP标准：同步用户Modal */}
+      {/* BSC区块链DAPP标准：同步用户Modal */}
       <Modal
         visible={syncModalVisible}
         transparent
@@ -244,22 +244,25 @@ export default function UsersScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>SYNC USER FROM CHAIN</Text>
+            <Text style={styles.modalTitle}>SYNC USER FROM BSC CHAIN</Text>
             <Text style={styles.modalSubtitle}>
-              从区块链同步用户数据
+              从BSC区块链同步用户数据
             </Text>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>WALLET ADDRESS:</Text>
+              <Text style={styles.inputLabel}>BSC WALLET ADDRESS:</Text>
               <TextInput
                 style={styles.addressInput}
                 value={syncAddress}
                 onChangeText={setSyncAddress}
-                placeholder="Enter wallet address (e.g., ABC123...)"
+                placeholder="Enter BSC wallet address (0x...)"
                 placeholderTextColor="#555570"
                 autoCapitalize="none"
                 autoCorrect={false}
               />
+              <Text style={styles.inputHint}>
+                Format: 0x + 40 hexadecimal characters
+              </Text>
             </View>
 
             <View style={styles.modalButtons}>
@@ -489,6 +492,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#EAEAEA',
     fontFamily: 'monospace',
+  },
+  inputHint: {
+    fontSize: 10,
+    color: '#555570',
+    marginTop: 8,
+    letterSpacing: 1,
   },
   modalButtons: {
     flexDirection: 'row',
