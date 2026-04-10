@@ -250,6 +250,34 @@ export const operationLogs = pgTable(
   ]
 );
 
+// ============ 节点申请记录表 ============
+export const nodeApplications = pgTable(
+  "node_applications",
+  {
+    id: serial().primaryKey(),
+    user_address: varchar("user_address", { length: 64 }).notNull(),
+    user_name: varchar("user_name", { length: 100 }), // 用户昵称/名称
+    apply_type: varchar("apply_type", { length: 20 }).notNull(), // node_partner, node_delegate
+    apply_reason: text("apply_reason"), // 申请理由
+    contact_info: varchar("contact_info", { length: 100 }), // 联系方式
+    total_invest: numeric("total_invest", { precision: 20, scale: 9 }).default("0").notNull(), // 累计投资额
+    team_size: integer("team_size").default(0).notNull(), // 团队人数
+    attachment_url: text("attachment_url"), // 附件链接
+    status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, approved, rejected
+    reviewer_id: integer("reviewer_id").references(() => admins.id), // 审核人
+    reviewer_notes: text("reviewer_notes"), // 审核备注
+    reviewed_at: timestamp("reviewed_at", { withTimezone: true }), // 审核时间
+    created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("node_app_user_idx").on(table.user_address),
+    index("node_app_status_idx").on(table.status),
+    index("node_app_type_idx").on(table.apply_type),
+    index("node_app_created_idx").on(table.created_at),
+  ]
+);
+
 export const healthCheck = pgTable("health_check", {
 	id: serial().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),

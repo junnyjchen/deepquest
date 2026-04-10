@@ -10,6 +10,7 @@ import { getDLevelStats, getUserDLevel, getDLevelSummary } from './routes/dlevel
 import { getContractConfigs, getConfig, updateConfig, initDefaultConfigs } from './routes/config';
 import { logOperation, getOperationLogs } from './routes/logs';
 import { getDashboardStats, getDepositTrend } from './routes/dashboard';
+import nodeApplicationsRouter from './routes/node-applications';
 
 const app = express();
 const port = process.env.PORT || 9091;
@@ -503,6 +504,9 @@ app.post('/api/v1/logs', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// ============ Node Applications ============
+app.use('/api/v1/node-applications', nodeApplicationsRouter);
 
 app.listen(port, () => {
   console.log(`DQ Admin Server listening at http://localhost:${port}/`);

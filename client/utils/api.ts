@@ -267,3 +267,47 @@ export const logsApi = {
     return request<any>(`/api/v1/logs?${query.toString()}`);
   },
 };
+
+// ============ Node Applications API ============
+export const nodeApplicationsApi = {
+  getList: (params?: {
+    page?: number;
+    pageSize?: number;
+    status?: string;
+    apply_type?: string;
+    user_address?: string;
+    startDate?: string;
+    endDate?: string;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.pageSize) query.append('pageSize', String(params.pageSize));
+    if (params?.status) query.append('status', params.status);
+    if (params?.apply_type) query.append('apply_type', params.apply_type);
+    if (params?.user_address) query.append('user_address', params.user_address);
+    if (params?.startDate) query.append('startDate', params.startDate);
+    if (params?.endDate) query.append('endDate', params.endDate);
+    return request<any>(`/api/v1/node-applications?${query.toString()}`);
+  },
+  getStats: () => request<any>('/api/v1/node-applications/stats'),
+  getById: (id: number) => request<any>(`/api/v1/node-applications/${id}`),
+  create: (data: {
+    user_address: string;
+    user_name?: string;
+    apply_type: string;
+    apply_reason?: string;
+    contact_info?: string;
+    total_invest?: string;
+    team_size?: number;
+    attachment_url?: string;
+  }) =>
+    request<any>('/api/v1/node-applications', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  review: (id: number, status: 'approved' | 'rejected', reviewerId?: number, reviewerNotes?: string) =>
+    request<any>(`/api/v1/node-applications/${id}/review`, {
+      method: 'PUT',
+      body: JSON.stringify({ status, reviewer_id: reviewerId, reviewer_notes: reviewerNotes }),
+    }),
+};
