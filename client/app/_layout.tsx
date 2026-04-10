@@ -23,6 +23,15 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="index" options={{ title: "" }} />
+        <Stack.Screen name="login" options={{ title: "Login" }} />
+        <Stack.Screen name="dashboard" options={{ title: "Dashboard" }} />
+        <Stack.Screen name="users" options={{ title: "Users" }} />
+        <Stack.Screen name="user-detail" options={{ title: "User Detail" }} />
+        <Stack.Screen name="deposits" options={{ title: "Deposits" }} />
+        <Stack.Screen name="partners" options={{ title: "Partners" }} />
+        <Stack.Screen name="pools" options={{ title: "Pools" }} />
+        <Stack.Screen name="config" options={{ title: "Config" }} />
+        <Stack.Screen name="logs" options={{ title: "Logs" }} />
       </Stack>
       <Toast />
     </Provider>
