@@ -50,7 +50,9 @@ export const adminApi = {
 };
 
 // ============ Users API ============
+// 区块链DAPP标准：用户数据通过钱包地址标识，无需注册
 export const usersApi = {
+  // 获取用户列表
   getList: (params: {
     page?: number;
     pageSize?: number;
@@ -70,14 +72,18 @@ export const usersApi = {
     if (params.sortOrder) query.append('sortOrder', params.sortOrder);
     return request<any>(`/api/v1/users?${query.toString()}`);
   },
+  // 获取用户统计
   getStats: () => request<any>('/api/v1/users/stats'),
+  // 获取用户详情（通过钱包地址）
   getByAddress: (address: string) => request<any>(`/api/v1/users/${address}`),
+  // 获取用户入金记录
   getDeposits: (address: string, page?: number, pageSize?: number) => {
     const query = new URLSearchParams();
     if (page) query.append('page', String(page));
     if (pageSize) query.append('pageSize', String(pageSize));
     return request<any>(`/api/v1/users/${address}/deposits?${query.toString()}`);
   },
+  // 获取用户奖励记录
   getRewards: (address: string, params?: { page?: number; pageSize?: number; rewardType?: string }) => {
     const query = new URLSearchParams();
     if (params?.page) query.append('page', String(params.page));
@@ -85,13 +91,31 @@ export const usersApi = {
     if (params?.rewardType) query.append('rewardType', params.rewardType);
     return request<any>(`/api/v1/users/${address}/rewards?${query.toString()}`);
   },
+  // 获取用户提现记录
   getWithdrawals: (address: string, page?: number, pageSize?: number) => {
     const query = new URLSearchParams();
     if (page) query.append('page', String(page));
     if (pageSize) query.append('pageSize', String(pageSize));
     return request<any>(`/api/v1/users/${address}/withdrawals?${query.toString()}`);
   },
+  // 获取用户团队（直接推荐人）
   getTeam: (address: string) => request<any[]>(`/api/v1/users/${address}/team`),
+  
+  // ============ 区块链DAPP标准：用户同步API ============
+  // 从链上同步单个用户
+  syncUser: (wallet_address: string) =>
+    request<any>('/api/v1/users/sync', {
+      method: 'POST',
+      body: JSON.stringify({ wallet_address }),
+    }),
+  // 批量同步用户
+  batchSyncUsers: (wallet_addresses: string[]) =>
+    request<any>('/api/v1/users/sync/batch', {
+      method: 'POST',
+      body: JSON.stringify({ wallet_addresses }),
+    }),
+  // 获取用户链上信息
+  getChainInfo: (address: string) => request<any>(`/api/v1/users/${address}/chain-info`),
 };
 
 // ============ Deposits API ============

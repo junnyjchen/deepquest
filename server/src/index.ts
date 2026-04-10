@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { adminLogin, getAdmins, createAdmin } from './routes/admin';
-import { getUsers, getUserByAddress, getUserDeposits, getUserRewards, getUserWithdrawals, getUserTeam, getUserStats } from './routes/users';
+import { getUsers, getUserByAddress, getUserDeposits, getUserRewards, getUserWithdrawals, getUserTeam, getUserStats, syncUserFromChain, batchSyncUsers } from './routes/users';
 import { getDeposits, getRewards, getWithdrawals, getBlockRewards, getDepositStats } from './routes/transactions';
 import { getPartners, getPartnerByAddress, updatePartnerStatus, getPartnerStats } from './routes/partners';
 import { getCards, mintCards, getCardStats } from './routes/cards';
@@ -172,6 +172,76 @@ app.get('/api/v1/users/:address/team', async (req, res) => {
     res.json(team);
   } catch (error: any) {
     console.error('Get user team error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============ Blockchain DAPP: User Sync ============
+// 区块链DAPP标准：同步单个用户（模拟从链上获取）
+app.post('/api/v1/users/sync', async (req, res) => {
+  try {
+    const { wallet_address } = req.body;
+    
+    if (!wallet_address) {
+      return res.status(400).json({ error: '钱包地址必填' });
+    }
+    
+    // 验证钱包地址格式（Solana地址以A-F或数字开头，长度32-44）
+    const isValidSolanaAddress = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet_address);
+    if (!isValidSolanaAddress) {
+      return res.status(400).json({ error: '无效的钱包地址格式' });
+    }
+    
+    const result = await syncUserFromChain(wallet_address);
+    res.json(result);
+  } catch (error: any) {
+    console.error('Sync user error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 区块链DAPP标准：批量同步用户
+app.post('/api/v1/users/sync/batch', async (req, res) => {
+  try {
+    const { wallet_addresses } = req.body;
+    
+    if (!wallet_addresses || !Array.isArray(wallet_addresses)) {
+      return res.status(400).json({ error: '钱包地址列表必填' });
+    }
+    
+    if (wallet_addresses.length > 100) {
+      return res.status(400).json({ error: '单次同步不超过100个地址' });
+    }
+    
+    const results = await batchSyncUsers(wallet_addresses);
+    res.json({ results, total: results.length });
+  } catch (error: any) {
+    console.error('Batch sync users error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 区块链DAPP标准：获取用户链上信息（模拟）
+app.get('/api/v1/users/:address/chain-info', async (req, res) => {
+  try {
+    const { address } = req.params;
+    
+    // 模拟从区块链获取用户信息
+    // 在真实场景中，这里会调用合约方法
+    const chainInfo = {
+      wallet_address: address,
+      // 以下是模拟数据
+      // 真实场景中这些数据来自链上合约
+      contract_balance: '0',
+      last_active_block: 0,
+      total_transactions: 0,
+      account_created: false,
+      // ... 其他链上数据
+    };
+    
+    res.json(chainInfo);
+  } catch (error: any) {
+    console.error('Get chain info error:', error);
     res.status(500).json({ error: error.message });
   }
 });

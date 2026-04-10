@@ -2,6 +2,84 @@ import { getSupabaseClient } from '../storage/database/supabase-client';
 
 const supabase = getSupabaseClient();
 
+/**
+ * 区块链DAPP标准：模拟从链上同步用户数据
+ * 在真实的DAPP中，这会调用合约的 getUserInfo 或类似方法来获取链上数据
+ * 这里我们提供两种同步方式：
+ * 1. 同步单个用户（通过钱包地址）
+ * 2. 批量同步（从链上事件中获取）
+ */
+export async function syncUserFromChain(walletAddress: string) {
+  // 模拟从区块链合约获取用户数据
+  // 在真实场景中，这里会调用合约方法
+  // const chainUser = await contract.getUserInfo(walletAddress);
+  
+  // 模拟链上数据
+  const chainUser = {
+    wallet_address: walletAddress,
+    // 其他字段将在真实场景中从链上获取
+    // 如：level, total_invest, team_invest, referrer_address 等
+  };
+  
+  // 检查用户是否已存在
+  const { data: existingUser, error: checkError } = await supabase
+    .from('users')
+    .select('*')
+    .eq('wallet_address', walletAddress)
+    .maybeSingle();
+  
+  if (checkError) {
+    throw new Error(`检查用户失败: ${checkError.message}`);
+  }
+  
+  // 如果用户不存在，创建新用户
+  if (!existingUser) {
+    const { data, error } = await supabase
+      .from('users')
+      .insert({
+        wallet_address: walletAddress,
+        // 初始值，将在后续交易中更新
+        direct_count: 0,
+        level: 0,
+        total_invest: '0',
+        team_invest: '0',
+        energy: '0',
+        lp_shares: '0',
+        pending_rewards: '0',
+        direct_sales: '0',
+        d_level: 0,
+        is_partner: false,
+      })
+      .select()
+      .single();
+    
+    if (error) {
+      throw new Error(`同步用户失败: ${error.message}`);
+    }
+    
+    return { ...data, isNew: true };
+  }
+  
+  return { ...existingUser, isNew: false };
+}
+
+// 批量同步链上用户（用于初始化或批量导入）
+export async function batchSyncUsers(walletAddresses: string[]) {
+  const results = [];
+  
+  for (const address of walletAddresses) {
+    try {
+      const result = await syncUserFromChain(address);
+      results.push(result);
+    } catch (error) {
+      console.error(`同步用户 ${address} 失败:`, error);
+      results.push({ wallet_address: address, error: (error as Error).message });
+    }
+  }
+  
+  return results;
+}
+
 // 获取用户列表（支持分页和搜索）
 export async function getUsers(params: {
   page?: number;
