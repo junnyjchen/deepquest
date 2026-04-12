@@ -4,29 +4,26 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useCSSVariable } from 'uniwind';
 
+const BG_DARK = '#0A0A12';
+const YELLOW = '#FFD23F';
+
 export default function DappTabLayout() {
   const insets = useSafeAreaInsets();
-  const [background, muted, accent, border] = useCSSVariable([
-    '--color-background',
-    '--color-muted',
-    '--color-accent',
-    '--color-border',
-  ]) as string[];
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: background,
+          backgroundColor: BG_DARK,
           borderTopWidth: 1,
-          borderTopColor: border,
+          borderTopColor: '#303040',
           height: Platform.OS === 'web' ? 60 : 55 + insets.bottom,
           paddingBottom: Platform.OS === 'ios' ? 0 : 6,
           paddingTop: 6,
         },
-        tabBarActiveTintColor: '#FFD700',
-        tabBarInactiveTintColor: muted,
+        tabBarActiveTintColor: YELLOW,
+        tabBarInactiveTintColor: '#A0A0B0',
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '500',
@@ -52,7 +49,7 @@ export default function DappTabLayout() {
           title: '我的',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
-              name={focused ? 'wallet' : 'wallet-outline'}
+              name={focused ? 'person' : 'person-outline'}
               size={22}
               color={color}
             />

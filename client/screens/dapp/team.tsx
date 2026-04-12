@@ -11,19 +11,24 @@ import {
 import { Screen } from '@/components/Screen';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 
-const YELLOW = '#FFD700';
+// 精确匹配参考图的颜色体系
+const BG_DARK = '#0A0A12';
+const BG_CARD_TRANS = 'rgba(26, 26, 48, 0.95)';
+const BG_CARD_SOLID = '#101018';
+const YELLOW = '#FFD23F';
+const BORDER_GRAY = '#303040';
+const TEXT_WHITE = '#F5F5F5';
+const TEXT_MUTED = '#A0A0B0';
 const CYAN = '#00F0FF';
-const PURPLE = '#BF00FF';
-const CARD_BG = '#12121A';
-const BORDER_GLOW = 'rgba(0, 240, 255, 0.15)';
 
 export default function DappTeam() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   // 团队数据
-  const [teamData, setTeamData] = useState({
+  const [teamData] = useState({
     totalMembers: '0',
     directMembers: '0',
     teamStaked: '0.0',
@@ -35,7 +40,7 @@ export default function DappTeam() {
   });
 
   // 成员列表
-  const [members, setMembers] = useState<any[]>([]);
+  const [members] = useState<any[]>([]);
 
   useFocusEffect(
     useCallback(() => {
@@ -49,14 +54,15 @@ export default function DappTeam() {
     setTimeout(() => setRefreshing(false), 1000);
   }, []);
 
-  const handleCopyInviteCode = () => {
+  const handleCopyInviteCode = async () => {
+    await Clipboard.setStringAsync(teamData.inviteCode);
     Alert.alert('复制成功', '邀请码已复制到剪贴板');
   };
 
   if (loading) {
     return (
       <Screen>
-        <View className="flex-1 items-center justify-center bg-[#0A0A0F]">
+        <View className="flex-1 items-center justify-center" style={{ backgroundColor: BG_DARK }}>
           <ActivityIndicator size="large" color={YELLOW} />
           <Text className="text-white mt-4">加载中...</Text>
         </View>
@@ -67,7 +73,8 @@ export default function DappTeam() {
   return (
     <Screen>
       <ScrollView
-        className="flex-1 bg-[#0A0A0F]"
+        className="flex-1"
+        style={{ backgroundColor: BG_DARK }}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}
         refreshControl={
@@ -79,21 +86,24 @@ export default function DappTeam() {
           />
         }
       >
-        {/* 顶部 */}
-        <View className="px-4 pt-3 pb-4">
+        {/* 顶部导航 */}
+        <View className="px-4 pt-3 pb-3">
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-3">
-              <View className="w-12 h-12 rounded-2xl items-center justify-center" style={{ backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER_GLOW }}>
+              <View
+                className="w-12 h-12 rounded-2xl items-center justify-center"
+                style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
+              >
                 <Ionicons name="diamond" size={24} color={CYAN} />
               </View>
               <View>
                 <Text className="text-xl font-bold" style={{ color: YELLOW }}>DeepQuest</Text>
-                <Text className="text-gray-500 text-xs">Web3 DeFi</Text>
+                <Text className="text-xs" style={{ color: TEXT_MUTED }}>Web3 DeFi</Text>
               </View>
             </View>
-            <View className="flex-row items-center gap-2 px-3 py-1.5 rounded-full" style={{ backgroundColor: CARD_BG }}>
+            <View className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}>
               <Ionicons name="people" size={16} color={CYAN} />
-              <Text className="text-cyan-400 font-medium text-sm">{teamData.totalMembers} 人</Text>
+              <Text className="text-sm font-medium" style={{ color: CYAN }}>{teamData.totalMembers} 人</Text>
             </View>
           </View>
         </View>
@@ -103,113 +113,110 @@ export default function DappTeam() {
           <View className="px-4 mb-4">
             <View
               className="rounded-xl p-3 flex-row items-center justify-between"
-              style={{ backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER_GLOW }}
+              style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
             >
               <View className="flex-row items-center gap-2">
-                <Ionicons name="person" size={16} color="#555570" />
-                <Text className="text-gray-500 text-xs">推荐人</Text>
-                <Text className="text-white text-xs font-mono">
+                <Ionicons name="person" size={14} color={TEXT_MUTED} />
+                <Text className="text-xs" style={{ color: TEXT_MUTED }}>推荐人</Text>
+                <Text className="text-xs font-mono" style={{ color: TEXT_WHITE }}>
                   {teamData.referrerAddress}
                 </Text>
               </View>
+              <TouchableOpacity className="px-2 py-1 rounded" style={{ backgroundColor: 'rgba(0,240,255,0.1)' }}>
+                <Text className="text-xs" style={{ color: CYAN }}>查看</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
 
-        {/* 团队统计 */}
+        {/* 团队统计卡片 - 黄色边框 */}
         <View className="px-4">
           <View
             className="rounded-2xl p-4"
-            style={{ backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER_GLOW }}
+            style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 2, borderColor: YELLOW }}
           >
             <View className="flex-row items-center gap-2 mb-4">
               <View className="w-1 h-5 rounded-full" style={{ backgroundColor: YELLOW }} />
-              <Text className="text-white font-bold">团队统计</Text>
+              <View className="w-1 h-5 rounded-full" style={{ backgroundColor: YELLOW }} />
+              <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>团队统计</Text>
             </View>
 
-            <View className="grid grid-cols-2 gap-3">
-              <View className="p-3 rounded-xl" style={{ backgroundColor: 'rgba(0,240,255,0.08)' }}>
-                <View className="flex-row items-center gap-2 mb-2">
-                  <Ionicons name="people" size={14} color={CYAN} />
-                  <Text className="text-gray-400 text-xs">团队总人数</Text>
-                </View>
-                <Text className="text-cyan-400 font-bold text-xl">{teamData.totalMembers}</Text>
-                <Text className="text-gray-500 text-xs mt-1">人</Text>
+            <View className="grid grid-cols-2 gap-x-4 gap-y-4">
+              <View>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>团队总人数</Text>
+                <Text className="text-xl font-bold" style={{ color: CYAN }}>{teamData.totalMembers}</Text>
+                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>人</Text>
               </View>
-
-              <View className="p-3 rounded-xl" style={{ backgroundColor: 'rgba(0,255,136,0.08)' }}>
-                <View className="flex-row items-center gap-2 mb-2">
-                  <Ionicons name="person-add" size={14} color="#00FF88" />
-                  <Text className="text-gray-400 text-xs">直推人数</Text>
-                </View>
-                <Text className="text-green-400 font-bold text-xl">{teamData.directMembers}</Text>
-                <Text className="text-gray-500 text-xs mt-1">人</Text>
+              <View>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>直推人数</Text>
+                <Text className="text-xl font-bold" style={{ color: '#00FF88' }}>{teamData.directMembers}</Text>
+                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>人</Text>
               </View>
-
-              <View className="p-3 rounded-xl" style={{ backgroundColor: 'rgba(243,186,47,0.08)' }}>
-                <View className="flex-row items-center gap-2 mb-2">
-                  <Ionicons name="wallet" size={14} color={YELLOW} />
-                  <Text className="text-gray-400 text-xs">团队质押</Text>
-                </View>
-                <Text className="text-yellow-400 font-bold text-xl">{teamData.teamStaked}</Text>
-                <Text className="text-gray-500 text-xs mt-1">BNB</Text>
+              <View>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>团队质押</Text>
+                <Text className="text-xl font-bold" style={{ color: YELLOW }}>{teamData.teamStaked}</Text>
+                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>BNB</Text>
               </View>
-
-              <View className="p-3 rounded-xl" style={{ backgroundColor: 'rgba(191,0,255,0.08)' }}>
-                <View className="flex-row items-center gap-2 mb-2">
-                  <Ionicons name="trophy" size={14} color={PURPLE} />
-                  <Text className="text-gray-400 text-xs">团队奖励</Text>
-                </View>
-                <Text className="text-purple-400 font-bold text-xl">{teamData.teamRewards}</Text>
-                <Text className="text-gray-500 text-xs mt-1">DQT</Text>
+              <View>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>团队奖励</Text>
+                <Text className="text-xl font-bold" style={{ color: TEXT_WHITE }}>{teamData.teamRewards}</Text>
+                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQT</Text>
               </View>
             </View>
           </View>
         </View>
 
-        {/* 我的收益 */}
+        {/* 我的推广收益卡片 - 黄色边框 */}
         <View className="px-4 mt-4">
           <View
             className="rounded-2xl p-4"
-            style={{ backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER_GLOW }}
+            style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 2, borderColor: YELLOW }}
           >
             <View className="flex-row items-center gap-2 mb-4">
-              <View className="w-1 h-5 rounded-full" style={{ backgroundColor: CYAN }} />
-              <Text className="text-white font-bold">我的推广收益</Text>
+              <View className="w-1 h-5 rounded-full" style={{ backgroundColor: YELLOW }} />
+              <View className="w-1 h-5 rounded-full" style={{ backgroundColor: YELLOW }} />
+              <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>我的推广收益</Text>
             </View>
 
-            <View className="flex-row gap-3">
-              <View className="flex-1 p-3 rounded-xl" style={{ backgroundColor: 'rgba(255,215,0,0.08)' }}>
-                <Text className="text-gray-400 text-xs mb-2">直推奖励</Text>
-                <Text className="text-yellow-400 font-bold text-lg">{teamData.myDirectRewards}</Text>
-                <Text className="text-gray-500 text-xs mt-1">DQT</Text>
+            <View className="grid grid-cols-2 gap-x-4 gap-y-4 mb-4">
+              <View>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>直推奖励</Text>
+                <Text className="text-xl font-bold" style={{ color: YELLOW }}>{teamData.myDirectRewards}</Text>
+                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQT</Text>
               </View>
-              <View className="flex-1 p-3 rounded-xl" style={{ backgroundColor: 'rgba(0,240,255,0.08)' }}>
-                <Text className="text-gray-400 text-xs mb-2">团队奖励</Text>
-                <Text className="text-cyan-400 font-bold text-lg">{teamData.myRewards}</Text>
-                <Text className="text-gray-500 text-xs mt-1">DQT</Text>
+              <View>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>团队奖励</Text>
+                <Text className="text-xl font-bold" style={{ color: CYAN }}>{teamData.myRewards}</Text>
+                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQT</Text>
               </View>
             </View>
 
-            <View className="mt-4 p-3 rounded-xl" style={{ backgroundColor: 'rgba(191,0,255,0.05)' }}>
-              <View className="flex-row items-center justify-between">
+            {/* 邀请码 */}
+            <View
+              className="p-3 rounded-xl"
+              style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
+            >
+              <View className="flex-row items-center justify-between mb-2">
                 <View className="flex-row items-center gap-2">
-                  <Ionicons name="link" size={16} color={PURPLE} />
-                  <Text className="text-gray-400 text-sm">我的邀请码</Text>
+                  <Ionicons name="link" size={14} color={TEXT_MUTED} />
+                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>我的邀请码</Text>
                 </View>
                 <TouchableOpacity onPress={handleCopyInviteCode}>
-                  <Ionicons name="copy" size={16} color="#555570" />
+                  <Ionicons name="copy" size={16} color={TEXT_MUTED} />
                 </TouchableOpacity>
               </View>
-              <Text className="text-white font-mono text-base mt-2">{teamData.inviteCode}</Text>
+              <Text className="text-base font-mono font-semibold" style={{ color: TEXT_WHITE }}>
+                {teamData.inviteCode}
+              </Text>
             </View>
 
+            {/* 复制邀请链接按钮 */}
             <TouchableOpacity
               className="mt-4 py-3 rounded-xl items-center"
               style={{ backgroundColor: YELLOW }}
               onPress={handleCopyInviteCode}
             >
-              <Text className="text-black font-bold">复制邀请链接</Text>
+              <Text className="text-sm font-semibold" style={{ color: '#333' }}>复制邀请链接</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -219,25 +226,26 @@ export default function DappTeam() {
           <View className="flex-row items-center justify-between mb-4">
             <View className="flex-row items-center gap-2">
               <View className="w-1 h-5 rounded-full" style={{ backgroundColor: YELLOW }} />
-              <Text className="text-white font-bold">团队成员</Text>
+              <View className="w-1 h-5 rounded-full" style={{ backgroundColor: YELLOW }} />
+              <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>团队成员</Text>
             </View>
-            <Text className="text-gray-400 text-sm">{members.length} 人</Text>
+            <Text className="text-sm" style={{ color: TEXT_MUTED }}>{members.length} 人</Text>
           </View>
 
           {members.length === 0 ? (
             <View
               className="rounded-2xl p-8 items-center"
-              style={{ backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER_GLOW }}
+              style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
             >
-              <Ionicons name="people-outline" size={48} color="#555570" />
-              <Text className="text-gray-400 mt-4">暂无团队成员</Text>
-              <Text className="text-gray-500 text-sm mt-2">邀请好友加入，获得推广奖励</Text>
+              <Ionicons name="people-outline" size={48} color={TEXT_MUTED} />
+              <Text className="text-base mt-4" style={{ color: TEXT_MUTED }}>暂无团队成员</Text>
+              <Text className="text-sm mt-2" style={{ color: TEXT_MUTED }}>邀请好友加入，获得推广奖励</Text>
               <TouchableOpacity
-                className="mt-4 px-6 py-2 rounded-xl"
+                className="mt-4 px-6 py-2.5 rounded-xl"
                 style={{ backgroundColor: YELLOW }}
                 onPress={handleCopyInviteCode}
               >
-                <Text className="text-black font-bold text-sm">立即邀请</Text>
+                <Text className="text-sm font-semibold" style={{ color: '#333' }}>立即邀请</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -246,20 +254,22 @@ export default function DappTeam() {
                 <View
                   key={index}
                   className="rounded-xl p-4 flex-row items-center justify-between"
-                  style={{ backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER_GLOW }}
+                  style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
                 >
                   <View className="flex-row items-center gap-3">
                     <View className="w-10 h-10 rounded-full items-center justify-center" style={{ backgroundColor: 'rgba(0,240,255,0.2)' }}>
-                      <Text className="text-cyan-400 font-bold">{member.name?.charAt(0) || 'U'}</Text>
+                      <Text className="text-sm font-bold" style={{ color: CYAN }}>
+                        {member.name?.charAt(0) || 'U'}
+                      </Text>
                     </View>
                     <View>
-                      <Text className="text-white font-medium">{member.name}</Text>
-                      <Text className="text-gray-500 text-xs font-mono mt-1">{member.address}</Text>
+                      <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{member.name}</Text>
+                      <Text className="text-xs font-mono mt-0.5" style={{ color: TEXT_MUTED }}>{member.address}</Text>
                     </View>
                   </View>
                   <View className="items-end">
-                    <Text className="text-yellow-400 font-medium text-sm">{member.staked} BNB</Text>
-                    <Text className="text-gray-500 text-xs mt-1">质押额</Text>
+                    <Text className="text-sm font-medium" style={{ color: YELLOW }}>{member.staked} BNB</Text>
+                    <Text className="text-xs mt-0.5" style={{ color: TEXT_MUTED }}>质押额</Text>
                   </View>
                 </View>
               ))}
