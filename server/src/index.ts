@@ -11,6 +11,9 @@ import { getContractConfigs, getConfig, updateConfig, initDefaultConfigs } from 
 import { logOperation, getOperationLogs } from './routes/logs';
 import { getDashboardStats, getDepositTrend } from './routes/dashboard';
 import nodeApplicationsRouter from './routes/node-applications';
+import dappRouter from './routes/dapp';
+import dappUserRouter from './routes/dapp-user';
+import dappTeamRouter from './routes/dapp-team';
 
 const app = express();
 const port = process.env.PORT || 9091;
@@ -577,6 +580,16 @@ app.post('/api/v1/logs', async (req, res) => {
 
 // ============ Node Applications ============
 app.use('/api/v1/node-applications', nodeApplicationsRouter);
+
+// ============ DAPP 前端 API ============
+// DAPP平台数据
+app.use('/api/v1/dapp', dappRouter);
+
+// DAPP用户数据
+app.use('/api/v1/dapp/user', dappUserRouter);
+
+// DAPP团队数据
+app.use('/api/v1/dapp/team', dappTeamRouter);
 
 app.listen(port, () => {
   console.log(`DQ Admin Server listening at http://localhost:${port}/`);
