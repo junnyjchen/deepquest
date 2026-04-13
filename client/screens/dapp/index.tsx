@@ -18,6 +18,8 @@ import * as Crypto from 'expo-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappApi } from '@/utils/api';
 
+import { useSafeRouter } from '@/hooks/useSafeRouter';
+
 // 精确匹配参考图的颜色体系
 const BG_DARK = '#0A0A12';
 const BG_CARD_TRANS = 'rgba(26, 26, 48, 0.95)';
@@ -32,8 +34,10 @@ const PURPLE = '#D020FF';
 const WALLET_STORAGE_KEY = '@deepquest_wallet';
 
 export default function DappIndex() {
+  const router = useSafeRouter();
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<'swap' | 'stake'>('swap');
+  const [menuExpanded, setMenuExpanded] = useState(false);
   const [sellAmount, setSellAmount] = useState('');
   const [buyAmount, setBuyAmount] = useState('');
   const [stakeAmount, setStakeAmount] = useState('');
@@ -262,7 +266,7 @@ export default function DappIndex() {
         className="flex-1"
         style={{ backgroundColor: BG_DARK }}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        contentContainerStyle={{ paddingBottom: 40 }}
       >
         {/* 顶部导航 */}
         <View className="px-4 pt-3 pb-3">
@@ -280,45 +284,174 @@ export default function DappIndex() {
               </Text>
             </View>
 
-            {/* 钱包+注册 */}
-            <View className="flex-row items-center gap-2">
-              {walletAddress ? (
-                <>
-                  <TouchableOpacity
-                    className="flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
-                    style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-                    onPress={handleCopyAddress}
-                  >
-                    <Ionicons name="folder-open" size={14} color={TEXT_WHITE} />
-                    <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>
-                      {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    className="px-2.5 py-1.5 rounded-lg"
-                    style={{ backgroundColor: 'rgba(255,80,80,0.2)', borderWidth: 1, borderColor: '#FF5050' }}
-                    onPress={handleDisconnect}
-                  >
-                    <Text className="text-sm" style={{ color: '#FF5050' }}>断开</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <TouchableOpacity
-                  className="px-2.5 py-1.5 rounded-lg"
-                  style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-                  onPress={handleConnect}
-                >
-                  <Text className="text-sm" style={{ color: TEXT_WHITE }}>连接钱包</Text>
-                </TouchableOpacity>
-              )}
+            {/* 菜单按钮 */}
+            <TouchableOpacity
+              className="w-10 h-10 rounded-xl items-center justify-center"
+              style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
+              onPress={() => setMenuExpanded(!menuExpanded)}
+            >
+              <Ionicons 
+                name={menuExpanded ? "close" : "menu"} 
+                size={22} 
+                color={TEXT_WHITE} 
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* 快捷菜单折叠区域 */}
+        {menuExpanded && (
+          <View className="px-4 pb-3">
+            <View 
+              className="rounded-2xl overflow-hidden"
+              style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
+            >
               <TouchableOpacity
-                className="px-3 py-1.5 rounded-lg"
-                style={{ backgroundColor: YELLOW }}
-                onPress={handleRegister}
+                className="flex-row items-center gap-3 p-4 border-b"
+                style={{ borderColor: BORDER_GRAY }}
+                onPress={() => { router.push('/profile'); setMenuExpanded(false); }}
               >
-                <Text className="text-sm font-semibold" style={{ color: '#333' }}>注册</Text>
+                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(255,215,0,0.1)' }}>
+                  <Ionicons name="person" size={20} color={YELLOW} />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>个人中心</Text>
+                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>查看我的账户信息</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                className="flex-row items-center gap-3 p-4 border-b"
+                style={{ borderColor: BORDER_GRAY }}
+                onPress={() => { router.push('/team'); setMenuExpanded(false); }}
+              >
+                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(0,240,255,0.1)' }}>
+                  <Ionicons name="people" size={20} color={CYAN} />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>团队</Text>
+                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>推广奖励和团队业绩</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                className="flex-row items-center gap-3 p-4 border-b"
+                style={{ borderColor: BORDER_GRAY }}
+                onPress={() => { router.push('/stakes'); setMenuExpanded(false); }}
+              >
+                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(208,32,255,0.1)' }}>
+                  <Ionicons name="time" size={20} color={PURPLE} />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>质押记录</Text>
+                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>查看质押历史</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                className="flex-row items-center gap-3 p-4 border-b"
+                style={{ borderColor: BORDER_GRAY }}
+                onPress={() => { router.push('/rewards'); setMenuExpanded(false); }}
+              >
+                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(255,215,0,0.1)' }}>
+                  <Ionicons name="gift" size={20} color={YELLOW} />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>收益记录</Text>
+                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>查看收益明细</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                className="flex-row items-center gap-3 p-4 border-b"
+                style={{ borderColor: BORDER_GRAY }}
+                onPress={() => { router.push('/withdrawals'); setMenuExpanded(false); }}
+              >
+                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(0,240,255,0.1)' }}>
+                  <Ionicons name="wallet-outline" size={20} color={CYAN} />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>提现记录</Text>
+                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>查看提现历史</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                className="flex-row items-center gap-3 p-4 border-b"
+                style={{ borderColor: BORDER_GRAY }}
+                onPress={() => { router.push('/nodes'); setMenuExpanded(false); }}
+              >
+                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(208,32,255,0.1)' }}>
+                  <Ionicons name="ribbon" size={20} color={PURPLE} />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>节点申请</Text>
+                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>成为节点合伙人</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                className="flex-row items-center gap-3 p-4"
+                onPress={() => { router.push('/help'); setMenuExpanded(false); }}
+              >
+                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(0,240,255,0.1)' }}>
+                  <Ionicons name="help-circle" size={20} color={CYAN} />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>帮助中心</Text>
+                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>常见问题解答</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
               </TouchableOpacity>
             </View>
+          </View>
+        )}
+
+        {/* 钱包+注册 */}
+        <View className="px-4 pb-2">
+          <View className="flex-row items-center gap-2">
+            {walletAddress ? (
+              <>
+                <TouchableOpacity
+                  className="flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+                  style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
+                  onPress={handleCopyAddress}
+                >
+                  <Ionicons name="folder-open" size={14} color={TEXT_WHITE} />
+                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>
+                    {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  className="px-2.5 py-1.5 rounded-lg"
+                  style={{ backgroundColor: 'rgba(255,80,80,0.2)', borderWidth: 1, borderColor: '#FF5050' }}
+                  onPress={handleDisconnect}
+                >
+                  <Text className="text-sm" style={{ color: '#FF5050' }}>断开</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <TouchableOpacity
+                className="px-2.5 py-1.5 rounded-lg"
+                style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
+                onPress={handleConnect}
+              >
+                <Text className="text-sm" style={{ color: TEXT_WHITE }}>连接钱包</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              className="px-3 py-1.5 rounded-lg"
+              style={{ backgroundColor: YELLOW }}
+              onPress={handleRegister}
+            >
+              <Text className="text-sm font-semibold" style={{ color: '#333' }}>注册</Text>
+            </TouchableOpacity>
           </View>
         </View>
 

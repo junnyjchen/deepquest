@@ -237,7 +237,7 @@ export default function DappStakes() {
             data={stakes}
             renderItem={renderItem}
             keyExtractor={(item) => String(item.id)}
-            contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+            contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}

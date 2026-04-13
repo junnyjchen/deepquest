@@ -304,7 +304,7 @@ export default function DappRewards() {
             data={rewards}
             renderItem={renderItem}
             keyExtractor={(item) => String(item.id)}
-            contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+            contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}

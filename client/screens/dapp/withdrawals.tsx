@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingBottom: 100,
+    paddingBottom: 40,
   },
   recordCard: {
     backgroundColor: BG_CARD_SOLID,
