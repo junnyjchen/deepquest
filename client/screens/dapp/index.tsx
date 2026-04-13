@@ -40,6 +40,7 @@ export default function DappIndex() {
   const { t, language, setLanguage, languages } = useLanguage();
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<'swap' | 'stake'>('swap');
+  const [swapDirection, setSwapDirection] = useState<'usdt_to_dq' | 'dq_to_usdt'>('usdt_to_dq');
   const [menuExpanded, setMenuExpanded] = useState(false);
   const [langModalVisible, setLangModalVisible] = useState(false);
   const [sellAmount, setSellAmount] = useState('');
@@ -252,6 +253,13 @@ export default function DappIndex() {
       const amount = (bal * percent) / 100;
       setter(amount.toFixed(6));
     }
+  };
+
+  // 切换兑换方向
+  const handleSwapDirection = () => {
+    setSwapDirection(prev => prev === 'usdt_to_dq' ? 'dq_to_usdt' : 'usdt_to_dq');
+    setSellAmount('');
+    setBuyAmount('');
   };
 
   if (loading) {
@@ -607,20 +615,26 @@ export default function DappIndex() {
           {/* 兑换模式 */}
           {mode === 'swap' && (
             <>
-              {/* USDT 支付区 */}
+              {/* 出售区 */}
               <View
                 className="rounded-2xl p-4"
                 style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
               >
                 <View className="flex-row items-center justify-between mb-3">
                   <View className="flex-row items-center gap-2">
-                    <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: '#26A17B' }}>
-                      <Text className="text-sm font-bold text-white">U</Text>
+                    <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: swapDirection === 'usdt_to_dq' ? '#26A17B' : CYAN }}>
+                      {swapDirection === 'usdt_to_dq' ? (
+                        <Text className="text-sm font-bold text-white">U</Text>
+                      ) : (
+                        <Ionicons name="diamond" size={16} color="#0A0A12" />
+                      )}
                     </View>
-                    <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>USDT</Text>
+                    <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>
+                      {swapDirection === 'usdt_to_dq' ? 'USDT' : 'DQ'}
+                    </Text>
                   </View>
                   <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                    余额: {usdtBalance || '0.00'} USDT
+                    余额: {swapDirection === 'usdt_to_dq' ? (usdtBalance || '0.00') : dqtBalance} {swapDirection === 'usdt_to_dq' ? 'USDT' : 'DQ'}
                   </Text>
                 </View>
 
@@ -645,19 +659,20 @@ export default function DappIndex() {
                       key={item.label}
                       className="flex-1 py-2.5 rounded-lg items-center"
                       style={{
-                        backgroundColor: item.label === 'MAX' ? '#26A17B' : 'transparent',
+                        backgroundColor: item.label === 'MAX' ? (swapDirection === 'usdt_to_dq' ? '#26A17B' : CYAN) : 'transparent',
                         borderWidth: 1,
-                        borderColor: item.label === 'MAX' ? '#26A17B' : BORDER_GRAY,
+                        borderColor: item.label === 'MAX' ? (swapDirection === 'usdt_to_dq' ? '#26A17B' : CYAN) : BORDER_GRAY,
                       }}
                       onPress={() => {
-                        if (usdtBalance) {
-                          handlePercent(item.value, setSellAmount, usdtBalance);
+                        const balance = swapDirection === 'usdt_to_dq' ? usdtBalance : dqtBalance;
+                        if (balance) {
+                          handlePercent(item.value, setSellAmount, balance);
                         }
                       }}
                     >
                       <Text
                         className="text-sm font-medium"
-                        style={{ color: item.label === 'MAX' ? '#FFF' : TEXT_WHITE }}
+                        style={{ color: item.label === 'MAX' ? '#0A0A12' : TEXT_WHITE }}
                       >
                         {item.label}
                       </Text>
@@ -666,20 +681,37 @@ export default function DappIndex() {
                 </View>
               </View>
 
-              {/* DQ 购买区 */}
+              {/* 切换按钮 */}
+              <View className="items-center -my-2 z-10">
+                <TouchableOpacity
+                  className="w-12 h-12 rounded-full items-center justify-center"
+                  style={{ backgroundColor: BG_DARK, borderWidth: 2, borderColor: YELLOW }}
+                  onPress={handleSwapDirection}
+                >
+                  <Ionicons name="swap-vertical" size={24} color={YELLOW} />
+                </TouchableOpacity>
+              </View>
+
+              {/* 购买区 */}
               <View
                 className="rounded-2xl p-4"
                 style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
               >
                 <View className="flex-row items-center justify-between mb-3">
                   <View className="flex-row items-center gap-2">
-                    <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: CYAN }}>
-                      <Ionicons name="diamond" size={16} color="#0A0A12" />
+                    <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: swapDirection === 'usdt_to_dq' ? CYAN : '#26A17B' }}>
+                      {swapDirection === 'usdt_to_dq' ? (
+                        <Ionicons name="diamond" size={16} color="#0A0A12" />
+                      ) : (
+                        <Text className="text-sm font-bold text-white">U</Text>
+                      )}
                     </View>
-                    <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>DQ</Text>
+                    <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>
+                      {swapDirection === 'usdt_to_dq' ? 'DQ' : 'USDT'}
+                    </Text>
                   </View>
                   <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                    余额: {dqtBalance} DQ
+                    余额: {swapDirection === 'usdt_to_dq' ? dqtBalance : (usdtBalance || '0.00')} {swapDirection === 'usdt_to_dq' ? 'DQ' : 'USDT'}
                   </Text>
                 </View>
 
@@ -688,7 +720,7 @@ export default function DappIndex() {
                     {[30, 45, 35, 50, 40, 55, 45, 60, 50, 65, 55, 70, 60, 55, 65].map((h, i) => (
                       <View key={i} className="flex-1 rounded-sm" style={{
                         height: `${h}%`,
-                        backgroundColor: i > 10 ? CYAN : 'rgba(208,32,255,0.5)'
+                        backgroundColor: i > 10 ? (swapDirection === 'usdt_to_dq' ? CYAN : '#26A17B') : 'rgba(208,32,255,0.5)'
                       }} />
                     ))}
                   </View>
