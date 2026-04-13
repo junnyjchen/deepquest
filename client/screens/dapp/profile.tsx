@@ -180,16 +180,34 @@ export default function DappProfile() {
     ]);
   };
 
-  // 分享
+  // 分享邀请链接
   const handleShare = async () => {
     try {
-      await Share.share({
-        message: walletAddress
-          ? `加入DeepQuest，质押BNB获取被动收益！\n我的邀请码: ${walletAddress}`
-          : '下载DeepQuest Web3 DeFi量化平台',
-      });
+      if (walletAddress) {
+        // 生成邀请链接
+        const inviteLink = `https://app.deepquest.io/invite?ref=${walletAddress}`;
+        await Share.share({
+          title: 'Join DeepQuest',
+          message: `加入DeepQuest，质押DQ获取被动收益！\n我的邀请链接: ${inviteLink}`,
+          url: inviteLink,
+        });
+      } else {
+        await Share.share({
+          title: 'Join DeepQuest',
+          message: '下载DeepQuest Web3 DeFi量化平台，开启您的DeFi之旅！',
+        });
+      }
     } catch (error) {
       console.error('Share error:', error);
+    }
+  };
+
+  // 复制邀请链接
+  const handleCopyInviteLink = async () => {
+    if (walletAddress) {
+      const inviteLink = `https://app.deepquest.io/invite?ref=${walletAddress}`;
+      await Clipboard.setStringAsync(inviteLink);
+      Alert.alert('复制成功', '邀请链接已复制到剪贴板');
     }
   };
 
@@ -450,9 +468,20 @@ export default function DappProfile() {
                 <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(0,255,136,0.1)' }}>
                   <Ionicons name="share-social" size={20} color="#00FF88" />
                 </View>
-                <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>邀请好友</Text>
+                <View>
+                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>邀请好友</Text>
+                  <Text className="text-xs mt-0.5" style={{ color: TEXT_MUTED }}>分享邀请链接获得奖励</Text>
+                </View>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
+              <View className="flex-row items-center gap-2">
+                <TouchableOpacity 
+                  style={{ padding: 8 }}
+                  onPress={handleCopyInviteLink}
+                >
+                  <Ionicons name="copy-outline" size={18} color={CYAN} />
+                </TouchableOpacity>
+                <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
+              </View>
             </TouchableOpacity>
 
             <TouchableOpacity

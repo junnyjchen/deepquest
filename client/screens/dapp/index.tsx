@@ -54,6 +54,11 @@ export default function DappIndex() {
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  
+  // 邀请绑定相关状态
+  const [pendingInviteReferrer, setPendingInviteReferrer] = useState<string | null>(null);
+  const [inviteModalVisible, setInviteModalVisible] = useState(false);
+  const [bindLoading, setBindLoading] = useState(false);
 
   // 质押周期配置
   const stakePeriods = [
@@ -89,6 +94,8 @@ export default function DappIndex() {
           const savedWallet = await AsyncStorage.getItem(WALLET_STORAGE_KEY);
           if (savedWallet) {
             setWalletAddress(savedWallet);
+            // 检查是否已绑定推荐人
+            await checkInviteBinding(savedWallet);
           }
           
           // 获取平台统计数据
@@ -103,6 +110,60 @@ export default function DappIndex() {
       init();
     }, [])
   );
+  
+  // 检查邀请绑定状态
+  const checkInviteBinding = async (address: string) => {
+    try {
+      const result = await dappApi.checkBinding(address);
+      // 如果未绑定，检查本地存储的待绑定推荐人
+      if (!result.bound) {
+        const pendingRef = await AsyncStorage.getItem('@deepquest_pending_referrer');
+        if (pendingRef) {
+          // 验证推荐人是否有效
+          const validation = await dappApi.validateReferrer(pendingRef);
+          if (validation.valid) {
+            setPendingInviteReferrer(pendingRef);
+            setInviteModalVisible(true);
+          } else {
+            // 无效则清除
+            await AsyncStorage.removeItem('@deepquest_pending_referrer');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('检查绑定状态失败:', error);
+    }
+  };
+  
+  // 绑定推荐人
+  const handleBindInvite = async () => {
+    if (!walletAddress || !pendingInviteReferrer) return;
+    
+    try {
+      setBindLoading(true);
+      const result = await dappApi.bindReferrer(walletAddress, pendingInviteReferrer);
+      
+      if (result.code === 0) {
+        Alert.alert('绑定成功', '您已成功绑定推荐人！');
+        await AsyncStorage.removeItem('@deepquest_pending_referrer');
+        setPendingInviteReferrer(null);
+      } else {
+        Alert.alert('绑定失败', result.message || '绑定推荐人失败');
+      }
+    } catch (error: any) {
+      Alert.alert('绑定失败', error.message || '绑定推荐人失败');
+    } finally {
+      setBindLoading(false);
+      setInviteModalVisible(false);
+    }
+  };
+  
+  // 跳过绑定
+  const handleSkipInvite = async () => {
+    await AsyncStorage.removeItem('@deepquest_pending_referrer');
+    setPendingInviteReferrer(null);
+    setInviteModalVisible(false);
+  };
 
   // 获取平台统计数据
   const fetchStats = async () => {
@@ -528,6 +589,56 @@ export default function DappIndex() {
           </TouchableOpacity>
         </Modal>
 
+        {/* 邀请绑定弹窗 */}
+        <Modal
+          visible={inviteModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setInviteModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.inviteModalContent}>
+              <View style={styles.inviteModalHeader}>
+                <Ionicons name="people-circle" size={48} color={YELLOW} />
+                <Text style={styles.inviteModalTitle}>邀请绑定</Text>
+              </View>
+              
+              <Text style={styles.inviteModalDesc}>
+                您有一个待绑定的推荐人，绑定后可以获得邀请奖励
+              </Text>
+              
+              {pendingInviteReferrer && (
+                <View style={styles.referrerAddressBox}>
+                  <Text style={styles.referrerLabel}>推荐人地址:</Text>
+                  <Text style={styles.referrerAddress} numberOfLines={1} ellipsizeMode="middle">
+                    {pendingInviteReferrer}
+                  </Text>
+                </View>
+              )}
+              
+              <View style={styles.inviteModalButtons}>
+                <TouchableOpacity
+                  style={[styles.inviteModalBtn, styles.skipBtn]}
+                  onPress={handleSkipInvite}
+                >
+                  <Text style={styles.skipBtnText}>暂不绑定</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.inviteModalBtn, styles.bindBtn]}
+                  onPress={handleBindInvite}
+                  disabled={bindLoading}
+                >
+                  {bindLoading ? (
+                    <ActivityIndicator size="small" color="#0A0A12" />
+                  ) : (
+                    <Text style={styles.bindBtnText}>确认绑定</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         {/* 模式切换 */}
         <View className="px-4 pb-2">
           <View className="flex-row rounded-xl overflow-hidden" style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}>
@@ -899,3 +1010,83 @@ export default function DappIndex() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  inviteModalContent: {
+    backgroundColor: BG_CARD_TRANS,
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+    borderWidth: 1,
+    borderColor: YELLOW,
+  },
+  inviteModalHeader: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  inviteModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: TEXT_WHITE,
+    marginTop: 12,
+  },
+  inviteModalDesc: {
+    fontSize: 14,
+    color: TEXT_MUTED,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  referrerAddressBox: {
+    backgroundColor: BG_DARK,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 20,
+  },
+  referrerLabel: {
+    fontSize: 11,
+    color: TEXT_MUTED,
+    marginBottom: 4,
+  },
+  referrerAddress: {
+    fontSize: 12,
+    fontFamily: 'monospace',
+    color: CYAN,
+  },
+  inviteModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  inviteModalBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  skipBtn: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: BORDER_GRAY,
+  },
+  skipBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: TEXT_MUTED,
+  },
+  bindBtn: {
+    backgroundColor: YELLOW,
+  },
+  bindBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: BG_DARK,
+  },
+});

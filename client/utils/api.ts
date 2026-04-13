@@ -359,6 +359,21 @@ export const dappApi = {
   // 获取推广信息
   getReferral: (wallet_address: string) =>
     request<any>(`/api/v1/dapp/referral/${wallet_address}`),
+  
+  // 绑定推荐人
+  bindReferrer: (wallet_address: string, referrer_address: string, tx_hash?: string) =>
+    request<any>('/api/v1/dapp/bind-referrer', {
+      method: 'POST',
+      body: JSON.stringify({ wallet_address, referrer_address, tx_hash }),
+    }),
+  
+  // 验证推荐人地址
+  validateReferrer: (referrer_address: string) =>
+    request<any>(`/api/v1/dapp/validate-referrer/${referrer_address}`),
+  
+  // 检查绑定状态
+  checkBinding: (wallet_address: string) =>
+    request<any>(`/api/v1/dapp/check-binding/${wallet_address}`),
 };
 
 // ============ DAPP User API (用户端) ============

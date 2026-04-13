@@ -247,4 +247,220 @@ router.get('/referral/:wallet_address', async (req, res) => {
   }
 });
 
+// 注册/绑定推荐关系
+router.post('/bind-referrer', async (req, res) => {
+  try {
+    const { wallet_address, referrer_address, tx_hash } = req.body;
+
+    if (!wallet_address || !referrer_address) {
+      return res.status(400).json({
+        code: 400,
+        message: '缺少必要参数：wallet_address 和 referrer_address'
+      });
+    }
+
+    // 验证钱包地址格式
+    const addressRegex = /^0x[a-fA-F0-9]{40}$/;
+    if (!addressRegex.test(wallet_address) || !addressRegex.test(referrer_address)) {
+      return res.status(400).json({
+        code: 400,
+        message: '无效的钱包地址格式'
+      });
+    }
+
+    // 不能自己推荐自己
+    if (wallet_address.toLowerCase() === referrer_address.toLowerCase()) {
+      return res.status(400).json({
+        code: 400,
+        message: '不能绑定自己为推荐人'
+      });
+    }
+
+    const walletLower = wallet_address.toLowerCase();
+    const referrerLower = referrer_address.toLowerCase();
+
+    // 查询推荐人是否存在
+    const { data: referrer, error: referrerError } = await supabase
+      .from('users')
+      .select('wallet_address')
+      .eq('wallet_address', referrerLower)
+      .single();
+
+    if (referrerError || !referrer) {
+      return res.status(404).json({
+        code: 404,
+        message: '推荐人不存在'
+      });
+    }
+
+    // 查询用户是否存在
+    const { data: existingUser, error: userError } = await supabase
+      .from('users')
+      .select('wallet_address, referrer_address')
+      .eq('wallet_address', walletLower)
+      .single();
+
+    if (existingUser) {
+      // 用户已存在，检查是否已有推荐人
+      if (existingUser.referrer_address) {
+        return res.status(400).json({
+          code: 400,
+          message: '您已经有推荐人了，无法重复绑定'
+        });
+      }
+      
+      // 更新推荐关系
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ referrer_address: referrerLower })
+        .eq('wallet_address', walletLower);
+
+      if (updateError) {
+        return res.status(500).json({
+          code: 500,
+          message: '绑定推荐人失败'
+        });
+      }
+
+      return res.json({
+        code: 0,
+        message: '绑定推荐人成功',
+        data: {
+          wallet_address: walletLower,
+          referrer_address: referrerLower
+        }
+      });
+    }
+
+    // 创建新用户并绑定推荐人
+    const { error: insertError } = await supabase
+      .from('users')
+      .insert({
+        wallet_address: walletLower,
+        referrer_address: referrerLower,
+        level: 1,
+        is_partner: false,
+        created_at: new Date().toISOString()
+      });
+
+    if (insertError) {
+      console.error('创建用户失败:', insertError);
+      return res.status(500).json({
+        code: 500,
+        message: '注册用户失败'
+      });
+    }
+
+    res.json({
+      code: 0,
+      message: '注册并绑定推荐人成功',
+      data: {
+        wallet_address: walletLower,
+        referrer_address: referrerLower
+      }
+    });
+  } catch (error) {
+    console.error('绑定推荐人失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 验证推荐人地址
+router.get('/validate-referrer/:referrer_address', async (req, res) => {
+  try {
+    const { referrer_address } = req.params;
+
+    if (!referrer_address) {
+      return res.status(400).json({
+        code: 400,
+        message: '缺少推荐人地址'
+      });
+    }
+
+    // 验证地址格式
+    const addressRegex = /^0x[a-fA-F0-9]{40}$/;
+    if (!addressRegex.test(referrer_address)) {
+      return res.status(400).json({
+        code: 400,
+        message: '无效的钱包地址格式'
+      });
+    }
+
+    // 查询推荐人
+    const { data: referrer, error } = await supabase
+      .from('users')
+      .select('wallet_address, level, created_at')
+      .eq('wallet_address', referrer_address.toLowerCase())
+      .single();
+
+    if (error || !referrer) {
+      return res.status(404).json({
+        code: 404,
+        message: '推荐人不存在',
+        valid: false
+      });
+    }
+
+    res.json({
+      code: 0,
+      valid: true,
+      data: {
+        wallet_address: referrer.wallet_address,
+        level: referrer.level,
+        created_at: referrer.created_at
+      }
+    });
+  } catch (error) {
+    console.error('验证推荐人失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 检查用户是否已绑定推荐人
+router.get('/check-binding/:wallet_address', async (req, res) => {
+  try {
+    const { wallet_address } = req.params;
+
+    if (!wallet_address) {
+      return res.status(400).json({
+        code: 400,
+        message: '缺少钱包地址'
+      });
+    }
+
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('wallet_address, referrer_address')
+      .eq('wallet_address', wallet_address.toLowerCase())
+      .single();
+
+    if (error || !user) {
+      return res.json({
+        code: 0,
+        bound: false,
+        has_referrer: false
+      });
+    }
+
+    res.json({
+      code: 0,
+      bound: !!user.referrer_address,
+      has_referrer: !!user.referrer_address,
+      referrer_address: user.referrer_address
+    });
+  } catch (error) {
+    console.error('检查绑定状态失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
 export default router;
