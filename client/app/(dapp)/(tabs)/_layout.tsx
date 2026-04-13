@@ -97,6 +97,13 @@ export default function DappTabLayout() {
           title: '节点申请',
         }}
       />
+      <Tabs.Screen
+        name="help"
+        options={{
+          href: null, // 不显示在 Tab 栏
+          title: '帮助中心',
+        }}
+      />
     </Tabs>
   );
 }
