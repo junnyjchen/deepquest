@@ -165,7 +165,7 @@ export default function DappWithdrawals() {
         <View style={styles.recordBody}>
           <View style={styles.amountRow}>
             <Text style={styles.amountLabel}>提现金额</Text>
-            <Text style={styles.amountValue}>{parseFloat(item.amount).toFixed(2)} DQT</Text>
+            <Text style={styles.amountValue}>{parseFloat(item.amount).toFixed(2)} DQ</Text>
           </View>
           
           <TouchableOpacity 
@@ -279,7 +279,7 @@ export default function DappWithdrawals() {
             <Ionicons name="wallet" size={20} color={YELLOW} />
             <Text style={styles.statsLabel}>累计提现</Text>
             <Text style={styles.statsValue}>{totalWithdraw}</Text>
-            <Text style={styles.statsUnit}>DQT</Text>
+            <Text style={styles.statsUnit}>DQ</Text>
           </View>
         </View>
 

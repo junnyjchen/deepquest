@@ -323,7 +323,7 @@ export default function DappProfile() {
                 </Text>
               </View>
               <View>
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>DQT余额</Text>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>DQ余额</Text>
                 <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>
                   {userLoading ? '...' : userData.dqtBalance}
                 </Text>
@@ -362,14 +362,14 @@ export default function DappProfile() {
                 <Text className="text-xl font-bold" style={{ color: YELLOW }}>
                   {userLoading ? '...' : userData.pendingRewards}
                 </Text>
-                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQT</Text>
+                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQ</Text>
               </View>
               <View>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>累计收益</Text>
                 <Text className="text-xl font-bold" style={{ color: CYAN }}>
                   {userLoading ? '...' : userData.totalRewards}
                 </Text>
-                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQT</Text>
+                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQ</Text>
               </View>
             </View>
           </View>

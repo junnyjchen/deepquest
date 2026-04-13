@@ -47,6 +47,7 @@ export default function DappIndex() {
   const [stakeAmount, setStakeAmount] = useState('');
   const [bnbBalance, setBnbBalance] = useState('0.0');
   const [dqtBalance, setDqtBalance] = useState('0.0');
+  const [usdtBalance, setUsdtBalance] = useState('0.00');
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -541,20 +542,20 @@ export default function DappIndex() {
             >
               <View className="flex-row items-center justify-between mb-3">
                 <View className="flex-row items-center gap-2">
-                  <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: '#F3BA2F' }}>
-                    <Text className="text-sm font-bold text-black">B</Text>
+                  <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: CYAN }}>
+                    <Ionicons name="diamond" size={16} color="#0A0A12" />
                   </View>
-                  <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>质押 BNB</Text>
+                  <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>质押 DQ</Text>
                 </View>
                 <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                  余额: {bnbBalance} BNB
+                  余额: {dqtBalance} DQ
                 </Text>
               </View>
 
               <TextInput
                 className="text-xl font-semibold mb-3"
                 style={{ color: TEXT_WHITE, backgroundColor: 'transparent' }}
-                placeholder="请输入质押数量"
+                placeholder={t('home.inputAmount')}
                 placeholderTextColor={TEXT_MUTED}
                 value={stakeAmount}
                 onChangeText={setStakeAmount}
@@ -563,24 +564,24 @@ export default function DappIndex() {
 
               <View className="flex-row gap-2 mb-3">
                 {[
-                  { label: '20%', value: 20 },
+                  { label: '25%', value: 25 },
                   { label: '50%', value: 50 },
-                  { label: '70%', value: 70 },
+                  { label: '75%', value: 75 },
                   { label: 'MAX', value: 100 },
                 ].map((item) => (
                   <TouchableOpacity
                     key={item.label}
                     className="flex-1 py-2.5 rounded-lg items-center"
                     style={{
-                      backgroundColor: item.label === 'MAX' ? '#FFFFFF' : 'transparent',
+                      backgroundColor: item.label === 'MAX' ? CYAN : 'transparent',
                       borderWidth: 1,
-                      borderColor: item.label === 'MAX' ? '#FFFFFF' : BORDER_GRAY,
+                      borderColor: item.label === 'MAX' ? CYAN : BORDER_GRAY,
                     }}
-                    onPress={() => handlePercent(item.value, setStakeAmount, bnbBalance)}
+                    onPress={() => handlePercent(item.value, setStakeAmount, dqtBalance)}
                   >
                     <Text
                       className="text-sm font-medium"
-                      style={{ color: item.label === 'MAX' ? '#333' : TEXT_WHITE }}
+                      style={{ color: item.label === 'MAX' ? '#0A0A12' : TEXT_WHITE }}
                     >
                       {item.label}
                     </Text>
@@ -592,12 +593,12 @@ export default function DappIndex() {
               <View className="p-3 rounded-xl" style={{ backgroundColor: 'rgba(0,240,255,0.05)' }}>
                 <View className="flex-row items-center gap-2 mb-2">
                   <Ionicons name="information-circle" size={16} color={CYAN} />
-                  <Text className="text-sm font-medium" style={{ color: CYAN }}>质押说明</Text>
+                  <Text className="text-sm font-medium" style={{ color: CYAN }}>{t('home.stakeInfo')}</Text>
                 </View>
                 <Text className="text-xs" style={{ color: TEXT_MUTED }}>
-                  • 质押 BNB 每日获得 DQT 收益{'\n'}
-                  • 质押锁定期为 30 天{'\n'}
-                  • 收益率根据等级和质押时长计算
+                  • {t('home.stakeInfo1')}{'\n'}
+                  • {t('home.stakeInfo2')}{'\n'}
+                  • {t('home.stakeInfo3')}
                 </Text>
               </View>
             </View>
@@ -606,127 +607,93 @@ export default function DappIndex() {
           {/* 兑换模式 */}
           {mode === 'swap' && (
             <>
-              {/* DQT 出售区 */}
-          <View
-            className="rounded-2xl p-4"
-            style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-          >
-            <View className="flex-row items-center justify-between mb-3">
-              <View className="flex-row items-center gap-2">
-                <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: CYAN }}>
-                  <Ionicons name="diamond" size={16} color="#0A0A12" />
-                </View>
-                <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>DQT</Text>
-              </View>
-              <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                余额: {dqtBalance} DQT
-              </Text>
-            </View>
-
-            <TextInput
-              className="text-xl font-semibold mb-3"
-              style={{ color: TEXT_WHITE, backgroundColor: 'transparent' }}
-              placeholder="请输入出售数量"
-              placeholderTextColor={TEXT_MUTED}
-              value={sellAmount}
-              onChangeText={setSellAmount}
-              keyboardType="decimal-pad"
-            />
-
-            <View className="flex-row gap-2">
-              {[
-                { label: '20%', value: 20 },
-                { label: '50%', value: 50 },
-                { label: '70%', value: 70 },
-                { label: 'MAX', value: 100 },
-              ].map((item) => (
-                <TouchableOpacity
-                  key={item.label}
-                  className="flex-1 py-2.5 rounded-lg items-center"
-                  style={{
-                    backgroundColor: item.label === 'MAX' ? '#FFFFFF' : 'transparent',
-                    borderWidth: 1,
-                    borderColor: item.label === 'MAX' ? '#FFFFFF' : BORDER_GRAY,
-                  }}
-                  onPress={() => handlePercent(item.value, setSellAmount, dqtBalance)}
-                >
-                  <Text
-                    className="text-sm font-medium"
-                    style={{ color: item.label === 'MAX' ? '#333' : TEXT_WHITE }}
-                  >
-                    {item.label}
+              {/* USDT 支付区 */}
+              <View
+                className="rounded-2xl p-4"
+                style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
+              >
+                <View className="flex-row items-center justify-between mb-3">
+                  <View className="flex-row items-center gap-2">
+                    <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: '#26A17B' }}>
+                      <Text className="text-sm font-bold text-white">U</Text>
+                    </View>
+                    <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>USDT</Text>
+                  </View>
+                  <Text className="text-sm" style={{ color: TEXT_MUTED }}>
+                    余额: {usdtBalance || '0.00'} USDT
                   </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* BNB 购买区 */}
-          <View
-            className="rounded-2xl p-4"
-            style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-          >
-            <View className="flex-row items-center justify-between mb-3">
-              <View className="flex-row items-center gap-2">
-                <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: '#F3BA2F' }}>
-                  <Text className="text-sm font-bold text-black">B</Text>
                 </View>
-                <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>BNB</Text>
+
+                <TextInput
+                  className="text-xl font-semibold mb-3"
+                  style={{ color: TEXT_WHITE, backgroundColor: 'transparent' }}
+                  placeholder={t('home.inputAmount')}
+                  placeholderTextColor={TEXT_MUTED}
+                  value={sellAmount}
+                  onChangeText={setSellAmount}
+                  keyboardType="decimal-pad"
+                />
+
+                <View className="flex-row gap-2">
+                  {[
+                    { label: '25%', value: 25 },
+                    { label: '50%', value: 50 },
+                    { label: '75%', value: 75 },
+                    { label: 'MAX', value: 100 },
+                  ].map((item) => (
+                    <TouchableOpacity
+                      key={item.label}
+                      className="flex-1 py-2.5 rounded-lg items-center"
+                      style={{
+                        backgroundColor: item.label === 'MAX' ? '#26A17B' : 'transparent',
+                        borderWidth: 1,
+                        borderColor: item.label === 'MAX' ? '#26A17B' : BORDER_GRAY,
+                      }}
+                      onPress={() => {
+                        if (usdtBalance) {
+                          handlePercent(item.value, setSellAmount, usdtBalance);
+                        }
+                      }}
+                    >
+                      <Text
+                        className="text-sm font-medium"
+                        style={{ color: item.label === 'MAX' ? '#FFF' : TEXT_WHITE }}
+                      >
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
-              <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                余额: {bnbBalance} BNB
-              </Text>
-            </View>
 
-            <TextInput
-              className="text-xl font-semibold mb-3"
-              style={{ color: TEXT_WHITE, backgroundColor: 'transparent' }}
-              placeholder="请输入购买数量"
-              placeholderTextColor={TEXT_MUTED}
-              value={buyAmount}
-              onChangeText={setBuyAmount}
-              keyboardType="decimal-pad"
-            />
-
-            <View className="flex-row gap-2">
-              {[
-                { label: '20%', value: 20 },
-                { label: '50%', value: 50 },
-                { label: '70%', value: 70 },
-                { label: 'MAX', value: 100 },
-              ].map((item) => (
-                <TouchableOpacity
-                  key={item.label}
-                  className="flex-1 py-2.5 rounded-lg items-center"
-                  style={{
-                    backgroundColor: item.label === 'MAX' ? '#FFFFFF' : 'transparent',
-                    borderWidth: 1,
-                    borderColor: item.label === 'MAX' ? '#FFFFFF' : BORDER_GRAY,
-                  }}
-                  onPress={() => handlePercent(item.value, setBuyAmount, bnbBalance)}
-                >
-                  <Text
-                    className="text-sm font-medium"
-                    style={{ color: item.label === 'MAX' ? '#333' : TEXT_WHITE }}
-                  >
-                    {item.label}
+              {/* DQ 购买区 */}
+              <View
+                className="rounded-2xl p-4"
+                style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
+              >
+                <View className="flex-row items-center justify-between mb-3">
+                  <View className="flex-row items-center gap-2">
+                    <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: CYAN }}>
+                      <Ionicons name="diamond" size={16} color="#0A0A12" />
+                    </View>
+                    <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>DQ</Text>
+                  </View>
+                  <Text className="text-sm" style={{ color: TEXT_MUTED }}>
+                    余额: {dqtBalance} DQ
                   </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+                </View>
 
-            {/* K线装饰区域 */}
-            <View className="mt-3 h-12 rounded-lg overflow-hidden" style={{ backgroundColor: 'rgba(0,240,255,0.05)' }}>
-              <View className="flex-1 flex-row items-end px-2 gap-0.5">
-                {[30, 45, 35, 50, 40, 55, 45, 60, 50, 65, 55, 70, 60, 55, 65].map((h, i) => (
-                  <View key={i} className="flex-1 rounded-sm" style={{ 
-                    height: `${h}%`, 
-                    backgroundColor: i > 10 ? CYAN : 'rgba(208,32,255,0.5)' 
-                  }} />
-                ))}
+                <View className="h-12 rounded-lg overflow-hidden" style={{ backgroundColor: 'rgba(0,240,255,0.05)' }}>
+                  <View className="flex-1 flex-row items-end px-2 gap-0.5">
+                    {[30, 45, 35, 50, 40, 55, 45, 60, 50, 65, 55, 70, 60, 55, 65].map((h, i) => (
+                      <View key={i} className="flex-1 rounded-sm" style={{
+                        height: `${h}%`,
+                        backgroundColor: i > 10 ? CYAN : 'rgba(208,32,255,0.5)'
+                      }} />
+                    ))}
+                  </View>
+                </View>
               </View>
-            </View>
-          </View>
             </>
           )}
 
@@ -741,7 +708,7 @@ export default function DappIndex() {
               <ActivityIndicator size="small" color="#333" />
             ) : (
               <Text className="text-base font-semibold" style={{ color: '#333' }}>
-                {mode === 'swap' ? '确定兑换' : '确定质押'}
+                {mode === 'swap' ? t('home.confirmSwap') : t('home.confirmStake')}
               </Text>
             )}
           </TouchableOpacity>
@@ -750,7 +717,7 @@ export default function DappIndex() {
         {/* 数据卡片区 */}
         <View className="px-4 pt-4 pb-2">
           <Text className="text-base font-semibold mb-3" style={{ color: TEXT_WHITE }}>
-            全网数据
+            {t('home.networkData')}
           </Text>
           <View className="flex-row flex-wrap gap-2">
             {/* 今日入单 */}
@@ -758,7 +725,7 @@ export default function DappIndex() {
               className="w-[calc(50%-4px)] p-3 rounded-xl"
               style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 1, borderColor: YELLOW }}
             >
-              <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>今日入单(BNB)</Text>
+              <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('home.todayDeposit')}</Text>
               <Text className="text-lg font-bold" style={{ color: YELLOW }}>
                 {statsLoading ? '...' : stats.todayDeposit}
               </Text>
@@ -816,12 +783,12 @@ export default function DappIndex() {
               </Text>
             </View>
             
-            {/* DQT池 */}
+            {/* DQ池 */}
             <View 
               className="w-[calc(50%-4px)] p-3 rounded-xl"
               style={{ backgroundColor: CYAN }}
             >
-              <Text className="text-xs mb-1" style={{ color: '#0A0A12' }}>DQT池</Text>
+              <Text className="text-xs mb-1" style={{ color: '#0A0A12' }}>DQ池</Text>
               <Text className="text-lg font-bold" style={{ color: '#0A0A12' }}>
                 {statsLoading ? '...' : stats.dqtPoolBalance}
               </Text>

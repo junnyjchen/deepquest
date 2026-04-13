@@ -245,7 +245,7 @@ export default function DappTeam() {
                 <Text className="text-xl font-bold" style={{ color: TEXT_WHITE }}>
                   {teamLoading ? '...' : teamData.referralRewards}
                 </Text>
-                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQT</Text>
+                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQ</Text>
               </View>
             </View>
           </View>
@@ -269,14 +269,14 @@ export default function DappTeam() {
                 <Text className="text-xl font-bold" style={{ color: YELLOW }}>
                   {teamLoading ? '...' : teamData.myDirectRewards}
                 </Text>
-                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQT</Text>
+                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQ</Text>
               </View>
               <View>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>团队奖励</Text>
                 <Text className="text-xl font-bold" style={{ color: CYAN }}>
                   {teamLoading ? '...' : teamData.myRewards}
                 </Text>
-                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQT</Text>
+                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQ</Text>
               </View>
             </View>
 

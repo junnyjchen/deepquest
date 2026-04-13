@@ -135,7 +135,7 @@ export default function DappRewards() {
               setClaiming(true);
               const response = await dappUserApi.claimReward(walletAddress);
               if (response.code === 0) {
-                Alert.alert('成功', `已领取 ${response.data?.claimed || 0} DQT`);
+                Alert.alert('成功', `已领取 ${response.data?.claimed || 0} DQ`);
                 await fetchRewards(walletAddress, 1);
               } else {
                 Alert.alert('失败', response.message || '领取失败');
@@ -205,7 +205,7 @@ export default function DappRewards() {
             </View>
           </View>
           <View className="items-end">
-            <Text className="text-base font-bold" style={{ color: typeInfo.color }}>+{item.amount} DQT</Text>
+            <Text className="text-base font-bold" style={{ color: typeInfo.color }}>+{item.amount} DQ</Text>
             <View className="px-2 py-0.5 rounded-full mt-1" style={{ backgroundColor: `${getStatusColor(item.status)}20` }}>
               <Text className="text-xs" style={{ color: getStatusColor(item.status) }}>{getStatusText(item.status)}</Text>
             </View>
@@ -255,13 +255,13 @@ export default function DappRewards() {
                 <View className="items-center flex-1">
                   <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>待领取</Text>
                   <Text className="text-xl font-bold" style={{ color: YELLOW }}>{pendingTotal.toFixed(2)}</Text>
-                  <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQT</Text>
+                  <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQ</Text>
                 </View>
                 <View className="w-px" style={{ backgroundColor: BORDER_GRAY }} />
                 <View className="items-center flex-1">
                   <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>已领取</Text>
                   <Text className="text-xl font-bold" style={{ color: CYAN }}>{claimedTotal.toFixed(2)}</Text>
-                  <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQT</Text>
+                  <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQ</Text>
                 </View>
               </View>
               

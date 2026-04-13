@@ -47,7 +47,7 @@ const NODE_LEVELS: NodeLevel[] = [
     dailyReward: '0.8%',
     icon: 'ribbon',
     color: '#FFD23F',
-    description: '质押10,000 DQT，每日获得0.8%静态奖励',
+    description: '质押10,000 DQ，每日获得0.8%静态奖励',
   },
   {
     type: 'node_delegate',
@@ -56,7 +56,7 @@ const NODE_LEVELS: NodeLevel[] = [
     dailyReward: '1.2%',
     icon: 'medal',
     color: '#D020FF',
-    description: '质押50,000 DQT，每日获得1.2%静态奖励',
+    description: '质押50,000 DQ，每日获得1.2%静态奖励',
   },
 ];
 
@@ -118,13 +118,13 @@ export default function DappNodes() {
 
     const level = NODE_LEVELS.find(l => l.type === selectedLevel);
     if (level && parseFloat(stakeAmount) < parseFloat(level.stakeAmount.replace(',', ''))) {
-      Alert.alert('提示', `质押数量不能少于 ${level.stakeAmount} DQT`);
+      Alert.alert('提示', `质押数量不能少于 ${level.stakeAmount} DQ`);
       return;
     }
 
     Alert.alert(
       '确认申请',
-      `确定申请成为${level?.name}吗？\n质押数量: ${stakeAmount} DQT`,
+      `确定申请成为${level?.name}吗？\n质押数量: ${stakeAmount} DQ`,
       [
         { text: '取消', style: 'cancel' },
         { 
@@ -244,7 +244,7 @@ export default function DappNodes() {
                 <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>质押数量</Text>
                   <Text style={[styles.infoValue, { color: YELLOW }]}>
-                    {myApplication.stake_amount} DQT
+                    {myApplication.stake_amount} DQ
                   </Text>
                 </View>
                 <View style={styles.infoRow}>
@@ -280,7 +280,7 @@ export default function DappNodes() {
                   </View>
                   <View style={styles.levelInfo}>
                     <Text style={[styles.levelName, { color: level.color }]}>{level.name}</Text>
-                    <Text style={styles.levelAmount}>质押 {level.stakeAmount} DQT</Text>
+                    <Text style={styles.levelAmount}>质押 {level.stakeAmount} DQ</Text>
                   </View>
                   {selectedLevel === level.type && (
                     <View style={[styles.checkBadge, { backgroundColor: level.color }]}>
@@ -310,7 +310,7 @@ export default function DappNodes() {
                   value={stakeAmount}
                   onChangeText={setStakeAmount}
                 />
-                <Text style={styles.inputSuffix}>DQT</Text>
+                <Text style={styles.inputSuffix}>DQ</Text>
               </View>
               
               <View style={styles.percentButtons}>
@@ -348,7 +348,7 @@ export default function DappNodes() {
             <Text style={styles.noticeTitle}>注意事项</Text>
             <View style={styles.noticeItem}>
               <Ionicons name="alert-circle" size={16} color={TEXT_MUTED} />
-              <Text style={styles.noticeText}>节点申请需要质押相应数量的DQT代币</Text>
+              <Text style={styles.noticeText}>节点申请需要质押相应数量的DQ代币</Text>
             </View>
             <View style={styles.noticeItem}>
               <Ionicons name="alert-circle" size={16} color={TEXT_MUTED} />
