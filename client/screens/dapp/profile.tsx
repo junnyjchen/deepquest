@@ -26,6 +26,7 @@ const BORDER_GRAY = '#303040';
 const TEXT_WHITE = '#F5F5F5';
 const TEXT_MUTED = '#A0A0B0';
 const CYAN = '#00F0FF';
+const PURPLE = '#D020FF';
 
 const WALLET_STORAGE_KEY = '@deepquest_wallet';
 
@@ -487,6 +488,19 @@ export default function DappProfile() {
                   <Ionicons name="wallet-outline" size={20} color={CYAN} />
                 </View>
                 <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>提现记录</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              className="flex-row items-center justify-between p-4 border-t border-[rgba(48,48,64,0.5)]"
+              onPress={() => router.push('/nodes')}
+            >
+              <View className="flex-row items-center gap-3">
+                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(208,32,255,0.1)' }}>
+                  <Ionicons name="ribbon" size={20} color={PURPLE} />
+                </View>
+                <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>节点申请</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
             </TouchableOpacity>

@@ -444,3 +444,25 @@ export const dappTeamApi = {
   getTrend: (wallet_address: string) =>
     request<any>(`/api/v1/dapp/team/trend/${wallet_address}`),
 };
+
+// ============ DAPP Node API (用户端) ============
+export const dappNodeApi = {
+  // 获取节点申请统计
+  getStats: () =>
+    request<any>('/api/v1/dapp/node/stats'),
+  
+  // 获取我的节点申请记录
+  getMyApplication: (wallet_address: string) =>
+    request<any>(`/api/v1/dapp/node/my-application/${wallet_address}`),
+  
+  // 提交节点申请
+  apply: (wallet_address: string, data: { apply_type: string; stake_amount: string }) =>
+    request<any>('/api/v1/dapp/node/apply', {
+      method: 'POST',
+      body: JSON.stringify({ wallet_address, ...data }),
+    }),
+  
+  // 获取节点等级说明
+  getLevels: () =>
+    request<any>('/api/v1/dapp/node/levels'),
+};

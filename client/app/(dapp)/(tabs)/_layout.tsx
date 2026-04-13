@@ -90,6 +90,13 @@ export default function DappTabLayout() {
           title: '提现记录',
         }}
       />
+      <Tabs.Screen
+        name="nodes"
+        options={{
+          href: null, // 不显示在 Tab 栏
+          title: '节点申请',
+        }}
+      />
     </Tabs>
   );
 }
