@@ -83,6 +83,13 @@ export default function DappTabLayout() {
           title: '收益记录',
         }}
       />
+      <Tabs.Screen
+        name="withdrawals"
+        options={{
+          href: null, // 不显示在 Tab 栏
+          title: '提现记录',
+        }}
+      />
     </Tabs>
   );
 }
