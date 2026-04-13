@@ -42,6 +42,8 @@ export default {
     stakeInfo1: '質押 DQ 每日獲得收益',
     stakeInfo2: '質押鎖定期為 30 天',
     stakeInfo3: '收益率根據等級和質押時長計算',
+    swapUsdtToDq: 'USDT → DQ',
+    swapDqToUsdt: 'DQ → USDT',
   },
   profile: {
     title: '個人中心',
