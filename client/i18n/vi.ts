@@ -42,8 +42,6 @@ export default {
     stakeInfo1: 'Staking DQ hàng ngày để nhận thưởng',
     stakeInfo2: 'Thời gian khóa là 30 ngày',
     stakeInfo3: 'Lợi suất dựa trên cấp độ và thời gian',
-    swapUsdtToDq: 'USDT → DQ',
-    swapDqToUsdt: 'DQ → USDT',
   },
   profile: {
     title: 'Hồ sơ',

@@ -40,7 +40,6 @@ export default function DappIndex() {
   const { t, language, setLanguage, languages } = useLanguage();
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<'swap' | 'stake'>('swap');
-  const [swapDirection, setSwapDirection] = useState<'usdt_to_dq' | 'dq_to_usdt'>('usdt_to_dq');
   const [menuExpanded, setMenuExpanded] = useState(false);
   const [langModalVisible, setLangModalVisible] = useState(false);
   const [sellAmount, setSellAmount] = useState('');
@@ -608,233 +607,93 @@ export default function DappIndex() {
           {/* 兑换模式 */}
           {mode === 'swap' && (
             <>
-              {/* 兑换方向切换 */}
-              <View className="flex-row items-center justify-center mb-3">
-                <TouchableOpacity
-                  className="px-4 py-2 rounded-l-lg"
-                  style={{
-                    backgroundColor: swapDirection === 'usdt_to_dq' ? '#26A17B' : BG_CARD_TRANS,
-                    borderWidth: 1,
-                    borderColor: swapDirection === 'usdt_to_dq' ? '#26A17B' : BORDER_GRAY,
-                  }}
-                  onPress={() => {
-                    setSwapDirection('usdt_to_dq');
-                    setSellAmount('');
-                    setBuyAmount('');
-                  }}
-                >
-                  <Text
-                    className="text-sm font-medium"
-                    style={{ color: swapDirection === 'usdt_to_dq' ? '#FFF' : TEXT_MUTED }}
-                  >
-                    USDT → DQ
+              {/* USDT 支付区 */}
+              <View
+                className="rounded-2xl p-4"
+                style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
+              >
+                <View className="flex-row items-center justify-between mb-3">
+                  <View className="flex-row items-center gap-2">
+                    <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: '#26A17B' }}>
+                      <Text className="text-sm font-bold text-white">U</Text>
+                    </View>
+                    <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>USDT</Text>
+                  </View>
+                  <Text className="text-sm" style={{ color: TEXT_MUTED }}>
+                    余额: {usdtBalance || '0.00'} USDT
                   </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className="px-4 py-2 rounded-r-lg"
-                  style={{
-                    backgroundColor: swapDirection === 'dq_to_usdt' ? CYAN : BG_CARD_TRANS,
-                    borderWidth: 1,
-                    borderColor: swapDirection === 'dq_to_usdt' ? CYAN : BORDER_GRAY,
-                  }}
-                  onPress={() => {
-                    setSwapDirection('dq_to_usdt');
-                    setSellAmount('');
-                    setBuyAmount('');
-                  }}
-                >
-                  <Text
-                    className="text-sm font-medium"
-                    style={{ color: swapDirection === 'dq_to_usdt' ? '#0A0A12' : TEXT_MUTED }}
-                  >
-                    DQ → USDT
-                  </Text>
-                </TouchableOpacity>
+                </View>
+
+                <TextInput
+                  className="text-xl font-semibold mb-3"
+                  style={{ color: TEXT_WHITE, backgroundColor: 'transparent' }}
+                  placeholder={t('home.inputAmount')}
+                  placeholderTextColor={TEXT_MUTED}
+                  value={sellAmount}
+                  onChangeText={setSellAmount}
+                  keyboardType="decimal-pad"
+                />
+
+                <View className="flex-row gap-2">
+                  {[
+                    { label: '25%', value: 25 },
+                    { label: '50%', value: 50 },
+                    { label: '75%', value: 75 },
+                    { label: 'MAX', value: 100 },
+                  ].map((item) => (
+                    <TouchableOpacity
+                      key={item.label}
+                      className="flex-1 py-2.5 rounded-lg items-center"
+                      style={{
+                        backgroundColor: item.label === 'MAX' ? '#26A17B' : 'transparent',
+                        borderWidth: 1,
+                        borderColor: item.label === 'MAX' ? '#26A17B' : BORDER_GRAY,
+                      }}
+                      onPress={() => {
+                        if (usdtBalance) {
+                          handlePercent(item.value, setSellAmount, usdtBalance);
+                        }
+                      }}
+                    >
+                      <Text
+                        className="text-sm font-medium"
+                        style={{ color: item.label === 'MAX' ? '#FFF' : TEXT_WHITE }}
+                      >
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
 
-              {/* USDT 兑换 DQ */}
-              {swapDirection === 'usdt_to_dq' && (
-                <>
-                  {/* USDT 支付区 */}
-                  <View
-                    className="rounded-2xl p-4"
-                    style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-                  >
-                    <View className="flex-row items-center justify-between mb-3">
-                      <View className="flex-row items-center gap-2">
-                        <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: '#26A17B' }}>
-                          <Text className="text-sm font-bold text-white">U</Text>
-                        </View>
-                        <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>USDT</Text>
-                      </View>
-                      <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                        余额: {usdtBalance || '0.00'} USDT
-                      </Text>
+              {/* DQ 购买区 */}
+              <View
+                className="rounded-2xl p-4"
+                style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
+              >
+                <View className="flex-row items-center justify-between mb-3">
+                  <View className="flex-row items-center gap-2">
+                    <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: CYAN }}>
+                      <Ionicons name="diamond" size={16} color="#0A0A12" />
                     </View>
-
-                    <TextInput
-                      className="text-xl font-semibold mb-3"
-                      style={{ color: TEXT_WHITE, backgroundColor: 'transparent' }}
-                      placeholder={t('home.inputAmount')}
-                      placeholderTextColor={TEXT_MUTED}
-                      value={sellAmount}
-                      onChangeText={setSellAmount}
-                      keyboardType="decimal-pad"
-                    />
-
-                    <View className="flex-row gap-2">
-                      {[
-                        { label: '25%', value: 25 },
-                        { label: '50%', value: 50 },
-                        { label: '75%', value: 75 },
-                        { label: 'MAX', value: 100 },
-                      ].map((item) => (
-                        <TouchableOpacity
-                          key={item.label}
-                          className="flex-1 py-2.5 rounded-lg items-center"
-                          style={{
-                            backgroundColor: item.label === 'MAX' ? '#26A17B' : 'transparent',
-                            borderWidth: 1,
-                            borderColor: item.label === 'MAX' ? '#26A17B' : BORDER_GRAY,
-                          }}
-                          onPress={() => {
-                            if (usdtBalance) {
-                              handlePercent(item.value, setSellAmount, usdtBalance);
-                            }
-                          }}
-                        >
-                          <Text
-                            className="text-sm font-medium"
-                            style={{ color: item.label === 'MAX' ? '#FFF' : TEXT_WHITE }}
-                          >
-                            {item.label}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
+                    <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>DQ</Text>
                   </View>
+                  <Text className="text-sm" style={{ color: TEXT_MUTED }}>
+                    余额: {dqtBalance} DQ
+                  </Text>
+                </View>
 
-                  {/* DQ 购买区 */}
-                  <View
-                    className="rounded-2xl p-4"
-                    style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-                  >
-                    <View className="flex-row items-center justify-between mb-3">
-                      <View className="flex-row items-center gap-2">
-                        <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: CYAN }}>
-                          <Ionicons name="diamond" size={16} color="#0A0A12" />
-                        </View>
-                        <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>DQ</Text>
-                      </View>
-                      <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                        余额: {dqtBalance} DQ
-                      </Text>
-                    </View>
-
-                    <View className="h-12 rounded-lg overflow-hidden" style={{ backgroundColor: 'rgba(0,240,255,0.05)' }}>
-                      <View className="flex-1 flex-row items-end px-2 gap-0.5">
-                        {[30, 45, 35, 50, 40, 55, 45, 60, 50, 65, 55, 70, 60, 55, 65].map((h, i) => (
-                          <View key={i} className="flex-1 rounded-sm" style={{
-                            height: `${h}%`,
-                            backgroundColor: i > 10 ? CYAN : 'rgba(208,32,255,0.5)'
-                          }} />
-                        ))}
-                      </View>
-                    </View>
+                <View className="h-12 rounded-lg overflow-hidden" style={{ backgroundColor: 'rgba(0,240,255,0.05)' }}>
+                  <View className="flex-1 flex-row items-end px-2 gap-0.5">
+                    {[30, 45, 35, 50, 40, 55, 45, 60, 50, 65, 55, 70, 60, 55, 65].map((h, i) => (
+                      <View key={i} className="flex-1 rounded-sm" style={{
+                        height: `${h}%`,
+                        backgroundColor: i > 10 ? CYAN : 'rgba(208,32,255,0.5)'
+                      }} />
+                    ))}
                   </View>
-                </>
-              )}
-
-              {/* DQ 兑换 USDT */}
-              {swapDirection === 'dq_to_usdt' && (
-                <>
-                  {/* DQ 支付区 */}
-                  <View
-                    className="rounded-2xl p-4"
-                    style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-                  >
-                    <View className="flex-row items-center justify-between mb-3">
-                      <View className="flex-row items-center gap-2">
-                        <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: CYAN }}>
-                          <Ionicons name="diamond" size={16} color="#0A0A12" />
-                        </View>
-                        <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>DQ</Text>
-                      </View>
-                      <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                        余额: {dqtBalance} DQ
-                      </Text>
-                    </View>
-
-                    <TextInput
-                      className="text-xl font-semibold mb-3"
-                      style={{ color: TEXT_WHITE, backgroundColor: 'transparent' }}
-                      placeholder={t('home.inputAmount')}
-                      placeholderTextColor={TEXT_MUTED}
-                      value={sellAmount}
-                      onChangeText={setSellAmount}
-                      keyboardType="decimal-pad"
-                    />
-
-                    <View className="flex-row gap-2">
-                      {[
-                        { label: '25%', value: 25 },
-                        { label: '50%', value: 50 },
-                        { label: '75%', value: 75 },
-                        { label: 'MAX', value: 100 },
-                      ].map((item) => (
-                        <TouchableOpacity
-                          key={item.label}
-                          className="flex-1 py-2.5 rounded-lg items-center"
-                          style={{
-                            backgroundColor: item.label === 'MAX' ? CYAN : 'transparent',
-                            borderWidth: 1,
-                            borderColor: item.label === 'MAX' ? CYAN : BORDER_GRAY,
-                          }}
-                          onPress={() => {
-                            handlePercent(item.value, setSellAmount, dqtBalance);
-                          }}
-                        >
-                          <Text
-                            className="text-sm font-medium"
-                            style={{ color: item.label === 'MAX' ? '#0A0A12' : TEXT_WHITE }}
-                          >
-                            {item.label}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-
-                  {/* USDT 购买区 */}
-                  <View
-                    className="rounded-2xl p-4"
-                    style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-                  >
-                    <View className="flex-row items-center justify-between mb-3">
-                      <View className="flex-row items-center gap-2">
-                        <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: '#26A17B' }}>
-                          <Text className="text-sm font-bold text-white">U</Text>
-                        </View>
-                        <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>USDT</Text>
-                      </View>
-                      <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                        余额: {usdtBalance || '0.00'} USDT
-                      </Text>
-                    </View>
-
-                    <View className="h-12 rounded-lg overflow-hidden" style={{ backgroundColor: 'rgba(38,161,123,0.1)' }}>
-                      <View className="flex-1 flex-row items-end px-2 gap-0.5">
-                        {[25, 40, 55, 45, 60, 50, 65, 55, 70, 60, 65, 55, 75, 65, 70].map((h, i) => (
-                          <View key={i} className="flex-1 rounded-sm" style={{
-                            height: `${h}%`,
-                            backgroundColor: i > 8 ? '#26A17B' : 'rgba(38,161,123,0.4)'
-                          }} />
-                        ))}
-                      </View>
-                    </View>
-                  </View>
-                </>
-              )}
+                </View>
+              </View>
             </>
           )}
 

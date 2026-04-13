@@ -42,8 +42,6 @@ export default {
     stakeInfo1: '质押 DQ 每日获得收益',
     stakeInfo2: '质押锁定期为 30 天',
     stakeInfo3: '收益率根据等级和质押时长计算',
-    swapUsdtToDq: 'USDT → DQ',
-    swapDqToUsdt: 'DQ → USDT',
   },
   profile: {
     title: '个人中心',

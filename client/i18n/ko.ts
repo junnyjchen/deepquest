@@ -42,8 +42,6 @@ export default {
     stakeInfo1: 'DQ를 스테이킹하여 매일 보상 획득',
     stakeInfo2: '잠금 기간은 30일',
     stakeInfo3: '수익률은 레벨과 기간에 따라 결정',
-    swapUsdtToDq: 'USDT → DQ',
-    swapDqToUsdt: 'DQ → USDT',
   },
   profile: {
     title: '프로필',

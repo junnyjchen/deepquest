@@ -42,8 +42,6 @@ export default {
     stakeInfo1: 'Stake DQ daily to earn rewards',
     stakeInfo2: 'Lock period is 30 days',
     stakeInfo3: 'Yield based on level and duration',
-    swapUsdtToDq: 'USDT → DQ',
-    swapDqToUsdt: 'DQ → USDT',
   },
   profile: {
     title: 'Profile',

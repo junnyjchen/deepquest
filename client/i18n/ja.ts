@@ -42,8 +42,6 @@ export default {
     stakeInfo1: 'DQをステークして毎日報酬を獲得',
     stakeInfo2: 'ロック期間は30日間',
     stakeInfo3: '利回りはレベルと期間に基づきます',
-    swapUsdtToDq: 'USDT → DQ',
-    swapDqToUsdt: 'DQ → USDT',
   },
   profile: {
     title: 'プロフィール',
