@@ -244,15 +244,6 @@ export default function DappIndex() {
     );
   };
 
-  // 注册
-  const handleRegister = () => {
-    if (!walletAddress) {
-      Alert.alert('提示', '请先连接钱包');
-      return;
-    }
-    Alert.alert('注册成功', '您已成功激活账户');
-  };
-
   // 质押操作
   const handleStake = async () => {
     if (!walletAddress) {
@@ -517,13 +508,6 @@ export default function DappIndex() {
                 <Text className="text-sm" style={{ color: TEXT_WHITE }}>{t('home.connectWallet')}</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity
-              className="px-3 py-1.5 rounded-lg"
-              style={{ backgroundColor: YELLOW }}
-              onPress={handleRegister}
-            >
-              <Text className="text-sm font-semibold" style={{ color: '#333' }}>{t('home.register')}</Text>
-            </TouchableOpacity>
           </View>
         </View>
 
