@@ -217,6 +217,7 @@ export const cardsApi = {
     cardType?: number;
     ownerAddress?: string;
     status?: string;
+    search?: string;
   }) => {
     const query = new URLSearchParams();
     if (params?.page) query.append('page', String(params.page));
@@ -224,6 +225,7 @@ export const cardsApi = {
     if (params?.cardType !== undefined) query.append('cardType', String(params.cardType));
     if (params?.ownerAddress) query.append('ownerAddress', params.ownerAddress);
     if (params?.status) query.append('status', params.status);
+    if (params?.search) query.append('search', params.search);
     return request<any>(`/api/v1/cards?${query.toString()}`);
   },
   getStats: () => request<any>('/api/v1/cards/stats'),
@@ -232,6 +234,31 @@ export const cardsApi = {
       method: 'POST',
       body: JSON.stringify({ cards }),
     }),
+};
+
+// ============ Stakes API ============
+export const stakesApi = {
+  getList: (params?: {
+    page?: number;
+    pageSize?: number;
+    stakeDays?: number;
+    isClaimed?: boolean;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.pageSize) query.append('pageSize', String(params.pageSize));
+    if (params?.stakeDays !== undefined) query.append('stakeDays', String(params.stakeDays));
+    if (params?.isClaimed !== undefined) query.append('isClaimed', String(params.isClaimed));
+    if (params?.search) query.append('search', params.search);
+    if (params?.startDate) query.append('startDate', params.startDate);
+    if (params?.endDate) query.append('endDate', params.endDate);
+    return request<any>(`/api/v1/stakes?${query.toString()}`);
+  },
+  getStats: () => request<any>('/api/v1/stakes/stats'),
+  getByAddress: (address: string) => request<any[]>(`/api/v1/stakes/user/${address}`),
 };
 
 // ============ Pools API ============
