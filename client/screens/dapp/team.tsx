@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappTeamApi, dappApi } from '@/utils/api';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 // 精确匹配参考图的颜色体系
 const BG_DARK = '#0A0A12';
@@ -28,6 +29,7 @@ const CYAN = '#00F0FF';
 const WALLET_STORAGE_KEY = '@deepquest_wallet';
 
 export default function DappTeam() {
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);

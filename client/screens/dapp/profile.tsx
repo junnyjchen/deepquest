@@ -12,6 +12,7 @@ import { Screen } from '@/components/Screen';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
+import { useLanguage } from '@/contexts/LanguageContext';
 import * as Clipboard from 'expo-clipboard';
 import * as Crypto from 'expo-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -32,6 +33,7 @@ const WALLET_STORAGE_KEY = '@deepquest_wallet';
 
 export default function DappProfile() {
   const router = useSafeRouter();
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [userLoading, setUserLoading] = useState(false);
@@ -196,7 +198,7 @@ export default function DappProfile() {
       <Screen>
         <View className="flex-1 items-center justify-center" style={{ backgroundColor: BG_DARK }}>
           <ActivityIndicator size="large" color={YELLOW} />
-          <Text className="text-white mt-4">加载中...</Text>
+          <Text className="text-white mt-4">{t('common.loading')}</Text>
         </View>
       </Screen>
     );
@@ -267,7 +269,7 @@ export default function DappProfile() {
                   style={{ backgroundColor: 'rgba(255,0,60,0.15)' }}
                   onPress={handleDisconnect}
                 >
-                  <Text className="text-xs" style={{ color: '#FF003C' }}>断开</Text>
+                  <Text className="text-xs" style={{ color: '#FF003C' }}>{t('home.disconnect')}</Text>
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity
@@ -275,7 +277,7 @@ export default function DappProfile() {
                   style={{ backgroundColor: YELLOW }}
                   onPress={handleConnect}
                 >
-                  <Text className="text-sm font-semibold" style={{ color: '#333' }}>连接</Text>
+                  <Text className="text-sm font-semibold" style={{ color: '#333' }}>{t('home.connectWallet')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -283,18 +285,18 @@ export default function DappProfile() {
             {/* 账户状态 */}
             <View className="flex-row items-center gap-3 mt-4 pt-3 border-t border-[rgba(48,48,64,0.5)]">
               <View className="flex-1 flex-row items-center justify-between">
-                <Text className="text-xs" style={{ color: TEXT_MUTED }}>账户状态</Text>
+                <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('profile.accountStatus') || '账户状态'}</Text>
                 <View
                   className="px-2 py-0.5 rounded-full"
                   style={{ backgroundColor: userData.isActivated ? 'rgba(0,255,136,0.15)' : 'rgba(255,215,0,0.15)' }}
                 >
                   <Text className="text-xs font-medium" style={{ color: userData.isActivated ? '#00FF88' : YELLOW }}>
-                    {userData.isActivated ? '已激活' : '未激活'}
+                    {userData.isActivated ? (t('profile.activated') || '已激活') : (t('profile.notActivated') || '未激活')}
                   </Text>
                 </View>
               </View>
               <View className="flex-1 flex-row items-center justify-between">
-                <Text className="text-xs" style={{ color: TEXT_MUTED }}>等级</Text>
+                <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('team.level')}</Text>
                 <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>Lv.{userData.level}</Text>
               </View>
             </View>
