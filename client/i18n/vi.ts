@@ -32,7 +32,7 @@ export default {
     confirmSwap: 'Xác nhận hoán đổi',
     confirmStake: 'Xác nhận staking',
     developing: 'Đang phát triển',
-    todayDeposit: 'Nạp hôm nay(USDT)',
+    todayDeposit: 'Nạp hôm nay(SOL)',
     networkPower: 'Công suất mạng',
     networkData: 'Dữ liệu mạng',
     totalUsers: 'Tổng người dùng',

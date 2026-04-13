@@ -32,7 +32,7 @@ export default {
     confirmSwap: '确认兑换',
     confirmStake: '确认质押',
     developing: '功能开发中',
-    todayDeposit: '今日入单(USDT)',
+    todayDeposit: '今日入单(SOL)',
     networkPower: '网络算力',
     networkData: '全网数据',
     totalUsers: '总用户',

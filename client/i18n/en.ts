@@ -32,7 +32,7 @@ export default {
     confirmSwap: 'Confirm Swap',
     confirmStake: 'Confirm Stake',
     developing: 'Under Development',
-    todayDeposit: 'Today Deposit(USDT)',
+    todayDeposit: 'Today Deposit(SOL)',
     networkPower: 'Network Power',
     networkData: 'Network Data',
     totalUsers: 'Total Users',

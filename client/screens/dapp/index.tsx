@@ -40,7 +40,7 @@ export default function DappIndex() {
   const { t, language, setLanguage, languages } = useLanguage();
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<'swap' | 'stake'>('swap');
-  const [swapDirection, setSwapDirection] = useState<'usdt_to_dq' | 'dq_to_usdt'>('usdt_to_dq');
+  const [swapDirection, setSwapDirection] = useState<'dq_to_sol' | 'sol_to_dq'>('dq_to_sol');
   const [menuExpanded, setMenuExpanded] = useState(false);
   const [langModalVisible, setLangModalVisible] = useState(false);
   const [sellAmount, setSellAmount] = useState('');
@@ -48,11 +48,14 @@ export default function DappIndex() {
   const [stakeAmount, setStakeAmount] = useState('');
   const [bnbBalance, setBnbBalance] = useState('0.0');
   const [dqtBalance, setDqtBalance] = useState('0.0');
-  const [usdtBalance, setUsdtBalance] = useState('0.00');
+  const [solBalance, setSolBalance] = useState('0.00');
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // SOL 代币颜色
+  const SOL_PURPLE = '#9945FF';
 
   // 平台数据
   const [stats, setStats] = useState({
@@ -60,7 +63,7 @@ export default function DappIndex() {
     totalBurned: '140,480,617',
     todayDeposit: '0.00',
     networkPower: '63,497,422',
-    usdtPoolBalance: '0.00',
+    solPoolBalance: '0.00',
     dqtPoolBalance: '0.00',
     totalUsers: 0,
     totalDeposit: '0.00',
@@ -103,7 +106,7 @@ export default function DappIndex() {
           totalBurned: response.data.totalBurned || '140,480,617',
           todayDeposit: response.data.todayDeposit || '0.00',
           networkPower: response.data.networkPower || '63,497,422',
-          usdtPoolBalance: response.data.usdtPoolBalance || '0.00',
+          solPoolBalance: response.data.usdtPoolBalance || '0.00',
           dqtPoolBalance: response.data.dqtPoolBalance || '0.00',
           totalUsers: response.data.totalUsers || 0,
           totalDeposit: response.data.totalDeposit || '0.00',
@@ -257,7 +260,7 @@ export default function DappIndex() {
 
   // 切换兑换方向
   const handleSwapDirection = () => {
-    setSwapDirection(prev => prev === 'usdt_to_dq' ? 'dq_to_usdt' : 'usdt_to_dq');
+    setSwapDirection(prev => prev === 'dq_to_sol' ? 'sol_to_dq' : 'dq_to_sol');
     setSellAmount('');
     setBuyAmount('');
   };
@@ -622,19 +625,19 @@ export default function DappIndex() {
               >
                 <View className="flex-row items-center justify-between mb-3">
                   <View className="flex-row items-center gap-2">
-                    <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: swapDirection === 'usdt_to_dq' ? '#26A17B' : CYAN }}>
-                      {swapDirection === 'usdt_to_dq' ? (
-                        <Text className="text-sm font-bold text-white">U</Text>
-                      ) : (
+                    <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: swapDirection === 'dq_to_sol' ? CYAN : SOL_PURPLE }}>
+                      {swapDirection === 'dq_to_sol' ? (
                         <Ionicons name="diamond" size={16} color="#0A0A12" />
+                      ) : (
+                        <Text className="text-sm font-bold text-white">S</Text>
                       )}
                     </View>
                     <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>
-                      {swapDirection === 'usdt_to_dq' ? 'USDT' : 'DQ'}
+                      {swapDirection === 'dq_to_sol' ? 'DQ' : 'SOL'}
                     </Text>
                   </View>
                   <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                    余额: {swapDirection === 'usdt_to_dq' ? (usdtBalance || '0.00') : dqtBalance} {swapDirection === 'usdt_to_dq' ? 'USDT' : 'DQ'}
+                    余额: {swapDirection === 'dq_to_sol' ? dqtBalance : solBalance} {swapDirection === 'dq_to_sol' ? 'DQ' : 'SOL'}
                   </Text>
                 </View>
 
@@ -659,12 +662,12 @@ export default function DappIndex() {
                       key={item.label}
                       className="flex-1 py-2.5 rounded-lg items-center"
                       style={{
-                        backgroundColor: item.label === 'MAX' ? (swapDirection === 'usdt_to_dq' ? '#26A17B' : CYAN) : 'transparent',
+                        backgroundColor: item.label === 'MAX' ? (swapDirection === 'dq_to_sol' ? CYAN : SOL_PURPLE) : 'transparent',
                         borderWidth: 1,
-                        borderColor: item.label === 'MAX' ? (swapDirection === 'usdt_to_dq' ? '#26A17B' : CYAN) : BORDER_GRAY,
+                        borderColor: item.label === 'MAX' ? (swapDirection === 'dq_to_sol' ? CYAN : SOL_PURPLE) : BORDER_GRAY,
                       }}
                       onPress={() => {
-                        const balance = swapDirection === 'usdt_to_dq' ? usdtBalance : dqtBalance;
+                        const balance = swapDirection === 'dq_to_sol' ? dqtBalance : solBalance;
                         if (balance) {
                           handlePercent(item.value, setSellAmount, balance);
                         }
@@ -699,19 +702,19 @@ export default function DappIndex() {
               >
                 <View className="flex-row items-center justify-between mb-3">
                   <View className="flex-row items-center gap-2">
-                    <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: swapDirection === 'usdt_to_dq' ? CYAN : '#26A17B' }}>
-                      {swapDirection === 'usdt_to_dq' ? (
-                        <Ionicons name="diamond" size={16} color="#0A0A12" />
+                    <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: swapDirection === 'dq_to_sol' ? SOL_PURPLE : CYAN }}>
+                      {swapDirection === 'dq_to_sol' ? (
+                        <Text className="text-sm font-bold text-white">S</Text>
                       ) : (
-                        <Text className="text-sm font-bold text-white">U</Text>
+                        <Ionicons name="diamond" size={16} color="#0A0A12" />
                       )}
                     </View>
                     <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>
-                      {swapDirection === 'usdt_to_dq' ? 'DQ' : 'USDT'}
+                      {swapDirection === 'dq_to_sol' ? 'SOL' : 'DQ'}
                     </Text>
                   </View>
                   <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                    余额: {swapDirection === 'usdt_to_dq' ? dqtBalance : (usdtBalance || '0.00')} {swapDirection === 'usdt_to_dq' ? 'DQ' : 'USDT'}
+                    余额: {swapDirection === 'dq_to_sol' ? solBalance : dqtBalance} {swapDirection === 'dq_to_sol' ? 'SOL' : 'DQ'}
                   </Text>
                 </View>
 
@@ -720,7 +723,7 @@ export default function DappIndex() {
                     {[30, 45, 35, 50, 40, 55, 45, 60, 50, 65, 55, 70, 60, 55, 65].map((h, i) => (
                       <View key={i} className="flex-1 rounded-sm" style={{
                         height: `${h}%`,
-                        backgroundColor: i > 10 ? (swapDirection === 'usdt_to_dq' ? CYAN : '#26A17B') : 'rgba(208,32,255,0.5)'
+                        backgroundColor: i > 10 ? (swapDirection === 'dq_to_sol' ? SOL_PURPLE : CYAN) : 'rgba(208,32,255,0.5)'
                       }} />
                     ))}
                   </View>
@@ -804,14 +807,14 @@ export default function DappIndex() {
             底池数据
           </Text>
           <View className="flex-row flex-wrap gap-2">
-            {/* USDT池 */}
+            {/* SOL池 */}
             <View 
               className="w-[calc(50%-4px)] p-3 rounded-xl"
-              style={{ backgroundColor: YELLOW }}
+              style={{ backgroundColor: SOL_PURPLE }}
             >
-              <Text className="text-xs mb-1" style={{ color: '#333' }}>USDT池</Text>
-              <Text className="text-lg font-bold" style={{ color: '#333' }}>
-                {statsLoading ? '...' : stats.usdtPoolBalance}
+              <Text className="text-xs mb-1" style={{ color: '#FFF' }}>SOL池</Text>
+              <Text className="text-lg font-bold" style={{ color: '#FFF' }}>
+                {statsLoading ? '...' : stats.solPoolBalance}
               </Text>
             </View>
             
