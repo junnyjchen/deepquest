@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, TextInput, Modal } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { LinearGradient } from 'expo-linear-gradient';
 import { configApi } from '@/utils/api';
@@ -18,6 +18,10 @@ export default function ConfigScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingConfig, setEditingConfig] = useState<Config | null>(null);
+  const [editPeriods, setEditPeriods] = useState('');
+  const [editRates, setEditRates] = useState('');
 
   const fetchConfigs = useCallback(async () => {
     try {
@@ -88,6 +92,44 @@ export default function ConfigScreen() {
     );
   };
 
+  const handleEditStakeConfig = (config: Config) => {
+    const value = config.config_value;
+    setEditingConfig(config);
+    setEditPeriods((value.periods || []).join(', '));
+    setEditRates((value.rates || []).join(', '));
+    setEditModalVisible(true);
+  };
+
+  const handleSaveStakeConfig = async () => {
+    if (!editingConfig) return;
+    
+    try {
+      const periods = editPeriods.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+      const rates = editRates.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+      
+      if (periods.length === 0 || rates.length === 0) {
+        Alert.alert('Error', 'Invalid periods or rates format');
+        return;
+      }
+      
+      if (periods.length !== rates.length) {
+        Alert.alert('Error', 'Periods and rates must have the same count');
+        return;
+      }
+      
+      await configApi.update(editingConfig.config_key, {
+        periods,
+        rates
+      }, editingConfig.description);
+      
+      setEditModalVisible(false);
+      fetchConfigs();
+      Alert.alert('Success', 'Stake config updated');
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    }
+  };
+
   if (loading) {
     return (
       <Screen>
@@ -156,9 +198,26 @@ export default function ConfigScreen() {
                   <View style={styles.configBody}>
                     <View style={styles.valueContainer}>
                       <Text style={styles.valueLabel}>VALUE:</Text>
-                      <Text style={styles.valueText}>
-                        {formatValue(config.config_value)}
-                      </Text>
+                      {config.config_key === 'stake_config' ? (
+                        <View>
+                          <Text style={styles.valueText}>
+                            Periods: [{formatValue((config.config_value as any)?.periods)}]
+                          </Text>
+                          <Text style={styles.valueText}>
+                            Rates: [{formatValue((config.config_value as any)?.rates)}]
+                          </Text>
+                          <TouchableOpacity 
+                            style={styles.editButton}
+                            onPress={() => handleEditStakeConfig(config)}
+                          >
+                            <Text style={styles.editButtonText}>EDIT STAKE CONFIG</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <Text style={styles.valueText}>
+                          {formatValue(config.config_value)}
+                        </Text>
+                      )}
                     </View>
                     
                     {config.description && (
@@ -193,6 +252,53 @@ export default function ConfigScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Edit Stake Config Modal */}
+      <Modal
+        visible={editModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>EDIT STAKE CONFIG</Text>
+            
+            <Text style={styles.inputLabel}>PERIODS (days, comma separated):</Text>
+            <TextInput
+              style={styles.input}
+              value={editPeriods}
+              onChangeText={setEditPeriods}
+              placeholder="30, 90, 180, 360"
+              placeholderTextColor="#555570"
+            />
+            
+            <Text style={styles.inputLabel}>RATES (% per day, comma separated):</Text>
+            <TextInput
+              style={styles.input}
+              value={editRates}
+              onChangeText={setEditRates}
+              placeholder="5, 10, 15, 20"
+              placeholderTextColor="#555570"
+            />
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelBtn]}
+                onPress={() => setEditModalVisible(false)}
+              >
+                <Text style={styles.cancelBtnText}>CANCEL</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.saveBtn]}
+                onPress={handleSaveStakeConfig}
+              >
+                <Text style={styles.saveBtnText}>SAVE</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -347,5 +453,90 @@ const styles = StyleSheet.create({
   emptyHint: {
     color: '#555570',
     fontSize: 12,
+  },
+  editButton: {
+    backgroundColor: '#FF6B00',
+    borderRadius: 6,
+    padding: 10,
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  editButtonText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#12121A',
+    borderRadius: 12,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: '#00F0FF',
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FF6B00',
+    letterSpacing: 2,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  inputLabel: {
+    fontSize: 10,
+    color: '#555570',
+    letterSpacing: 1,
+    marginBottom: 6,
+    marginTop: 12,
+  },
+  input: {
+    backgroundColor: '#0A0A0F',
+    borderWidth: 1,
+    borderColor: '#00F0FF',
+    borderRadius: 6,
+    padding: 12,
+    color: '#EAEAEA',
+    fontSize: 14,
+    fontFamily: 'monospace',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 24,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  cancelBtn: {
+    backgroundColor: '#1A1A25',
+    borderWidth: 1,
+    borderColor: '#555570',
+  },
+  cancelBtnText: {
+    color: '#555570',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  saveBtn: {
+    backgroundColor: '#FF6B00',
+  },
+  saveBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1,
   },
 });
