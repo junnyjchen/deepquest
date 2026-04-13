@@ -12,6 +12,8 @@ import { Screen } from '@/components/Screen';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { dappTeamApi, dappApi } from '@/utils/api';
 
 // 精确匹配参考图的颜色体系
 const BG_DARK = '#0A0A12';
@@ -23,40 +25,113 @@ const TEXT_WHITE = '#F5F5F5';
 const TEXT_MUTED = '#A0A0B0';
 const CYAN = '#00F0FF';
 
+const WALLET_STORAGE_KEY = '@deepquest_wallet';
+
 export default function DappTeam() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [teamLoading, setTeamLoading] = useState(false);
 
   // 团队数据
-  const [teamData] = useState({
-    totalMembers: '0',
-    directMembers: '0',
+  const [teamData, setTeamData] = useState({
+    totalMembers: 0,
+    directMembers: 0,
     teamStaked: '0.0',
     teamRewards: '0.0',
     myRewards: '0.0',
     myDirectRewards: '0.0',
-    referrerAddress: null,
-    inviteCode: '0x0000...0000',
+    referrerAddress: null as string | null,
+    directCount: 0,
+    teamCount: 0,
+    teamInvest: '0.0',
+    referralRewards: '0.0',
   });
 
   // 成员列表
-  const [members] = useState<any[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
 
   useFocusEffect(
     useCallback(() => {
-      setLoading(true);
-      setTimeout(() => setLoading(false), 500);
+      const init = async () => {
+        try {
+          // 加载保存的钱包地址
+          const savedWallet = await AsyncStorage.getItem(WALLET_STORAGE_KEY);
+          if (savedWallet) {
+            setWalletAddress(savedWallet);
+            // 获取团队数据
+            await fetchTeamData(savedWallet);
+          }
+        } catch (error) {
+          console.error('初始化失败:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      init();
     }, [])
   );
 
-  const onRefresh = useCallback(() => {
+  // 获取团队数据
+  const fetchTeamData = async (address: string) => {
+    try {
+      setTeamLoading(true);
+      
+      // 并行获取团队统计和推荐信息
+      const [statsRes, referralRes, directListRes] = await Promise.all([
+        dappTeamApi.getStats(address),
+        dappApi.getReferral(address),
+        dappTeamApi.getDirectList(address, 1, 50),
+      ]);
+
+      if (statsRes.code === 0 && statsRes.data) {
+        setTeamData({
+          totalMembers: statsRes.data.team_count || 0,
+          directMembers: statsRes.data.direct_count || 0,
+          teamStaked: statsRes.data.team_invest || '0.0',
+          teamRewards: '0.0', // 需要从奖励接口获取
+          myRewards: statsRes.data.referral_rewards || '0.0',
+          myDirectRewards: statsRes.data.referral_rewards || '0.0',
+          referrerAddress: referralRes.data?.referrer_address || null,
+          directCount: statsRes.data.direct_count || 0,
+          teamCount: statsRes.data.team_count || 0,
+          teamInvest: statsRes.data.team_invest || '0.0',
+          referralRewards: statsRes.data.referral_rewards || '0.0',
+        });
+      }
+
+      // 获取直接推荐列表
+      if (directListRes.code === 0 && directListRes.data?.list) {
+        setMembers(directListRes.data.list.map((item: any) => ({
+          address: item.wallet_address,
+          level: item.level || 1,
+          staked: item.total_invest || '0.0',
+          name: `用户 ${item.wallet_address?.slice(2, 6) || 'XXXX'}`,
+        })));
+      }
+    } catch (error) {
+      console.error('获取团队数据失败:', error);
+    } finally {
+      setTeamLoading(false);
+    }
+  };
+
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
-  }, []);
+    if (walletAddress) {
+      await fetchTeamData(walletAddress);
+    }
+    setRefreshing(false);
+  }, [walletAddress]);
 
   const handleCopyInviteCode = async () => {
-    await Clipboard.setStringAsync(teamData.inviteCode);
-    Alert.alert('复制成功', '邀请码已复制到剪贴板');
+    if (walletAddress) {
+      await Clipboard.setStringAsync(walletAddress);
+      Alert.alert('复制成功', '邀请码已复制到剪贴板');
+    } else {
+      Alert.alert('提示', '请先连接钱包');
+    }
   };
 
   if (loading) {
@@ -119,7 +194,7 @@ export default function DappTeam() {
                 <Ionicons name="person" size={14} color={TEXT_MUTED} />
                 <Text className="text-xs" style={{ color: TEXT_MUTED }}>推荐人</Text>
                 <Text className="text-xs font-mono" style={{ color: TEXT_WHITE }}>
-                  {teamData.referrerAddress}
+                  {teamData.referrerAddress?.slice(0, 10)}...{teamData.referrerAddress?.slice(-6)}
                 </Text>
               </View>
               <TouchableOpacity className="px-2 py-1 rounded" style={{ backgroundColor: 'rgba(0,240,255,0.1)' }}>
@@ -144,22 +219,30 @@ export default function DappTeam() {
             <View className="grid grid-cols-2 gap-x-4 gap-y-4">
               <View>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>团队总人数</Text>
-                <Text className="text-xl font-bold" style={{ color: CYAN }}>{teamData.totalMembers}</Text>
+                <Text className="text-xl font-bold" style={{ color: CYAN }}>
+                  {teamLoading ? '...' : teamData.teamCount}
+                </Text>
                 <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>人</Text>
               </View>
               <View>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>直推人数</Text>
-                <Text className="text-xl font-bold" style={{ color: '#00FF88' }}>{teamData.directMembers}</Text>
+                <Text className="text-xl font-bold" style={{ color: '#00FF88' }}>
+                  {teamLoading ? '...' : teamData.directCount}
+                </Text>
                 <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>人</Text>
               </View>
               <View>
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>团队质押</Text>
-                <Text className="text-xl font-bold" style={{ color: YELLOW }}>{teamData.teamStaked}</Text>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>团队业绩</Text>
+                <Text className="text-xl font-bold" style={{ color: YELLOW }}>
+                  {teamLoading ? '...' : teamData.teamInvest}
+                </Text>
                 <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>BNB</Text>
               </View>
               <View>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>团队奖励</Text>
-                <Text className="text-xl font-bold" style={{ color: TEXT_WHITE }}>{teamData.teamRewards}</Text>
+                <Text className="text-xl font-bold" style={{ color: TEXT_WHITE }}>
+                  {teamLoading ? '...' : teamData.referralRewards}
+                </Text>
                 <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQT</Text>
               </View>
             </View>
@@ -181,12 +264,16 @@ export default function DappTeam() {
             <View className="grid grid-cols-2 gap-x-4 gap-y-4 mb-4">
               <View>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>直推奖励</Text>
-                <Text className="text-xl font-bold" style={{ color: YELLOW }}>{teamData.myDirectRewards}</Text>
+                <Text className="text-xl font-bold" style={{ color: YELLOW }}>
+                  {teamLoading ? '...' : teamData.myDirectRewards}
+                </Text>
                 <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQT</Text>
               </View>
               <View>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>团队奖励</Text>
-                <Text className="text-xl font-bold" style={{ color: CYAN }}>{teamData.myRewards}</Text>
+                <Text className="text-xl font-bold" style={{ color: CYAN }}>
+                  {teamLoading ? '...' : teamData.myRewards}
+                </Text>
                 <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQT</Text>
               </View>
             </View>
@@ -206,7 +293,7 @@ export default function DappTeam() {
                 </TouchableOpacity>
               </View>
               <Text className="text-base font-mono font-semibold" style={{ color: TEXT_WHITE }}>
-                {teamData.inviteCode}
+                {walletAddress ? `${walletAddress.slice(0, 8)}...${walletAddress.slice(-6)}` : '未连接钱包'}
               </Text>
             </View>
 
@@ -232,7 +319,12 @@ export default function DappTeam() {
             <Text className="text-sm" style={{ color: TEXT_MUTED }}>{members.length} 人</Text>
           </View>
 
-          {members.length === 0 ? (
+          {teamLoading ? (
+            <View className="rounded-2xl p-8 items-center" style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}>
+              <ActivityIndicator size="small" color={YELLOW} />
+              <Text className="text-sm mt-2" style={{ color: TEXT_MUTED }}>加载中...</Text>
+            </View>
+          ) : members.length === 0 ? (
             <View
               className="rounded-2xl p-8 items-center"
               style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
@@ -264,12 +356,14 @@ export default function DappTeam() {
                     </View>
                     <View>
                       <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{member.name}</Text>
-                      <Text className="text-xs font-mono mt-0.5" style={{ color: TEXT_MUTED }}>{member.address}</Text>
+                      <Text className="text-xs font-mono mt-0.5" style={{ color: TEXT_MUTED }}>
+                        {member.address?.slice(0, 8)}...{member.address?.slice(-6)}
+                      </Text>
                     </View>
                   </View>
                   <View className="items-end">
                     <Text className="text-sm font-medium" style={{ color: YELLOW }}>{member.staked} BNB</Text>
-                    <Text className="text-xs mt-0.5" style={{ color: TEXT_MUTED }}>质押额</Text>
+                    <Text className="text-xs mt-0.5" style={{ color: TEXT_MUTED }}>Lv.{member.level}</Text>
                   </View>
                 </View>
               ))}

@@ -33,6 +33,7 @@ export default function RootLayout() {
         <Stack.Screen name="config" options={{ title: "Config" }} />
         <Stack.Screen name="logs" options={{ title: "Logs" }} />
         <Stack.Screen name="node-applications" options={{ title: "Node Applications" }} />
+        <Stack.Screen name="(dapp)" options={{ title: "DAPP" }} />
       </Stack>
       <Toast />
     </Provider>

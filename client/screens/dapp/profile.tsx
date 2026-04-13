@@ -13,6 +13,9 @@ import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import * as Clipboard from 'expo-clipboard';
+import * as Crypto from 'expo-crypto';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { dappUserApi } from '@/utils/api';
 
 // 精确匹配参考图的颜色体系
 const BG_DARK = '#0A0A12';
@@ -24,33 +27,118 @@ const TEXT_WHITE = '#F5F5F5';
 const TEXT_MUTED = '#A0A0B0';
 const CYAN = '#00F0FF';
 
+const WALLET_STORAGE_KEY = '@deepquest_wallet';
+
 export default function DappProfile() {
   const router = useSafeRouter();
   const [loading, setLoading] = useState(true);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [userLoading, setUserLoading] = useState(false);
 
   // 用户数据
-  const [userData] = useState({
+  const [userData, setUserData] = useState({
     stakedAmount: '0.0',
     pendingRewards: '0.0',
     totalRewards: '0.0',
-    bnbBalance: '0.000338',
+    bnbBalance: '0.0',
     dqtBalance: '0.0',
-    teamSize: '0',
-    directCount: '0',
-    level: 'Lv.0',
+    teamSize: 0,
+    directCount: 0,
+    level: 1,
     isActivated: false,
-    stakeDays: '0',
-    referrerAddress: null,
+    stakeDays: 0,
+    totalInvest: '0.0',
+    teamInvest: '0.0',
+    totalReward: '0.0',
+    referrerAddress: null as string | null,
   });
 
   useFocusEffect(
     useCallback(() => {
-      setLoading(true);
-      setTimeout(() => setLoading(false), 500);
+      const init = async () => {
+        try {
+          // 加载保存的钱包地址
+          const savedWallet = await AsyncStorage.getItem(WALLET_STORAGE_KEY);
+          if (savedWallet) {
+            setWalletAddress(savedWallet);
+            // 获取用户数据
+            await fetchUserData(savedWallet);
+          }
+        } catch (error) {
+          console.error('初始化失败:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      init();
     }, [])
   );
 
+  // 获取用户数据
+  const fetchUserData = async (address: string) => {
+    try {
+      setUserLoading(true);
+      const response = await dappUserApi.getProfile(address);
+      if (response.code === 0 && response.data) {
+        setUserData({
+          stakedAmount: response.data.total_invest || '0.0',
+          pendingRewards: response.data.pending_reward || '0.0',
+          totalRewards: response.data.total_reward || '0.0',
+          bnbBalance: '0.0', // 需要从链上获取
+          dqtBalance: '0.0', // 需要从链上获取
+          teamSize: response.data.team_count || 0,
+          directCount: response.data.direct_count || 0,
+          level: response.data.level || 1,
+          isActivated: parseFloat(response.data.total_invest || '0') > 0,
+          stakeDays: 0, // 需要计算
+          totalInvest: response.data.total_invest || '0.0',
+          teamInvest: response.data.team_invest || '0.0',
+          totalReward: response.data.total_reward || '0.0',
+          referrerAddress: response.data.referrer_address || null,
+        });
+      }
+    } catch (error) {
+      console.error('获取用户数据失败:', error);
+    } finally {
+      setUserLoading(false);
+    }
+  };
+
+  // 生成随机钱包地址（模拟）
+  const generateMockWallet = async () => {
+    const randomBytes = await Crypto.getRandomBytesAsync(20);
+    const address = '0x' + Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    return address;
+  };
+
+  // 连接钱包
+  const handleConnect = async () => {
+    try {
+      Alert.alert(
+        '连接钱包',
+        '请选择钱包类型',
+        [
+          { text: '取消', style: 'cancel' },
+          { 
+            text: '模拟钱包（测试）', 
+            onPress: async () => {
+              const mockWallet = await generateMockWallet();
+              await AsyncStorage.setItem(WALLET_STORAGE_KEY, mockWallet);
+              setWalletAddress(mockWallet);
+              await fetchUserData(mockWallet);
+              Alert.alert('成功', `钱包已连接: ${mockWallet.slice(0, 10)}...`);
+            }
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('连接钱包失败:', error);
+      Alert.alert('错误', '钱包连接失败');
+    }
+  };
+
+  // 复制地址
   const handleCopyAddress = async () => {
     if (walletAddress) {
       await Clipboard.setStringAsync(walletAddress);
@@ -58,17 +146,38 @@ export default function DappProfile() {
     }
   };
 
-  const handleConnect = () => {
-    Alert.alert('钱包连接', '正在连接Web3钱包...');
-  };
-
+  // 断开钱包连接
   const handleDisconnect = () => {
-    Alert.alert('断开钱包', '确定断开连接？', [
+    Alert.alert('断开钱包', '确定要断开钱包连接吗？', [
       { text: '取消', style: 'cancel' },
-      { text: '确定', style: 'destructive', onPress: () => setWalletAddress(null) },
+      { 
+        text: '确定', 
+        style: 'destructive',
+        onPress: async () => {
+          await AsyncStorage.removeItem(WALLET_STORAGE_KEY);
+          setWalletAddress(null);
+          setUserData({
+            stakedAmount: '0.0',
+            pendingRewards: '0.0',
+            totalRewards: '0.0',
+            bnbBalance: '0.0',
+            dqtBalance: '0.0',
+            teamSize: 0,
+            directCount: 0,
+            level: 1,
+            isActivated: false,
+            stakeDays: 0,
+            totalInvest: '0.0',
+            teamInvest: '0.0',
+            totalReward: '0.0',
+            referrerAddress: null,
+          });
+        }
+      },
     ]);
   };
 
+  // 分享
   const handleShare = async () => {
     try {
       await Share.share({
@@ -146,7 +255,7 @@ export default function DappProfile() {
                   </Text>
                   <TouchableOpacity onPress={handleCopyAddress} disabled={!walletAddress}>
                     <Text className="text-sm mt-1 font-mono" style={{ color: TEXT_MUTED }}>
-                      {walletAddress || '点击连接钱包'}
+                      {userLoading ? '加载中...' : (walletAddress ? `${walletAddress.slice(0, 8)}...${walletAddress.slice(-6)}` : '点击连接钱包')}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -185,7 +294,7 @@ export default function DappProfile() {
               </View>
               <View className="flex-1 flex-row items-center justify-between">
                 <Text className="text-xs" style={{ color: TEXT_MUTED }}>等级</Text>
-                <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{userData.level}</Text>
+                <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>Lv.{userData.level}</Text>
               </View>
             </View>
           </View>
@@ -206,19 +315,27 @@ export default function DappProfile() {
             <View className="grid grid-cols-2 gap-x-4 gap-y-4">
               <View>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>BNB余额</Text>
-                <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>{userData.bnbBalance}</Text>
+                <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>
+                  {userLoading ? '...' : userData.bnbBalance}
+                </Text>
               </View>
               <View>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>DQT余额</Text>
-                <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>{userData.dqtBalance}</Text>
+                <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>
+                  {userLoading ? '...' : userData.dqtBalance}
+                </Text>
               </View>
               <View>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>质押数量</Text>
-                <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>{userData.stakedAmount} BNB</Text>
+                <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>
+                  {userLoading ? '...' : userData.stakedAmount} BNB
+                </Text>
               </View>
               <View>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>质押天数</Text>
-                <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>{userData.stakeDays} 天</Text>
+                <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>
+                  {userLoading ? '...' : userData.stakeDays} 天
+                </Text>
               </View>
             </View>
           </View>
@@ -239,12 +356,16 @@ export default function DappProfile() {
             <View className="grid grid-cols-2 gap-x-4 gap-y-4">
               <View>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>待领取收益</Text>
-                <Text className="text-xl font-bold" style={{ color: YELLOW }}>{userData.pendingRewards}</Text>
+                <Text className="text-xl font-bold" style={{ color: YELLOW }}>
+                  {userLoading ? '...' : userData.pendingRewards}
+                </Text>
                 <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQT</Text>
               </View>
               <View>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>累计收益</Text>
-                <Text className="text-xl font-bold" style={{ color: CYAN }}>{userData.totalRewards}</Text>
+                <Text className="text-xl font-bold" style={{ color: CYAN }}>
+                  {userLoading ? '...' : userData.totalRewards}
+                </Text>
                 <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQT</Text>
               </View>
             </View>
@@ -266,13 +387,31 @@ export default function DappProfile() {
             <View className="grid grid-cols-2 gap-x-4 gap-y-4">
               <View>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>团队规模</Text>
-                <Text className="text-xl font-bold" style={{ color: TEXT_WHITE }}>{userData.teamSize}</Text>
+                <Text className="text-xl font-bold" style={{ color: TEXT_WHITE }}>
+                  {userLoading ? '...' : userData.teamSize}
+                </Text>
                 <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>人</Text>
               </View>
               <View>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>直推人数</Text>
-                <Text className="text-xl font-bold" style={{ color: TEXT_WHITE }}>{userData.directCount}</Text>
+                <Text className="text-xl font-bold" style={{ color: TEXT_WHITE }}>
+                  {userLoading ? '...' : userData.directCount}
+                </Text>
                 <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>人</Text>
+              </View>
+              <View>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>个人投资</Text>
+                <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>
+                  {userLoading ? '...' : userData.totalInvest}
+                </Text>
+                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>BNB</Text>
+              </View>
+              <View>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>团队业绩</Text>
+                <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>
+                  {userLoading ? '...' : userData.teamInvest}
+                </Text>
+                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>BNB</Text>
               </View>
             </View>
           </View>
@@ -286,7 +425,7 @@ export default function DappProfile() {
           >
             <TouchableOpacity
               className="flex-row items-center justify-between p-4 border-b border-[rgba(48,48,64,0.5)]"
-              onPress={() => router.push('/dapp/team')}
+              onPress={() => router.push('/team')}
             >
               <View className="flex-row items-center gap-3">
                 <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(0,240,255,0.1)' }}>

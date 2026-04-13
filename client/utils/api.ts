@@ -336,3 +336,104 @@ export const nodeApplicationsApi = {
       body: JSON.stringify({ status, reviewer_id: reviewerId, reviewer_notes: reviewerNotes }),
     }),
 };
+
+// ============ DAPP API (用户端) ============
+export const dappApi = {
+  // 获取平台统计数据
+  getStats: () => request<any>('/api/v1/dapp/stats'),
+  
+  // 质押操作
+  stake: (wallet_address: string, amount: string, tx_hash: string) =>
+    request<any>('/api/v1/dapp/stake', {
+      method: 'POST',
+      body: JSON.stringify({ wallet_address, amount, tx_hash }),
+    }),
+  
+  // 领取奖励
+  claimReward: (wallet_address: string, reward_type?: string) =>
+    request<any>('/api/v1/dapp/claim-reward', {
+      method: 'POST',
+      body: JSON.stringify({ wallet_address, reward_type }),
+    }),
+  
+  // 获取推广信息
+  getReferral: (wallet_address: string) =>
+    request<any>(`/api/v1/dapp/referral/${wallet_address}`),
+};
+
+// ============ DAPP User API (用户端) ============
+export const dappUserApi = {
+  // 获取用户资料
+  getProfile: (wallet_address: string) =>
+    request<any>(`/api/v1/dapp/user/profile/${wallet_address}`),
+  
+  // 获取质押记录
+  getStakes: (wallet_address: string, page?: number, limit?: number) => {
+    const query = new URLSearchParams();
+    if (page) query.append('page', String(page));
+    if (limit) query.append('limit', String(limit));
+    return request<any>(`/api/v1/dapp/user/stakes/${wallet_address}?${query.toString()}`);
+  },
+  
+  // 获取奖励记录
+  getRewards: (wallet_address: string, params?: { page?: number; limit?: number; reward_type?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.reward_type) query.append('reward_type', params.reward_type);
+    return request<any>(`/api/v1/dapp/user/rewards/${wallet_address}?${query.toString()}`);
+  },
+  
+  // 获取提现记录
+  getWithdrawals: (wallet_address: string, page?: number, limit?: number) => {
+    const query = new URLSearchParams();
+    if (page) query.append('page', String(page));
+    if (limit) query.append('limit', String(limit));
+    return request<any>(`/api/v1/dapp/user/withdrawals/${wallet_address}?${query.toString()}`);
+  },
+  
+  // 更新用户信息
+  updateProfile: (wallet_address: string, data: { nickname?: string; avatar_url?: string }) =>
+    request<any>(`/api/v1/dapp/user/profile/${wallet_address}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  // 提现申请
+  withdraw: (wallet_address: string, amount: string, tx_hash?: string) =>
+    request<any>('/api/v1/dapp/user/withdraw', {
+      method: 'POST',
+      body: JSON.stringify({ wallet_address, amount, tx_hash }),
+    }),
+};
+
+// ============ DAPP Team API (用户端) ============
+export const dappTeamApi = {
+  // 获取团队统计数据
+  getStats: (wallet_address: string) =>
+    request<any>(`/api/v1/dapp/team/stats/${wallet_address}`),
+  
+  // 获取直接推荐列表
+  getDirectList: (wallet_address: string, page?: number, limit?: number) => {
+    const query = new URLSearchParams();
+    if (page) query.append('page', String(page));
+    if (limit) query.append('limit', String(limit));
+    return request<any>(`/api/v1/dapp/team/direct/${wallet_address}?${query.toString()}`);
+  },
+  
+  // 获取团队排行榜
+  getRanking: (wallet_address: string, type?: string, limit?: number) => {
+    const query = new URLSearchParams();
+    if (type) query.append('type', type);
+    if (limit) query.append('limit', String(limit));
+    return request<any>(`/api/v1/dapp/team/ranking/${wallet_address}?${query.toString()}`);
+  },
+  
+  // 获取下线详情
+  getDownline: (wallet_address: string, downline_address: string) =>
+    request<any>(`/api/v1/dapp/team/downline/${wallet_address}/${downline_address}`),
+  
+  // 获取团队业绩趋势
+  getTrend: (wallet_address: string) =>
+    request<any>(`/api/v1/dapp/team/trend/${wallet_address}`),
+};
