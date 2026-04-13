@@ -46,6 +46,7 @@ export default function DappIndex() {
   const [sellAmount, setSellAmount] = useState('');
   const [buyAmount, setBuyAmount] = useState('');
   const [stakeAmount, setStakeAmount] = useState('');
+  const [stakePeriod, setStakePeriod] = useState<30 | 90 | 180 | 360>(30);
   const [bnbBalance, setBnbBalance] = useState('0.0');
   const [dqtBalance, setDqtBalance] = useState('0.0');
   const [solBalance, setSolBalance] = useState('0.00');
@@ -53,6 +54,14 @@ export default function DappIndex() {
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  // 质押周期配置
+  const stakePeriods = [
+    { days: 30, label: '30天', reward: '5%' },
+    { days: 90, label: '90天', reward: '10%' },
+    { days: 180, label: '180天', reward: '15%' },
+    { days: 360, label: '360天', reward: '20%' },
+  ] as const;
 
   // SOL 代币颜色
   const SOL_PURPLE = '#9945FF';
@@ -600,6 +609,38 @@ export default function DappIndex() {
                 ))}
               </View>
 
+              {/* 质押周期选择 */}
+              <View className="mb-3">
+                <Text className="text-sm mb-2" style={{ color: TEXT_MUTED }}>选择质押周期</Text>
+                <View className="flex-row gap-2">
+                  {stakePeriods.map((period) => (
+                    <TouchableOpacity
+                      key={period.days}
+                      className="flex-1 py-2.5 rounded-lg items-center"
+                      style={{
+                        backgroundColor: stakePeriod === period.days ? YELLOW : 'transparent',
+                        borderWidth: 1,
+                        borderColor: stakePeriod === period.days ? YELLOW : BORDER_GRAY,
+                      }}
+                      onPress={() => setStakePeriod(period.days)}
+                    >
+                      <Text
+                        className="text-xs font-medium"
+                        style={{ color: stakePeriod === period.days ? '#333' : TEXT_WHITE }}
+                      >
+                        {period.label}
+                      </Text>
+                      <Text
+                        className="text-xs"
+                        style={{ color: stakePeriod === period.days ? '#333' : YELLOW }}
+                      >
+                        {period.reward}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
               {/* 质押说明 */}
               <View className="p-3 rounded-xl" style={{ backgroundColor: 'rgba(0,240,255,0.05)' }}>
                 <View className="flex-row items-center gap-2 mb-2">
@@ -607,9 +648,10 @@ export default function DappIndex() {
                   <Text className="text-sm font-medium" style={{ color: CYAN }}>{t('home.stakeInfo')}</Text>
                 </View>
                 <Text className="text-xs" style={{ color: TEXT_MUTED }}>
-                  • {t('home.stakeInfo1')}{'\n'}
-                  • {t('home.stakeInfo2')}{'\n'}
-                  • {t('home.stakeInfo3')}
+                  • 单币质押，爆块产出{'\n'}
+                  • 质押 {stakePeriod} 天，享 {stakePeriods.find(p => p.days === stakePeriod)?.reward} 加权分红{'\n'}
+                  • 加权按权重分配卖出手续费6%{'\n'}
+                  • 质押锁定期内不可提前解押
                 </Text>
               </View>
             </View>
