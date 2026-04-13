@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity, TextInput, Modal, Alert, ActivityIndicator, ScrollView } from 'react-native';
-import { Screen } from '@/components/Screen';
+import AdminLayout from '@/components/AdminLayout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { cardsApi } from '@/utils/api';
 
@@ -325,16 +325,16 @@ export default function CardsScreen() {
 
   if (loading && cards.length === 0) {
     return (
-      <Screen>
+      <AdminLayout>
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>LOADING CARDS...</Text>
         </View>
-      </Screen>
+      </AdminLayout>
     );
   }
 
   return (
-    <Screen>
+    <AdminLayout>
       <FlatList
         data={cards}
         renderItem={renderItem}
@@ -431,7 +431,7 @@ export default function CardsScreen() {
           </View>
         </View>
       </Modal>
-    </Screen>
+    </AdminLayout>
   );
 }
 

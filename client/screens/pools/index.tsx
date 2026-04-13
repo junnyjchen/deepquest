@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
-import { Screen } from '@/components/Screen';
+import AdminLayout from '@/components/AdminLayout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { poolsApi } from '@/utils/api';
 
@@ -73,16 +73,16 @@ export default function PoolsScreen() {
 
   if (loading) {
     return (
-      <Screen>
+      <AdminLayout>
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>LOADING POOL DATA...</Text>
         </View>
-      </Screen>
+      </AdminLayout>
     );
   }
 
   return (
-    <Screen>
+    <AdminLayout>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.contentContainer}
@@ -200,7 +200,7 @@ export default function PoolsScreen() {
           </View>
         </View>
       </ScrollView>
-    </Screen>
+    </AdminLayout>
   );
 }
 

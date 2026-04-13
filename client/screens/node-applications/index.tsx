@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
-import { Screen } from '@/components/Screen';
+import AdminLayout from '@/components/AdminLayout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nodeApplicationsApi } from '@/utils/api';
 
@@ -243,7 +243,7 @@ export default function NodeApplicationsScreen() {
   };
 
   return (
-    <Screen>
+    <AdminLayout>
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
@@ -359,7 +359,7 @@ export default function NodeApplicationsScreen() {
           </View>
         </Modal>
       </View>
-    </Screen>
+    </AdminLayout>
   );
 }
 

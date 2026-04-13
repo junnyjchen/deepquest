@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator } from 'react-native';
-import { Screen } from '@/components/Screen';
+import AdminLayout from '@/components/AdminLayout';
 import { depositsApi } from '@/utils/api';
 
 interface Deposit {
@@ -118,7 +118,7 @@ export default function DepositsScreen() {
   );
 
   return (
-    <Screen>
+    <AdminLayout>
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
@@ -151,7 +151,7 @@ export default function DepositsScreen() {
           }
         />
       </View>
-    </Screen>
+    </AdminLayout>
   );
 }
 

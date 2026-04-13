@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, TextInput, Modal } from 'react-native';
-import { Screen } from '@/components/Screen';
+import AdminLayout from '@/components/AdminLayout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { configApi } from '@/utils/api';
 
@@ -203,16 +203,16 @@ export default function ConfigScreen() {
 
   if (loading) {
     return (
-      <Screen>
+      <AdminLayout>
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>LOADING CONFIG...</Text>
         </View>
-      </Screen>
+      </AdminLayout>
     );
   }
 
   return (
-    <Screen>
+    <AdminLayout>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.contentContainer}
@@ -522,7 +522,7 @@ export default function ConfigScreen() {
           </ScrollView>
         </View>
       </Modal>
-    </Screen>
+    </AdminLayout>
   );
 }
 

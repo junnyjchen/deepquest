@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, RefreshControl, ActivityIndicator, Modal, Alert } from 'react-native';
-import { Screen } from '@/components/Screen';
+import AdminLayout from '@/components/AdminLayout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { usersApi } from '@/utils/api';
 import { Link } from 'expo-router';
@@ -171,7 +171,7 @@ export default function UsersScreen() {
   );
 
   return (
-    <Screen>
+    <AdminLayout>
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
@@ -286,7 +286,7 @@ export default function UsersScreen() {
           </View>
         </View>
       </Modal>
-    </Screen>
+    </AdminLayout>
   );
 }
 

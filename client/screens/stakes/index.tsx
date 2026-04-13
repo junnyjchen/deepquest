@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity, TextInput, ScrollView, ActivityIndicator } from 'react-native';
-import { Screen } from '@/components/Screen';
+import AdminLayout from '@/components/AdminLayout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { stakesApi } from '@/utils/api';
 
@@ -355,16 +355,16 @@ export default function StakesScreen() {
 
   if (loading && stakes.length === 0) {
     return (
-      <Screen>
+      <AdminLayout>
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>LOADING STAKES...</Text>
         </View>
-      </Screen>
+      </AdminLayout>
     );
   }
 
   return (
-    <Screen>
+    <AdminLayout>
       <FlatList
         data={stakes}
         renderItem={renderItem}
@@ -387,7 +387,7 @@ export default function StakesScreen() {
           ) : null
         }
       />
-    </Screen>
+    </AdminLayout>
   );
 }
 

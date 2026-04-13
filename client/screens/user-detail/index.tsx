@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity } from 'react-native';
-import { Screen } from '@/components/Screen';
+import AdminLayout from '@/components/AdminLayout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeSearchParams } from '@/hooks/useSafeRouter';
 import { usersApi } from '@/utils/api';
@@ -122,27 +122,27 @@ export default function UserDetailScreen() {
 
   if (loading) {
     return (
-      <Screen>
+      <AdminLayout>
         <View style={styles.loadingContainer}>
           <ActivityIndicator color="#00F0FF" size="large" />
           <Text style={styles.loadingText}>LOADING USER DATA...</Text>
         </View>
-      </Screen>
+      </AdminLayout>
     );
   }
 
   if (!user) {
     return (
-      <Screen>
+      <AdminLayout>
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>User not found</Text>
         </View>
-      </Screen>
+      </AdminLayout>
     );
   }
 
   return (
-    <Screen>
+    <AdminLayout>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.contentContainer}
@@ -336,7 +336,7 @@ export default function UserDetailScreen() {
           </View>
         )}
       </ScrollView>
-    </Screen>
+    </AdminLayout>
   );
 }
 

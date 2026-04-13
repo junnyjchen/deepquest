@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Platform } from 'react-native';
-import { Screen } from '@/components/Screen';
+import AdminLayout from '@/components/AdminLayout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { dashboardApi, depositsApi } from '@/utils/api';
 
@@ -70,16 +70,16 @@ export default function DashboardScreen() {
 
   if (loading) {
     return (
-      <Screen>
+      <AdminLayout>
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>LOADING DATA...</Text>
         </View>
-      </Screen>
+      </AdminLayout>
     );
   }
 
   return (
-    <Screen>
+    <AdminLayout>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.contentContainer}
@@ -198,7 +198,7 @@ export default function DashboardScreen() {
           </View>
         </View>
       </ScrollView>
-    </Screen>
+    </AdminLayout>
   );
 }
 

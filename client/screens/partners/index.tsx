@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
-import { Screen } from '@/components/Screen';
+import AdminLayout from '@/components/AdminLayout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { partnersApi } from '@/utils/api';
 
@@ -171,7 +171,7 @@ export default function PartnersScreen() {
   );
 
   return (
-    <Screen>
+    <AdminLayout>
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
@@ -222,7 +222,7 @@ export default function PartnersScreen() {
           }
         />
       </View>
-    </Screen>
+    </AdminLayout>
   );
 }
 
