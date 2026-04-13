@@ -8,6 +8,8 @@ import {
   Linking,
   ActivityIndicator,
   Alert,
+  Modal,
+  StyleSheet,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { useFocusEffect } from 'expo-router';
@@ -17,8 +19,8 @@ import * as Clipboard from 'expo-clipboard';
 import * as Crypto from 'expo-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappApi } from '@/utils/api';
-
 import { useSafeRouter } from '@/hooks/useSafeRouter';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 // 精确匹配参考图的颜色体系
 const BG_DARK = '#0A0A12';
@@ -35,9 +37,11 @@ const WALLET_STORAGE_KEY = '@deepquest_wallet';
 
 export default function DappIndex() {
   const router = useSafeRouter();
+  const { t, language, setLanguage, languages } = useLanguage();
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<'swap' | 'stake'>('swap');
   const [menuExpanded, setMenuExpanded] = useState(false);
+  const [langModalVisible, setLangModalVisible] = useState(false);
   const [sellAmount, setSellAmount] = useState('');
   const [buyAmount, setBuyAmount] = useState('');
   const [stakeAmount, setStakeAmount] = useState('');
@@ -315,8 +319,8 @@ export default function DappIndex() {
                   <Ionicons name="person" size={20} color={YELLOW} />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>个人中心</Text>
-                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>查看我的账户信息</Text>
+                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.title')}</Text>
+                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('profile.myAssets')}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
               </TouchableOpacity>
@@ -330,8 +334,8 @@ export default function DappIndex() {
                   <Ionicons name="people" size={20} color={CYAN} />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>团队</Text>
-                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>推广奖励和团队业绩</Text>
+                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('team.title')}</Text>
+                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('team.teamRewards')}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
               </TouchableOpacity>
@@ -345,8 +349,8 @@ export default function DappIndex() {
                   <Ionicons name="time" size={20} color={PURPLE} />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>质押记录</Text>
-                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>查看质押历史</Text>
+                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.stakes')}</Text>
+                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('stakes.title')}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
               </TouchableOpacity>
@@ -360,8 +364,8 @@ export default function DappIndex() {
                   <Ionicons name="gift" size={20} color={YELLOW} />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>收益记录</Text>
-                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>查看收益明细</Text>
+                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.rewards')}</Text>
+                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('rewards.title')}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
               </TouchableOpacity>
@@ -375,8 +379,8 @@ export default function DappIndex() {
                   <Ionicons name="wallet-outline" size={20} color={CYAN} />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>提现记录</Text>
-                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>查看提现历史</Text>
+                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.withdrawals')}</Text>
+                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('withdrawals.title')}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
               </TouchableOpacity>
@@ -390,8 +394,8 @@ export default function DappIndex() {
                   <Ionicons name="ribbon" size={20} color={PURPLE} />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>节点申请</Text>
-                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>成为节点合伙人</Text>
+                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.nodes')}</Text>
+                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('nodes.subtitle')}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
               </TouchableOpacity>
@@ -404,8 +408,8 @@ export default function DappIndex() {
                   <Ionicons name="help-circle" size={20} color={CYAN} />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>帮助中心</Text>
-                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>常见问题解答</Text>
+                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.help')}</Text>
+                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('help.subtitle')}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
               </TouchableOpacity>
@@ -433,7 +437,7 @@ export default function DappIndex() {
                   style={{ backgroundColor: 'rgba(255,80,80,0.2)', borderWidth: 1, borderColor: '#FF5050' }}
                   onPress={handleDisconnect}
                 >
-                  <Text className="text-sm" style={{ color: '#FF5050' }}>断开</Text>
+                  <Text className="text-sm" style={{ color: '#FF5050' }}>{t('home.disconnect')}</Text>
                 </TouchableOpacity>
               </>
             ) : (
@@ -442,7 +446,7 @@ export default function DappIndex() {
                 style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
                 onPress={handleConnect}
               >
-                <Text className="text-sm" style={{ color: TEXT_WHITE }}>连接钱包</Text>
+                <Text className="text-sm" style={{ color: TEXT_WHITE }}>{t('home.connectWallet')}</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
@@ -450,20 +454,72 @@ export default function DappIndex() {
               style={{ backgroundColor: YELLOW }}
               onPress={handleRegister}
             >
-              <Text className="text-sm font-semibold" style={{ color: '#333' }}>注册</Text>
+              <Text className="text-sm font-semibold" style={{ color: '#333' }}>{t('home.register')}</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {/* 语言切换 */}
         <View className="px-4 pb-2">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center gap-1.5">
-              <Ionicons name="globe-outline" size={14} color={YELLOW} />
-              <Text className="text-xs" style={{ color: YELLOW }}>语言：简体中文</Text>
-            </View>
-          </View>
+          <TouchableOpacity
+            className="flex-row items-center gap-1.5"
+            onPress={() => setLangModalVisible(true)}
+          >
+            <Ionicons name="globe-outline" size={14} color={YELLOW} />
+            <Text className="text-xs" style={{ color: YELLOW }}>
+              {t('home.language')}：{languages.find(l => l.code === language)?.nativeName || '繁體中文'}
+            </Text>
+            <Ionicons name="chevron-down" size={12} color={YELLOW} />
+          </TouchableOpacity>
         </View>
+
+        {/* 语言选择 Modal */}
+        <Modal
+          visible={langModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setLangModalVisible(false)}
+        >
+          <TouchableOpacity
+            className="flex-1 justify-center items-center"
+            style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}
+            onPress={() => setLangModalVisible(false)}
+            activeOpacity={1}
+          >
+            <View
+              className="w-64 rounded-2xl overflow-hidden"
+              style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 1, borderColor: BORDER_GRAY }}
+            >
+              <View className="p-4 border-b" style={{ borderColor: BORDER_GRAY }}>
+                <Text className="text-base font-semibold text-center" style={{ color: TEXT_WHITE }}>
+                  {t('home.language')}
+                </Text>
+              </View>
+              {languages.map((lang) => (
+                <TouchableOpacity
+                  key={lang.code}
+                  className="flex-row items-center justify-between p-4 border-b"
+                  style={{ borderColor: BORDER_GRAY }}
+                  onPress={() => {
+                    setLanguage(lang.code);
+                    setLangModalVisible(false);
+                  }}
+                >
+                  <Text style={{ color: TEXT_WHITE, fontSize: 15 }}>{lang.nativeName}</Text>
+                  {language === lang.code && (
+                    <Ionicons name="checkmark" size={20} color={YELLOW} />
+                  )}
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                className="p-4 items-center"
+                onPress={() => setLangModalVisible(false)}
+              >
+                <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>{t('common.close')}</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
 
         {/* 模式切换 */}
         <View className="px-4 pb-2">
@@ -474,7 +530,7 @@ export default function DappIndex() {
               onPress={() => setMode('swap')}
             >
               <Text className="text-sm font-medium" style={{ color: mode === 'swap' ? '#333' : TEXT_MUTED }}>
-                兑换
+                {t('home.swap')}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -483,7 +539,7 @@ export default function DappIndex() {
               onPress={() => setMode('stake')}
             >
               <Text className="text-sm font-medium" style={{ color: mode === 'stake' ? '#333' : TEXT_MUTED }}>
-                质押
+                {t('home.stake')}
               </Text>
             </TouchableOpacity>
           </View>
