@@ -392,6 +392,13 @@ export const dappUserApi = {
     return request<any>(`/api/v1/dapp/user/withdrawals/${wallet_address}?${query.toString()}`);
   },
   
+  // 领取奖励
+  claimReward: (wallet_address: string, reward_type?: string) =>
+    request<any>('/api/v1/dapp/claim-reward', {
+      method: 'POST',
+      body: JSON.stringify({ wallet_address, reward_type }),
+    }),
+  
   // 更新用户信息
   updateProfile: (wallet_address: string, data: { nickname?: string; avatar_url?: string }) =>
     request<any>(`/api/v1/dapp/user/profile/${wallet_address}`, {

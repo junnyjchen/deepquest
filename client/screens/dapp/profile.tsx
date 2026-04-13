@@ -454,7 +454,7 @@ export default function DappProfile() {
 
             <TouchableOpacity
               className="flex-row items-center justify-between p-4 border-b border-[rgba(48,48,64,0.5)]"
-              onPress={() => Alert.alert('开发中', '质押记录功能开发中')}
+              onPress={() => router.push('/stakes')}
             >
               <View className="flex-row items-center gap-3">
                 <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(208,32,255,0.1)' }}>
@@ -467,7 +467,7 @@ export default function DappProfile() {
 
             <TouchableOpacity
               className="flex-row items-center justify-between p-4"
-              onPress={() => Alert.alert('开发中', '收益记录功能开发中')}
+              onPress={() => router.push('/rewards')}
             >
               <View className="flex-row items-center gap-3">
                 <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(255,215,0,0.1)' }}>

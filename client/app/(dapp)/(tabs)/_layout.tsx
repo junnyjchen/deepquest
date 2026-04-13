@@ -69,6 +69,20 @@ export default function DappTabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="stakes"
+        options={{
+          href: null, // 不显示在 Tab 栏
+          title: '质押记录',
+        }}
+      />
+      <Tabs.Screen
+        name="rewards"
+        options={{
+          href: null, // 不显示在 Tab 栏
+          title: '收益记录',
+        }}
+      />
     </Tabs>
   );
 }

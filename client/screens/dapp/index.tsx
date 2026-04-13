@@ -33,13 +33,16 @@ const WALLET_STORAGE_KEY = '@deepquest_wallet';
 
 export default function DappIndex() {
   const insets = useSafeAreaInsets();
+  const [mode, setMode] = useState<'swap' | 'stake'>('swap');
   const [sellAmount, setSellAmount] = useState('');
   const [buyAmount, setBuyAmount] = useState('');
+  const [stakeAmount, setStakeAmount] = useState('');
   const [bnbBalance, setBnbBalance] = useState('0.0');
   const [dqtBalance, setDqtBalance] = useState('0.0');
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   // 平台数据
   const [stats, setStats] = useState({
@@ -167,17 +170,56 @@ export default function DappIndex() {
     Alert.alert('注册成功', '您已成功激活账户');
   };
 
-  // 兑换
-  const handleSwap = () => {
+  // 质押操作
+  const handleStake = async () => {
     if (!walletAddress) {
       Alert.alert('提示', '请先连接钱包');
       return;
     }
-    if (!sellAmount || !buyAmount) {
-      Alert.alert('提示', '请输入兑换数量');
+    if (!stakeAmount || parseFloat(stakeAmount) <= 0) {
+      Alert.alert('提示', '请输入质押数量');
       return;
     }
-    Alert.alert('功能开发中', '兑换功能正在开发中');
+    
+    try {
+      setSubmitting(true);
+      
+      // 模拟生成交易哈希
+      const txHash = '0x' + Array.from(await Crypto.getRandomBytesAsync(32)).map(b => b.toString(16).padStart(2, '0')).join('');
+      
+      const response = await dappApi.stake(walletAddress, stakeAmount, txHash);
+      
+      if (response.code === 0) {
+        Alert.alert('成功', `质押 ${stakeAmount} BNB 成功！\n交易哈希: ${txHash.slice(0, 20)}...`);
+        setStakeAmount('');
+      } else {
+        Alert.alert('失败', response.message || '质押失败');
+      }
+    } catch (error) {
+      console.error('质押失败:', error);
+      Alert.alert('错误', '质押失败，请重试');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // 兑换/质押确定
+  const handleConfirm = () => {
+    if (mode === 'swap') {
+      // 兑换
+      if (!walletAddress) {
+        Alert.alert('提示', '请先连接钱包');
+        return;
+      }
+      if (!sellAmount || !buyAmount) {
+        Alert.alert('提示', '请输入兑换数量');
+        return;
+      }
+      Alert.alert('功能开发中', '兑换功能正在开发中');
+    } else {
+      // 质押
+      handleStake();
+    }
   };
 
   // 复制地址
@@ -282,15 +324,114 @@ export default function DappIndex() {
 
         {/* 语言切换 */}
         <View className="px-4 pb-2">
-          <View className="flex-row items-center gap-1.5">
-            <Ionicons name="globe-outline" size={14} color={YELLOW} />
-            <Text className="text-xs" style={{ color: YELLOW }}>语言：简体中文</Text>
+          <View className="flex-row items-center justify-between">
+            <View className="flex-row items-center gap-1.5">
+              <Ionicons name="globe-outline" size={14} color={YELLOW} />
+              <Text className="text-xs" style={{ color: YELLOW }}>语言：简体中文</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* 模式切换 */}
+        <View className="px-4 pb-2">
+          <View className="flex-row rounded-xl overflow-hidden" style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}>
+            <TouchableOpacity
+              className="flex-1 py-3 items-center"
+              style={{ backgroundColor: mode === 'swap' ? YELLOW : 'transparent' }}
+              onPress={() => setMode('swap')}
+            >
+              <Text className="text-sm font-medium" style={{ color: mode === 'swap' ? '#333' : TEXT_MUTED }}>
+                兑换
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="flex-1 py-3 items-center"
+              style={{ backgroundColor: mode === 'stake' ? YELLOW : 'transparent' }}
+              onPress={() => setMode('stake')}
+            >
+              <Text className="text-sm font-medium" style={{ color: mode === 'stake' ? '#333' : TEXT_MUTED }}>
+                质押
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
         {/* 交易区 */}
         <View className="px-4 pt-2 gap-3">
-          {/* DQT 出售区 */}
+          {/* 质押模式 */}
+          {mode === 'stake' && (
+            <View
+              className="rounded-2xl p-4"
+              style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
+            >
+              <View className="flex-row items-center justify-between mb-3">
+                <View className="flex-row items-center gap-2">
+                  <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: '#F3BA2F' }}>
+                    <Text className="text-sm font-bold text-black">B</Text>
+                  </View>
+                  <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>质押 BNB</Text>
+                </View>
+                <Text className="text-sm" style={{ color: TEXT_MUTED }}>
+                  余额: {bnbBalance} BNB
+                </Text>
+              </View>
+
+              <TextInput
+                className="text-xl font-semibold mb-3"
+                style={{ color: TEXT_WHITE, backgroundColor: 'transparent' }}
+                placeholder="请输入质押数量"
+                placeholderTextColor={TEXT_MUTED}
+                value={stakeAmount}
+                onChangeText={setStakeAmount}
+                keyboardType="decimal-pad"
+              />
+
+              <View className="flex-row gap-2 mb-3">
+                {[
+                  { label: '20%', value: 20 },
+                  { label: '50%', value: 50 },
+                  { label: '70%', value: 70 },
+                  { label: 'MAX', value: 100 },
+                ].map((item) => (
+                  <TouchableOpacity
+                    key={item.label}
+                    className="flex-1 py-2.5 rounded-lg items-center"
+                    style={{
+                      backgroundColor: item.label === 'MAX' ? '#FFFFFF' : 'transparent',
+                      borderWidth: 1,
+                      borderColor: item.label === 'MAX' ? '#FFFFFF' : BORDER_GRAY,
+                    }}
+                    onPress={() => handlePercent(item.value, setStakeAmount, bnbBalance)}
+                  >
+                    <Text
+                      className="text-sm font-medium"
+                      style={{ color: item.label === 'MAX' ? '#333' : TEXT_WHITE }}
+                    >
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* 质押说明 */}
+              <View className="p-3 rounded-xl" style={{ backgroundColor: 'rgba(0,240,255,0.05)' }}>
+                <View className="flex-row items-center gap-2 mb-2">
+                  <Ionicons name="information-circle" size={16} color={CYAN} />
+                  <Text className="text-sm font-medium" style={{ color: CYAN }}>质押说明</Text>
+                </View>
+                <Text className="text-xs" style={{ color: TEXT_MUTED }}>
+                  • 质押 BNB 每日获得 DQT 收益{'\n'}
+                  • 质押锁定期为 30 天{'\n'}
+                  • 收益率根据等级和质押时长计算
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* 兑换模式 */}
+          {mode === 'swap' && (
+            <>
+              {/* DQT 出售区 */}
           <View
             className="rounded-2xl p-4"
             style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
@@ -411,14 +552,23 @@ export default function DappIndex() {
               </View>
             </View>
           </View>
+            </>
+          )}
 
           {/* 确定兑换按钮 */}
           <TouchableOpacity
             className="py-4 rounded-xl items-center"
             style={{ backgroundColor: YELLOW }}
-            onPress={handleSwap}
+            onPress={handleConfirm}
+            disabled={submitting}
           >
-            <Text className="text-base font-semibold" style={{ color: '#333' }}>确定兑换</Text>
+            {submitting ? (
+              <ActivityIndicator size="small" color="#333" />
+            ) : (
+              <Text className="text-base font-semibold" style={{ color: '#333' }}>
+                {mode === 'swap' ? '确定兑换' : '确定质押'}
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
 
