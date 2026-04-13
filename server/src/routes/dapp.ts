@@ -463,4 +463,274 @@ router.get('/check-binding/:wallet_address', async (req, res) => {
   }
 });
 
+// 获取NFT卡牌配置
+router.get('/card-config', async (req, res) => {
+  try {
+    // 从配置表获取卡牌配置
+    const { data: config, error } = await supabase
+      .from('configs')
+      .select('config_key, config_value')
+      .eq('config_key', 'card_config')
+      .single();
+
+    if (error || !config) {
+      // 返回默认配置
+      return res.json({
+        code: 0,
+        data: {
+          A: { price: '500', total: 1000, remaining: 1000, reward_rate: 4, name: 'S1节点卡', level: 'S1', fee_rate: 10 },
+          B: { price: '1500', total: 500, remaining: 500, reward_rate: 5, name: 'S2节点卡', level: 'S2', fee_rate: 15 },
+          C: { price: '5000', total: 100, remaining: 100, reward_rate: 6, name: 'S3节点卡', level: 'S3', fee_rate: 15 },
+        }
+      });
+    }
+
+    res.json({
+      code: 0,
+      data: config.config_value
+    });
+  } catch (error) {
+    console.error('获取卡牌配置失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 购买NFT卡牌
+router.post('/buy-card', async (req, res) => {
+  try {
+    const { wallet_address, card_type, tx_hash, amount = 1 } = req.body;
+
+    if (!wallet_address || !card_type || !tx_hash) {
+      return res.status(400).json({
+        code: 400,
+        message: '缺少必要参数：wallet_address, card_type, tx_hash'
+      });
+    }
+
+    // 获取卡牌配置
+    const { data: config, error: configError } = await supabase
+      .from('configs')
+      .select('config_value')
+      .eq('config_key', 'card_config')
+      .single();
+
+    const cardConfig = config?.config_value || {
+      A: { price: '500', total: 1000, remaining: 1000, reward_rate: 4, name: 'S1节点卡', level: 'S1', fee_rate: 10 },
+      B: { price: '1500', total: 500, remaining: 500, reward_rate: 5, name: 'S2节点卡', level: 'S2', fee_rate: 15 },
+      C: { price: '5000', total: 100, remaining: 100, reward_rate: 6, name: 'S3节点卡', level: 'S3', fee_rate: 15 },
+    };
+
+    const card = cardConfig[card_type.toUpperCase()];
+    if (!card) {
+      return res.status(400).json({
+        code: 400,
+        message: '无效的卡牌类型'
+      });
+    }
+
+    // 检查剩余数量
+    if (card.remaining < amount) {
+      return res.status(400).json({
+        code: 400,
+        message: `卡牌库存不足，剩余 ${card.remaining} 张`
+      });
+    }
+
+    // 检查用户是否已购买过此类型卡牌
+    const { data: existingCard } = await supabase
+      .from('nft_cards')
+      .select('id')
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('card_type', card_type.toUpperCase())
+      .single();
+
+    if (existingCard) {
+      return res.status(400).json({
+        code: 400,
+        message: '您已购买过此类型卡牌，每人每类型限购买1张'
+      });
+    }
+
+    // 创建购买记录
+    const { data: purchase, error: insertError } = await supabase
+      .from('nft_cards')
+      .insert({
+        user_address: wallet_address.toLowerCase(),
+        card_type: card_type.toUpperCase(),
+        card_level: card.level,
+        price: card.price,
+        reward_rate: card.reward_rate,
+        fee_rate: card.fee_rate,
+        tx_hash: tx_hash,
+        status: 'active',
+        purchased_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('购买卡牌失败:', insertError);
+      return res.status(500).json({
+        code: 500,
+        message: '购买卡牌失败'
+      });
+    }
+
+    // 更新用户等级
+    const userLevelMap: Record<string, number> = { 'S1': 1, 'S2': 2, 'S3': 3 };
+    const newLevel = userLevelMap[card.level] || 1;
+
+    await supabase
+      .from('users')
+      .update({ 
+        node_level: card.level,
+        level: newLevel > 0 ? newLevel : undefined
+      })
+      .eq('wallet_address', wallet_address.toLowerCase());
+
+    res.json({
+      code: 0,
+      message: '购买成功',
+      data: {
+        card_id: purchase.id,
+        card_type: card_type.toUpperCase(),
+        card_level: card.level,
+        reward_rate: card.reward_rate,
+        price: card.price
+      }
+    });
+  } catch (error) {
+    console.error('购买卡牌失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 获取用户的NFT卡牌
+router.get('/my-cards/:wallet_address', async (req, res) => {
+  try {
+    const { wallet_address } = req.params;
+
+    const { data: cards, error } = await supabase
+      .from('nft_cards')
+      .select('*')
+      .eq('user_address', wallet_address.toLowerCase())
+      .order('purchased_at', { ascending: false });
+
+    if (error) {
+      return res.status(500).json({
+        code: 500,
+        message: '查询失败'
+      });
+    }
+
+    res.json({
+      code: 0,
+      data: cards || []
+    });
+  } catch (error) {
+    console.error('获取NFT卡牌失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 获取卡牌收益记录
+router.get('/card-rewards/:wallet_address', async (req, res) => {
+  try {
+    const { wallet_address } = req.params;
+    const { page = 1, limit = 20 } = req.query;
+    const offset = (Number(page) - 1) * Number(limit);
+
+    const { data: rewards, count, error } = await supabase
+      .from('card_rewards')
+      .select('*', { count: 'exact' })
+      .eq('user_address', wallet_address.toLowerCase())
+      .order('created_at', { ascending: false })
+      .range(offset, offset + Number(limit) - 1);
+
+    if (error) {
+      return res.status(500).json({
+        code: 500,
+        message: '查询失败'
+      });
+    }
+
+    res.json({
+      code: 0,
+      data: {
+        list: rewards || [],
+        total: count || 0,
+        page: Number(page),
+        limit: Number(limit)
+      }
+    });
+  } catch (error) {
+    console.error('获取卡牌收益失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 获取卡牌统计
+router.get('/card-stats/:wallet_address', async (req, res) => {
+  try {
+    const { wallet_address } = req.params;
+
+    // 获取用户卡牌
+    const { data: cards } = await supabase
+      .from('nft_cards')
+      .select('card_type, reward_rate, price')
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('status', 'active');
+
+    // 计算总投入
+    const totalInvest = cards?.reduce((sum: number, card: any) => sum + parseFloat(card.price || '0'), 0) || 0;
+
+    // 获取累计收益
+    const { data: rewards } = await supabase
+      .from('card_rewards')
+      .select('amount')
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('status', 'claimed');
+
+    const totalReward = rewards?.reduce((sum: number, r: any) => sum + parseFloat(r.amount || '0'), 0) || 0;
+
+    // 获取待领取收益
+    const { data: pendingRewards } = await supabase
+      .from('card_rewards')
+      .select('amount')
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('status', 'pending');
+
+    const pendingReward = pendingRewards?.reduce((sum: number, r: any) => sum + parseFloat(r.amount || '0'), 0) || 0;
+
+    res.json({
+      code: 0,
+      data: {
+        cards: cards || [],
+        cardCount: cards?.length || 0,
+        totalInvest: totalInvest.toFixed(2),
+        totalReward: totalReward.toFixed(2),
+        pendingReward: pendingReward.toFixed(2)
+      }
+    });
+  } catch (error) {
+    console.error('获取卡牌统计失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
 export default router;

@@ -22,6 +22,12 @@ export default function ConfigScreen() {
   const [editingConfig, setEditingConfig] = useState<Config | null>(null);
   const [editPeriods, setEditPeriods] = useState('');
   const [editRates, setEditRates] = useState('');
+  const [editCardConfig, setEditCardConfig] = useState({
+    A: { price: '', total: '', remaining: '', reward_rate: '', name: '', level: '', fee_rate: '' },
+    B: { price: '', total: '', remaining: '', reward_rate: '', name: '', level: '', fee_rate: '' },
+    C: { price: '', total: '', remaining: '', reward_rate: '', name: '', level: '', fee_rate: '' },
+  });
+  const [cardEditModalVisible, setCardEditModalVisible] = useState(false);
 
   const fetchConfigs = useCallback(async () => {
     try {
@@ -130,6 +136,71 @@ export default function ConfigScreen() {
     }
   };
 
+  const handleEditCardConfig = (config: Config) => {
+    const value = config.config_value || {};
+    setEditCardConfig({
+      A: {
+        price: String(value.A?.price || ''),
+        total: String(value.A?.total || ''),
+        remaining: String(value.A?.remaining || ''),
+        reward_rate: String(value.A?.reward_rate || ''),
+        name: value.A?.name || '',
+        level: value.A?.level || '',
+        fee_rate: String(value.A?.fee_rate || ''),
+      },
+      B: {
+        price: String(value.B?.price || ''),
+        total: String(value.B?.total || ''),
+        remaining: String(value.B?.remaining || ''),
+        reward_rate: String(value.B?.reward_rate || ''),
+        name: value.B?.name || '',
+        level: value.B?.level || '',
+        fee_rate: String(value.B?.fee_rate || ''),
+      },
+      C: {
+        price: String(value.C?.price || ''),
+        total: String(value.C?.total || ''),
+        remaining: String(value.C?.remaining || ''),
+        reward_rate: String(value.C?.reward_rate || ''),
+        name: value.C?.name || '',
+        level: value.C?.level || '',
+        fee_rate: String(value.C?.fee_rate || ''),
+      },
+    });
+    setEditingConfig(config);
+    setCardEditModalVisible(true);
+  };
+
+  const handleSaveCardConfig = async () => {
+    if (!editingConfig) return;
+    
+    try {
+      const newConfig: any = {};
+      for (const type of ['A', 'B', 'C']) {
+        const cardData = editCardConfig[type as keyof typeof editCardConfig];
+        if (cardData.price) {
+          newConfig[type] = {
+            price: cardData.price,
+            total: parseInt(cardData.total) || 0,
+            remaining: parseInt(cardData.remaining) || 0,
+            reward_rate: parseFloat(cardData.reward_rate) || 0,
+            name: cardData.name,
+            level: cardData.level,
+            fee_rate: parseFloat(cardData.fee_rate) || 0,
+          };
+        }
+      }
+      
+      await configApi.update(editingConfig.config_key, newConfig, editingConfig.description);
+      
+      setCardEditModalVisible(false);
+      fetchConfigs();
+      Alert.alert('Success', 'Card config updated');
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    }
+  };
+
   if (loading) {
     return (
       <Screen>
@@ -211,6 +282,27 @@ export default function ConfigScreen() {
                             onPress={() => handleEditStakeConfig(config)}
                           >
                             <Text style={styles.editButtonText}>EDIT STAKE CONFIG</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : config.config_key === 'card_config' ? (
+                        <View>
+                          {Object.entries((config.config_value as any) || {}).map(([type, card]: [string, any]) => (
+                            <View key={type} style={styles.cardConfigRow}>
+                              <Text style={[styles.cardTypeLabel, { 
+                                color: type === 'A' ? '#FFD23F' : type === 'B' ? '#00F0FF' : '#D020FF' 
+                              }]}>
+                                [{type}]
+                              </Text>
+                              <Text style={styles.cardConfigText}>
+                                {card.name} | {card.price}U | {card.reward_rate}% | {card.level} | 库存:{card.remaining}/{card.total}
+                              </Text>
+                            </View>
+                          ))}
+                          <TouchableOpacity 
+                            style={styles.editButton}
+                            onPress={() => handleEditCardConfig(config)}
+                          >
+                            <Text style={styles.editButtonText}>EDIT CARD CONFIG</Text>
                           </TouchableOpacity>
                         </View>
                       ) : (
@@ -297,6 +389,137 @@ export default function ConfigScreen() {
               </TouchableOpacity>
             </View>
           </View>
+        </View>
+      </Modal>
+
+      {/* Edit Card Config Modal */}
+      <Modal
+        visible={cardEditModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCardEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <ScrollView style={styles.cardModalScroll}>
+            <View style={styles.cardModalContent}>
+              <Text style={styles.modalTitle}>EDIT CARD CONFIG</Text>
+              
+              {(['A', 'B', 'C'] as const).map((type) => {
+                const colors: Record<string, string> = { A: '#FFD23F', B: '#00F0FF', C: '#D020FF' };
+                const card = editCardConfig[type as keyof typeof editCardConfig];
+                
+                return (
+                  <View key={type} style={[styles.cardEditSection, { borderColor: colors[type] }]}>
+                    <Text style={[styles.cardEditTitle, { color: colors[type] }]}>Card Type {type}</Text>
+                    
+                    <Text style={styles.inputLabel}>Name:</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={card.name}
+                      onChangeText={(text) => setEditCardConfig(prev => ({
+                        ...prev,
+                        [type]: { ...prev[type as keyof typeof prev], name: text }
+                      }))}
+                      placeholder="S1节点卡"
+                      placeholderTextColor="#555570"
+                    />
+                    
+                    <Text style={styles.inputLabel}>Level:</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={card.level}
+                      onChangeText={(text) => setEditCardConfig(prev => ({
+                        ...prev,
+                        [type]: { ...prev[type as keyof typeof prev], level: text }
+                      }))}
+                      placeholder="S1"
+                      placeholderTextColor="#555570"
+                    />
+                    
+                    <Text style={styles.inputLabel}>Price (USDT):</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={card.price}
+                      onChangeText={(text) => setEditCardConfig(prev => ({
+                        ...prev,
+                        [type]: { ...prev[type as keyof typeof prev], price: text }
+                      }))}
+                      placeholder="500"
+                      placeholderTextColor="#555570"
+                      keyboardType="numeric"
+                    />
+                    
+                    <Text style={styles.inputLabel}>Total / Remaining:</Text>
+                    <View style={styles.rowInputs}>
+                      <TextInput
+                        style={[styles.input, styles.halfInput]}
+                        value={card.total}
+                        onChangeText={(text) => setEditCardConfig(prev => ({
+                          ...prev,
+                          [type]: { ...prev[type as keyof typeof prev], total: text }
+                        }))}
+                        placeholder="1000"
+                        placeholderTextColor="#555570"
+                        keyboardType="numeric"
+                      />
+                      <TextInput
+                        style={[styles.input, styles.halfInput]}
+                        value={card.remaining}
+                        onChangeText={(text) => setEditCardConfig(prev => ({
+                          ...prev,
+                          [type]: { ...prev[type as keyof typeof prev], remaining: text }
+                        }))}
+                        placeholder="1000"
+                        placeholderTextColor="#555570"
+                        keyboardType="numeric"
+                      />
+                    </View>
+                    
+                    <Text style={styles.inputLabel}>Reward Rate (%):</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={card.reward_rate}
+                      onChangeText={(text) => setEditCardConfig(prev => ({
+                        ...prev,
+                        [type]: { ...prev[type as keyof typeof prev], reward_rate: text }
+                      }))}
+                      placeholder="4"
+                      placeholderTextColor="#555570"
+                      keyboardType="numeric"
+                    />
+                    
+                    <Text style={styles.inputLabel}>Fee Rate (%):</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={card.fee_rate}
+                      onChangeText={(text) => setEditCardConfig(prev => ({
+                        ...prev,
+                        [type]: { ...prev[type as keyof typeof prev], fee_rate: text }
+                      }))}
+                      placeholder="10"
+                      placeholderTextColor="#555570"
+                      keyboardType="numeric"
+                    />
+                  </View>
+                );
+              })}
+              
+              <View style={styles.modalButtons}>
+                <TouchableOpacity 
+                  style={[styles.modalButton, styles.cancelBtn]}
+                  onPress={() => setCardEditModalVisible(false)}
+                >
+                  <Text style={styles.cancelBtnText}>CANCEL</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.modalButton, styles.saveBtn]}
+                  onPress={handleSaveCardConfig}
+                >
+                  <Text style={styles.saveBtnText}>SAVE</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
         </View>
       </Modal>
     </Screen>
@@ -538,5 +761,54 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 1,
+  },
+  cardConfigRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+    gap: 8,
+  },
+  cardTypeLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    width: 30,
+  },
+  cardConfigText: {
+    fontSize: 11,
+    color: '#00F0FF',
+    fontFamily: 'monospace',
+    flex: 1,
+  },
+  cardModalScroll: {
+    flex: 1,
+    marginTop: 60,
+    marginBottom: 40,
+  },
+  cardModalContent: {
+    backgroundColor: '#12121A',
+    borderRadius: 12,
+    padding: 24,
+    marginHorizontal: 20,
+    borderWidth: 1,
+    borderColor: '#00F0FF',
+  },
+  cardEditSection: {
+    backgroundColor: '#0A0A0F',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+  },
+  cardEditTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  rowInputs: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  halfInput: {
+    flex: 1,
   },
 });

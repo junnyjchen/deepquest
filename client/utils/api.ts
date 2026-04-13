@@ -374,6 +374,33 @@ export const dappApi = {
   // 检查绑定状态
   checkBinding: (wallet_address: string) =>
     request<any>(`/api/v1/dapp/check-binding/${wallet_address}`),
+  
+  // ===== NFT卡牌相关 =====
+  // 获取卡牌配置
+  getCardConfig: () => request<any>('/api/v1/dapp/card-config'),
+  
+  // 购买NFT卡牌
+  buyCard: (wallet_address: string, card_type: string, tx_hash: string) =>
+    request<any>('/api/v1/dapp/buy-card', {
+      method: 'POST',
+      body: JSON.stringify({ wallet_address, card_type, tx_hash }),
+    }),
+  
+  // 获取我的NFT卡牌
+  getMyCards: (wallet_address: string) =>
+    request<any>(`/api/v1/dapp/my-cards/${wallet_address}`),
+  
+  // 获取卡牌收益记录
+  getCardRewards: (wallet_address: string, page?: number, limit?: number) => {
+    const query = new URLSearchParams();
+    if (page) query.append('page', String(page));
+    if (limit) query.append('limit', String(limit));
+    return request<any>(`/api/v1/dapp/card-rewards/${wallet_address}?${query.toString()}`);
+  },
+  
+  // 获取卡牌统计
+  getCardStats: (wallet_address: string) =>
+    request<any>(`/api/v1/dapp/card-stats/${wallet_address}`),
 };
 
 // ============ DAPP User API (用户端) ============

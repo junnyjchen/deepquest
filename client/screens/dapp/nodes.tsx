@@ -4,193 +4,193 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   ActivityIndicator,
   Alert,
   StyleSheet,
-  Platform,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { dappNodeApi } from '@/utils/api';
+import { dappApi } from '@/utils/api';
 
-// 精确匹配参考图的颜色体系
+// 颜色体系
 const BG_DARK = '#0A0A12';
-const BG_CARD_TRANS = 'rgba(26, 26, 48, 0.95)';
-const BG_CARD_SOLID = '#101018';
+const BG_CARD = 'rgba(26, 26, 48, 0.95)';
 const YELLOW = '#FFD23F';
-const BORDER_GRAY = '#303040';
-const TEXT_WHITE = '#F5F5F5';
-const TEXT_MUTED = '#A0A0B0';
 const CYAN = '#00F0FF';
 const PURPLE = '#D020FF';
+const GREEN = '#00FF88';
+const RED = '#FF4444';
+const TEXT_WHITE = '#F5F5F5';
+const TEXT_MUTED = '#A0A0B0';
+const BORDER_GRAY = '#303040';
 
 const WALLET_STORAGE_KEY = '@deepquest_wallet';
 
-interface NodeLevel {
-  type: string;
+// 卡牌配置类型
+interface CardConfig {
+  price: string;
+  total: number;
+  remaining: number;
+  reward_rate: number;
   name: string;
-  stakeAmount: string;
-  dailyReward: string;
-  icon: string;
-  color: string;
-  description: string;
+  level: string;
+  fee_rate: number;
+  description?: string;
 }
 
-const NODE_LEVELS: NodeLevel[] = [
-  {
-    type: 'node_partner',
-    name: '节点合伙人',
-    stakeAmount: '10,000',
-    dailyReward: '0.8%',
-    icon: 'ribbon',
-    color: '#FFD23F',
-    description: '质押10,000 DQ，每日获得0.8%静态奖励',
-  },
-  {
-    type: 'node_delegate',
-    name: '节点代表',
-    stakeAmount: '50,000',
-    dailyReward: '1.2%',
-    icon: 'medal',
-    color: '#D020FF',
-    description: '质押50,000 DQ，每日获得1.2%静态奖励',
-  },
-];
-
-const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  pending: { label: '审核中', color: '#FFA500' },
-  approved: { label: '已通过', color: '#00FF00' },
-  rejected: { label: '已拒绝', color: '#FF4444' },
-};
+// 卡牌数据
+interface CardData {
+  id: number;
+  card_type: string;
+  card_level: string;
+  price: string;
+  reward_rate: number;
+  fee_rate: number;
+  status: string;
+  purchased_at: string;
+}
 
 export default function DappNodes() {
   const [loading, setLoading] = useState(true);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
-  const [stakeAmount, setStakeAmount] = useState('');
-  const [myApplication, setMyApplication] = useState<any>(null);
+  const [selectedCard, setSelectedCard] = useState<string | null>(null);
+  const [cardConfig, setCardConfig] = useState<Record<string, CardConfig>>({});
+  const [myCards, setMyCards] = useState<CardData[]>([]);
+  const [cardStats, setCardStats] = useState({
+    totalInvest: '0.00',
+    pendingReward: '0.00',
+    totalReward: '0.00',
+  });
+  const [activeTab, setActiveTab] = useState<'buy' | 'mine'>('buy');
 
-  // 加载钱包地址
-  const loadWalletAddress = useCallback(async () => {
+  // 加载数据
+  const loadData = useCallback(async () => {
     try {
       const address = await AsyncStorage.getItem(WALLET_STORAGE_KEY);
       setWalletAddress(address);
-      return address;
-    } catch {
-      return null;
+
+      // 获取卡牌配置
+      const configRes = await dappApi.getCardConfig();
+      if (configRes.code === 0 && configRes.data) {
+        setCardConfig(configRes.data);
+      }
+
+      // 获取我的卡牌
+      if (address) {
+        const cardsRes = await dappApi.getMyCards(address);
+        if (cardsRes.code === 0 && cardsRes.data) {
+          setMyCards(cardsRes.data);
+        }
+
+        // 获取卡牌统计
+        const statsRes = await dappApi.getCardStats(address);
+        if (statsRes.code === 0 && statsRes.data) {
+          setCardStats({
+            totalInvest: statsRes.data.totalInvest,
+            pendingReward: statsRes.data.pendingReward,
+            totalReward: statsRes.data.totalReward,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('加载数据失败:', error);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
-  // 加载我的申请
-  const loadMyApplication = useCallback(async () => {
-    if (!walletAddress) return;
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
-    try {
-      const response = await dappNodeApi.getMyApplication(walletAddress);
-      if (response.code === 0 && response.data) {
-        setMyApplication(response.data);
-      }
-    } catch (error) {
-      console.error('加载申请记录失败:', error);
-    }
-  }, [walletAddress]);
+  // 检查用户是否已购买某类型卡牌
+  const hasCard = (cardType: string) => {
+    return myCards.some(card => card.card_type === cardType);
+  };
 
-  // 提交申请
-  const handleSubmit = async () => {
+  // 购买卡牌
+  const handleBuyCard = async () => {
     if (!walletAddress) {
       Alert.alert('提示', '请先连接钱包');
       return;
     }
 
-    if (!selectedLevel) {
-      Alert.alert('提示', '请选择节点类型');
+    if (!selectedCard) {
+      Alert.alert('提示', '请选择要购买的卡牌');
       return;
     }
 
-    if (!stakeAmount || parseFloat(stakeAmount) <= 0) {
-      Alert.alert('提示', '请输入质押数量');
-      return;
-    }
+    const card = cardConfig[selectedCard];
+    if (!card) return;
 
-    const level = NODE_LEVELS.find(l => l.type === selectedLevel);
-    if (level && parseFloat(stakeAmount) < parseFloat(level.stakeAmount.replace(',', ''))) {
-      Alert.alert('提示', `质押数量不能少于 ${level.stakeAmount} DQ`);
+    if (card.remaining <= 0) {
+      Alert.alert('提示', '该卡牌已售罄');
       return;
     }
 
     Alert.alert(
-      '确认申请',
-      `确定申请成为${level?.name}吗？\n质押数量: ${stakeAmount} DQ`,
+      '确认购买',
+      `您确定购买 ${card.name} 吗？\n价格: ${card.price} USDT\n\n资金分配:\n- LP质押: 60%\n- 节点(NFT): 15%\n\n注意: 购买后不可退款`,
       [
         { text: '取消', style: 'cancel' },
-        { 
-          text: '确认', 
+        {
+          text: '确认购买',
           onPress: async () => {
             setSubmitting(true);
             try {
-              // 模拟生成交易哈希
-              const txHash = '0x' + Array.from({ length: 64 }, () => 
+              // 模拟生成交易哈希 (实际应该调用合约)
+              const txHash = '0x' + Array.from({ length: 64 }, () =>
                 Math.floor(Math.random() * 16).toString(16)
               ).join('');
-              
-              const response = await dappNodeApi.apply(walletAddress, {
-                apply_type: selectedLevel,
-                stake_amount: stakeAmount,
-              });
+
+              const response = await dappApi.buyCard(walletAddress, selectedCard, txHash);
 
               if (response.code === 0) {
-                Alert.alert('申请成功', '节点申请已提交，请等待审核');
-                setMyApplication({
-                  ...response.data,
-                  tx_hash: txHash,
-                  apply_type: selectedLevel,
-                  stake_amount: stakeAmount,
-                  status: 'pending',
-                  created_at: new Date().toISOString(),
-                });
-                setSelectedLevel(null);
-                setStakeAmount('');
+                Alert.alert(
+                  '购买成功',
+                  `恭喜您成功购买 ${card.name}！\n\n权益:\n- 每日分币: ${card.reward_rate}%\n- 赠送级别: ${card.level}\n- 手续费: ${card.fee_rate}% SOL`,
+                  [{ text: '确定', onPress: loadData }]
+                );
+                setSelectedCard(null);
+                setActiveTab('mine');
               } else {
-                Alert.alert('申请失败', response.message || '请重试');
+                Alert.alert('购买失败', response.message || '请重试');
               }
-            } catch (error) {
-              Alert.alert('错误', '网络错误，请重试');
+            } catch (error: any) {
+              Alert.alert('错误', error.message || '网络错误，请重试');
             } finally {
               setSubmitting(false);
             }
-          }
+          },
         },
       ]
     );
   };
 
-  // 快捷设置质押数量
-  const handlePercent = (percent: number) => {
-    const level = NODE_LEVELS.find(l => l.type === selectedLevel);
-    if (level) {
-      const minAmount = parseFloat(level.stakeAmount.replace(',', ''));
-      const amount = (minAmount * percent) / 100;
-      setStakeAmount(amount.toFixed(2));
+  // 获取卡牌颜色
+  const getCardColor = (cardType: string) => {
+    switch (cardType) {
+      case 'A': return YELLOW;
+      case 'B': return CYAN;
+      case 'C': return PURPLE;
+      default: return YELLOW;
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      const init = async () => {
-        setLoading(true);
-        const address = await loadWalletAddress();
-        if (address) {
-          await loadMyApplication();
-        }
-        setLoading(false);
-      };
-      init();
-    }, [loadWalletAddress, loadMyApplication])
-  );
+  // 获取卡牌图标
+  const getCardIcon = (cardType: string) => {
+    switch (cardType) {
+      case 'A': return 'ribbon';
+      case 'B': return 'medal';
+      case 'C': return 'star';
+      default: return 'diamond';
+    }
+  };
 
   if (loading) {
     return (
@@ -208,157 +208,287 @@ export default function DappNodes() {
   return (
     <Screen>
       <View style={[styles.container, { backgroundColor: BG_DARK }]}>
-        <ScrollView 
+        <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>节点申请</Text>
-            <Text style={styles.headerSubtitle}>成为节点，享受更多权益</Text>
+            <Text style={styles.headerTitle}>节点权益</Text>
+            <Text style={styles.headerSubtitle}>购买NFT卡牌，享受节点分红</Text>
           </View>
 
-          {/* 我的申请状态 */}
-          {myApplication && (
-            <View style={styles.myApplicationCard}>
-              <View style={styles.myApplicationHeader}>
-                <Text style={styles.myApplicationTitle}>我的申请</Text>
-                <View style={[styles.statusBadge, { 
-                  backgroundColor: STATUS_CONFIG[myApplication.status]?.color + '20' 
-                }]}>
-                  <Text style={[styles.statusText, { 
-                    color: STATUS_CONFIG[myApplication.status]?.color 
-                  }]}>
-                    {STATUS_CONFIG[myApplication.status]?.label || '未知'}
-                  </Text>
-                </View>
-              </View>
-              
-              <View style={styles.applicationInfo}>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>申请类型</Text>
-                  <Text style={styles.infoValue}>
-                    {NODE_LEVELS.find(l => l.type === myApplication.apply_type)?.name || myApplication.apply_type}
-                  </Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>质押数量</Text>
-                  <Text style={[styles.infoValue, { color: YELLOW }]}>
-                    {myApplication.stake_amount} DQ
-                  </Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>申请时间</Text>
-                  <Text style={styles.infoValue}>
-                    {new Date(myApplication.created_at).toLocaleString('zh-CN')}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          )}
+          {/* Tab切换 */}
+          <View style={styles.tabContainer}>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'buy' && styles.tabActive]}
+              onPress={() => setActiveTab('buy')}
+            >
+              <Text style={[styles.tabText, activeTab === 'buy' && styles.tabTextActive]}>
+                购买卡牌
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'mine' && styles.tabActive]}
+              onPress={() => setActiveTab('mine')}
+            >
+              <Text style={[styles.tabText, activeTab === 'mine' && styles.tabTextActive]}>
+                我的卡牌 ({myCards.length})
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-          {/* 节点等级选择 */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>选择节点类型</Text>
-            {NODE_LEVELS.map((level) => (
-              <TouchableOpacity
-                key={level.type}
-                style={[
-                  styles.levelCard,
-                  selectedLevel === level.type && styles.levelCardSelected,
-                  { borderColor: selectedLevel === level.type ? level.color : BORDER_GRAY },
-                ]}
-                onPress={() => {
-                  setSelectedLevel(level.type);
-                  // 自动填充最低质押数量
-                  setStakeAmount(level.stakeAmount.replace(',', ''));
-                }}
-              >
-                <View style={styles.levelHeader}>
-                  <View style={[styles.levelIcon, { backgroundColor: level.color + '20' }]}>
-                    <Ionicons name={level.icon as any} size={24} color={level.color} />
-                  </View>
-                  <View style={styles.levelInfo}>
-                    <Text style={[styles.levelName, { color: level.color }]}>{level.name}</Text>
-                    <Text style={styles.levelAmount}>质押 {level.stakeAmount} DQ</Text>
-                  </View>
-                  {selectedLevel === level.type && (
-                    <View style={[styles.checkBadge, { backgroundColor: level.color }]}>
-                      <Ionicons name="checkmark" size={16} color="#000" />
+          {/* 购买区域 */}
+          {activeTab === 'buy' && (
+            <>
+              {/* 资金分配说明 */}
+              <View style={styles.allocationCard}>
+                <Text style={styles.allocationTitle}>资金分配</Text>
+                <View style={styles.allocationRow}>
+                  <View style={styles.allocationItem}>
+                    <View style={[styles.allocationBadge, { backgroundColor: GREEN + '30' }]}>
+                      <Text style={[styles.allocationValue, { color: GREEN }]}>60%</Text>
                     </View>
-                  )}
+                    <Text style={styles.allocationLabel}>LP质押</Text>
+                  </View>
+                  <View style={styles.allocationItem}>
+                    <View style={[styles.allocationBadge, { backgroundColor: YELLOW + '30' }]}>
+                      <Text style={[styles.allocationValue, { color: YELLOW }]}>15%</Text>
+                    </View>
+                    <Text style={styles.allocationLabel}>节点(NFT)</Text>
+                  </View>
+                  <View style={styles.allocationItem}>
+                    <View style={[styles.allocationBadge, { backgroundColor: CYAN + '30' }]}>
+                      <Text style={[styles.allocationValue, { color: CYAN }]}>25%</Text>
+                    </View>
+                    <Text style={styles.allocationLabel}>运营/研发</Text>
+                  </View>
                 </View>
-                <Text style={styles.levelDesc}>{level.description}</Text>
-                <View style={styles.levelReward}>
-                  <Text style={styles.rewardLabel}>每日收益率</Text>
-                  <Text style={[styles.rewardValue, { color: level.color }]}>{level.dailyReward}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
+              </View>
 
-          {/* 质押数量输入 */}
-          {selectedLevel && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>质押数量</Text>
-              <View style={styles.inputContainer}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="请输入质押数量"
-                  placeholderTextColor={TEXT_MUTED}
-                  keyboardType="decimal-pad"
-                  value={stakeAmount}
-                  onChangeText={setStakeAmount}
-                />
-                <Text style={styles.inputSuffix}>DQ</Text>
+              {/* 卡牌列表 */}
+              <View style={styles.cardList}>
+                {Object.entries(cardConfig).map(([type, card]) => {
+                  const color = getCardColor(type);
+                  const owned = hasCard(type);
+                  const soldOut = card.remaining <= 0;
+
+                  return (
+                    <TouchableOpacity
+                      key={type}
+                      style={[
+                        styles.cardItem,
+                        selectedCard === type && { borderColor: color, borderWidth: 2 },
+                        owned && styles.cardItemOwned,
+                        soldOut && styles.cardItemSoldOut,
+                      ]}
+                      onPress={() => !owned && !soldOut && setSelectedCard(type)}
+                      disabled={owned || soldOut}
+                    >
+                      {/* 卡牌头部 */}
+                      <View style={[styles.cardHeader, { backgroundColor: color }]}>
+                        <View style={styles.cardIconContainer}>
+                          <Ionicons
+                            name={getCardIcon(type) as any}
+                            size={32}
+                            color={BG_DARK}
+                          />
+                        </View>
+                        <Text style={styles.cardTitle}>{card.name}</Text>
+                        <View style={styles.cardLevelBadge}>
+                          <Text style={styles.cardLevelText}>{card.level}</Text>
+                        </View>
+                      </View>
+
+                      {/* 卡牌内容 */}
+                      <View style={styles.cardBody}>
+                        <View style={styles.cardPriceRow}>
+                          <Text style={styles.cardPriceLabel}>价格</Text>
+                          <Text style={[styles.cardPrice, { color }]}>
+                            {card.price} USDT
+                          </Text>
+                        </View>
+
+                        <View style={styles.cardBenefits}>
+                          <View style={styles.benefitItem}>
+                            <Ionicons name="pie-chart" size={14} color={GREEN} />
+                            <Text style={styles.benefitText}>
+                              每日分币 {card.reward_rate}%
+                            </Text>
+                          </View>
+                          <View style={styles.benefitItem}>
+                            <Ionicons name="ribbon" size={14} color={PURPLE} />
+                            <Text style={styles.benefitText}>
+                              赠送{card.level}级别
+                            </Text>
+                          </View>
+                          <View style={styles.benefitItem}>
+                            <Ionicons name="wallet" size={14} color={CYAN} />
+                            <Text style={styles.benefitText}>
+                              手续费 {card.fee_rate}% SOL
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.cardFooter}>
+                          <View style={styles.remainingBadge}>
+                            <Text style={styles.remainingText}>
+                              剩余 {card.remaining}/{card.total}
+                            </Text>
+                          </View>
+                          {owned && (
+                            <View style={[styles.ownedBadge, { backgroundColor: GREEN + '20' }]}>
+                              <Text style={[styles.ownedText, { color: GREEN }]}>已购买</Text>
+                            </View>
+                          )}
+                          {soldOut && !owned && (
+                            <View style={[styles.ownedBadge, { backgroundColor: RED + '20' }]}>
+                              <Text style={[styles.ownedText, { color: RED }]}>已售罄</Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+
+                      {/* 选中标记 */}
+                      {selectedCard === type && !owned && (
+                        <View style={[styles.selectedMark, { backgroundColor: color }]}>
+                          <Ionicons name="checkmark" size={20} color={BG_DARK} />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
-              
-              <View style={styles.percentButtons}>
-                {[100, 150, 200].map((percent) => (
-                  <TouchableOpacity
-                    key={percent}
-                    style={styles.percentButton}
-                    onPress={() => handlePercent(percent)}
-                  >
-                    <Text style={styles.percentButtonText}>{percent}%</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+
+              {/* 购买按钮 */}
+              {selectedCard && (
+                <TouchableOpacity
+                  style={[styles.buyButton, { backgroundColor: getCardColor(selectedCard) }]}
+                  onPress={handleBuyCard}
+                  disabled={submitting}
+                >
+                  {submitting ? (
+                    <ActivityIndicator size="small" color={BG_DARK} />
+                  ) : (
+                    <>
+                      <Ionicons name="cart" size={20} color={BG_DARK} />
+                      <Text style={styles.buyButtonText}>
+                        立即购买 {cardConfig[selectedCard]?.name}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+            </>
           )}
 
-          {/* 提交按钮 */}
-          <TouchableOpacity
-            style={[
-              styles.submitButton,
-              (!selectedLevel || !stakeAmount || submitting) && styles.submitButtonDisabled,
-            ]}
-            onPress={handleSubmit}
-            disabled={!selectedLevel || !stakeAmount || submitting}
-          >
-            {submitting ? (
-              <ActivityIndicator size="small" color="#000" />
-            ) : (
-              <Text style={styles.submitButtonText}>提交申请</Text>
-            )}
-          </TouchableOpacity>
+          {/* 我的卡牌区域 */}
+          {activeTab === 'mine' && (
+            <>
+              {/* 统计卡片 */}
+              <View style={styles.statsContainer}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statValue}>{cardStats.totalInvest}</Text>
+                  <Text style={styles.statLabel}>累计投入(USDT)</Text>
+                </View>
+                <View style={[styles.statItem, styles.statItemBorder]}>
+                  <Text style={[styles.statValue, { color: YELLOW }]}>
+                    {cardStats.pendingReward}
+                  </Text>
+                  <Text style={styles.statLabel}>待领取收益</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <Text style={[styles.statValue, { color: GREEN }]}>
+                    {cardStats.totalReward}
+                  </Text>
+                  <Text style={styles.statLabel}>累计收益</Text>
+                </View>
+              </View>
 
-          {/* 注意事项 */}
-          <View style={styles.noticeCard}>
-            <Text style={styles.noticeTitle}>注意事项</Text>
-            <View style={styles.noticeItem}>
-              <Ionicons name="alert-circle" size={16} color={TEXT_MUTED} />
-              <Text style={styles.noticeText}>节点申请需要质押相应数量的DQ代币</Text>
-            </View>
-            <View style={styles.noticeItem}>
-              <Ionicons name="alert-circle" size={16} color={TEXT_MUTED} />
-              <Text style={styles.noticeText}>申请提交后需要平台审核</Text>
-            </View>
-            <View style={styles.noticeItem}>
-              <Ionicons name="alert-circle" size={16} color={TEXT_MUTED} />
-              <Text style={styles.noticeText}>审核通过后开始计算节点奖励</Text>
-            </View>
-          </View>
+              {/* 卡牌列表 */}
+              {myCards.length > 0 ? (
+                <View style={styles.myCardsList}>
+                  {myCards.map((card) => {
+                    const color = getCardColor(card.card_type);
+                    const config = cardConfig[card.card_type];
+
+                    return (
+                      <View
+                        key={card.id}
+                        style={[styles.myCardItem, { borderColor: color }]}
+                      >
+                        <View style={[styles.myCardHeader, { backgroundColor: color }]}>
+                          <Ionicons
+                            name={getCardIcon(card.card_type) as any}
+                            size={24}
+                            color={BG_DARK}
+                          />
+                          <Text style={styles.myCardTitle}>
+                            {config?.name || card.card_type} 卡牌
+                          </Text>
+                        </View>
+
+                        <View style={styles.myCardBody}>
+                          <View style={styles.myCardRow}>
+                            <Text style={styles.myCardLabel}>卡牌等级</Text>
+                            <Text style={[styles.myCardValue, { color }]}>
+                              {card.card_level}
+                            </Text>
+                          </View>
+                          <View style={styles.myCardRow}>
+                            <Text style={styles.myCardLabel}>购买价格</Text>
+                            <Text style={styles.myCardValue}>
+                              {card.price} USDT
+                            </Text>
+                          </View>
+                          <View style={styles.myCardRow}>
+                            <Text style={styles.myCardLabel}>每日分币</Text>
+                            <Text style={[styles.myCardValue, { color: GREEN }]}>
+                              {card.reward_rate}%
+                            </Text>
+                          </View>
+                          <View style={styles.myCardRow}>
+                            <Text style={styles.myCardLabel}>手续费率</Text>
+                            <Text style={styles.myCardValue}>
+                              {card.fee_rate}% SOL
+                            </Text>
+                          </View>
+                          <View style={styles.myCardRow}>
+                            <Text style={styles.myCardLabel}>购买时间</Text>
+                            <Text style={styles.myCardValue}>
+                              {new Date(card.purchased_at).toLocaleDateString('zh-CN')}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.myCardStatus}>
+                          <View style={[styles.statusBadge, { backgroundColor: GREEN + '20' }]}>
+                            <Text style={[styles.statusText, { color: GREEN }]}>
+                              {card.status === 'active' ? '已激活' : card.status}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : (
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="card-outline" size={64} color={BORDER_GRAY} />
+                  <Text style={styles.emptyText}>您还没有购买任何卡牌</Text>
+                  <TouchableOpacity
+                    style={styles.emptyButton}
+                    onPress={() => setActiveTab('buy')}
+                  >
+                    <Text style={styles.emptyButtonText}>立即购买</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </>
+          )}
+
+          {/* 底部间距 */}
+          <View style={{ height: 100 }} />
         </ScrollView>
       </View>
     </Screen>
@@ -370,14 +500,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 40,
-  },
-  header: {
-    padding: 20,
+    paddingHorizontal: 16,
     paddingTop: 16,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: TEXT_WHITE,
+    marginTop: 16,
+    fontSize: 14,
+  },
+  header: {
+    marginBottom: 20,
+  },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700',
     color: TEXT_WHITE,
   },
@@ -386,25 +526,258 @@ const styles = StyleSheet.create({
     color: TEXT_MUTED,
     marginTop: 4,
   },
-  myApplicationCard: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    padding: 16,
-    backgroundColor: BG_CARD_SOLID,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: YELLOW + '40',
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: BG_CARD,
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 20,
   },
-  myApplicationHeader: {
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 10,
+  },
+  tabActive: {
+    backgroundColor: YELLOW,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: TEXT_MUTED,
+  },
+  tabTextActive: {
+    color: BG_DARK,
+  },
+  allocationCard: {
+    backgroundColor: BG_CARD,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+  },
+  allocationTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: TEXT_WHITE,
+    marginBottom: 16,
+  },
+  allocationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  allocationItem: {
+    alignItems: 'center',
+  },
+  allocationBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  allocationValue: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  allocationLabel: {
+    fontSize: 12,
+    color: TEXT_MUTED,
+  },
+  cardList: {
+    gap: 16,
+  },
+  cardItem: {
+    backgroundColor: BG_CARD,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: BORDER_GRAY,
+  },
+  cardItemOwned: {
+    opacity: 0.7,
+  },
+  cardItemSoldOut: {
+    opacity: 0.5,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  cardIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  cardTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '700',
+    color: BG_DARK,
+  },
+  cardLevelBadge: {
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  cardLevelText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: BG_DARK,
+  },
+  cardBody: {
+    padding: 16,
+  },
+  cardPriceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
   },
-  myApplicationTitle: {
-    fontSize: 16,
+  cardPriceLabel: {
+    fontSize: 14,
+    color: TEXT_MUTED,
+  },
+  cardPrice: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  cardBenefits: {
+    gap: 8,
+    marginBottom: 12,
+  },
+  benefitItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  benefitText: {
+    fontSize: 13,
+    color: TEXT_MUTED,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  remainingBadge: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  remainingText: {
+    fontSize: 12,
+    color: TEXT_MUTED,
+  },
+  ownedBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  ownedText: {
+    fontSize: 12,
     fontWeight: '600',
+  },
+  selectedMark: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  buyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginTop: 20,
+  },
+  buyButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: BG_DARK,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    backgroundColor: BG_CARD,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statItemBorder: {
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: BORDER_GRAY,
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: '700',
     color: TEXT_WHITE,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: TEXT_MUTED,
+  },
+  myCardsList: {
+    gap: 16,
+  },
+  myCardItem: {
+    backgroundColor: BG_CARD,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+  },
+  myCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  myCardTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    color: BG_DARK,
+    marginLeft: 12,
+  },
+  myCardBody: {
+    padding: 16,
+  },
+  myCardRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  myCardLabel: {
+    fontSize: 13,
+    color: TEXT_MUTED,
+  },
+  myCardValue: {
+    fontSize: 13,
+    color: TEXT_WHITE,
+    fontWeight: '500',
+  },
+  myCardStatus: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    alignItems: 'flex-end',
   },
   statusBadge: {
     paddingHorizontal: 12,
@@ -415,190 +788,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  applicationInfo: {
-    gap: 8,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  emptyContainer: {
     alignItems: 'center',
+    paddingVertical: 60,
   },
-  infoLabel: {
-    fontSize: 13,
-    color: TEXT_MUTED,
-  },
-  infoValue: {
-    fontSize: 13,
-    color: TEXT_WHITE,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
-  section: {
-    paddingHorizontal: 16,
-    marginBottom: 20,
-  },
-  sectionTitle: {
+  emptyText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: TEXT_WHITE,
-    marginBottom: 12,
-  },
-  levelCard: {
-    backgroundColor: BG_CARD_SOLID,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER_GRAY,
-    padding: 16,
-    marginBottom: 12,
-  },
-  levelCardSelected: {
-    borderWidth: 2,
-  },
-  levelHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  levelIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  levelInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  levelName: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  levelAmount: {
-    fontSize: 13,
     color: TEXT_MUTED,
-    marginTop: 2,
+    marginTop: 16,
+    marginBottom: 24,
   },
-  checkBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  levelDesc: {
-    fontSize: 13,
-    color: TEXT_MUTED,
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  levelReward: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: BORDER_GRAY,
-  },
-  rewardLabel: {
-    fontSize: 13,
-    color: TEXT_MUTED,
-  },
-  rewardValue: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: BG_CARD_SOLID,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: BORDER_GRAY,
-    paddingHorizontal: 16,
-  },
-  input: {
-    flex: 1,
-    height: 50,
-    fontSize: 16,
-    color: TEXT_WHITE,
-  },
-  inputSuffix: {
-    fontSize: 14,
-    color: TEXT_MUTED,
-    marginLeft: 8,
-  },
-  percentButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 12,
-    gap: 8,
-  },
-  percentButton: {
-    flex: 1,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: BG_CARD_SOLID,
-    borderWidth: 1,
-    borderColor: BORDER_GRAY,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  percentButtonText: {
-    fontSize: 13,
-    color: CYAN,
-    fontWeight: '500',
-  },
-  submitButton: {
-    marginHorizontal: 16,
-    height: 50,
-    borderRadius: 25,
+  emptyButton: {
     backgroundColor: YELLOW,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 12,
   },
-  submitButtonDisabled: {
-    opacity: 0.5,
-  },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-  },
-  noticeCard: {
-    marginHorizontal: 16,
-    padding: 16,
-    backgroundColor: BG_CARD_SOLID,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: BORDER_GRAY,
-  },
-  noticeTitle: {
+  emptyButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: TEXT_WHITE,
-    marginBottom: 12,
-  },
-  noticeItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginBottom: 8,
-  },
-  noticeText: {
-    fontSize: 13,
-    color: TEXT_MUTED,
-    flex: 1,
-    lineHeight: 20,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    fontSize: 14,
-    color: TEXT_MUTED,
-    marginTop: 12,
+    color: BG_DARK,
   },
 });
