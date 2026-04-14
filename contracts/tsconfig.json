@@ -17,6 +17,6 @@
     "typechain/**/*"
   ],
   "files": [
-    "./DQProject.sol"
+    "./src/DQProject.sol"
   ]
 }
