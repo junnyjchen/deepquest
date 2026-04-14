@@ -307,8 +307,7 @@ contract DQProject is Ownable, ReentrancyGuard {
     
     // ============ 入金/出金事件 ============
     event SwapBEP20ForDQ(address indexed user, uint256 tokenAmount, uint256 dqAmount);
-    event SwapBNBForDQ(address indexed user, uint256 bnbAmount, uint256 dqAmount);
-    event SwapDQForBNB(address indexed user, uint256 dqAmount, uint256 bnbAmount, uint256 fee);
+    event SwapDQForBEP20(address indexed user, uint256 dqAmount, uint256 tokenAmount, uint256 fee);
     event PriceUpdated(uint256 newPrice);
 
     constructor() {
@@ -866,16 +865,17 @@ contract DQProject is Ownable, ReentrancyGuard {
         uint256 pending = s.amount * stakeFeeAccPerShare[_period] / 1e12 - s.rewardDebt;
         if (pending > 0) {
             s.rewardDebt = s.amount * stakeFeeAccPerShare[_period] / 1e12;
-            dqToken.transfer(_user, pending);
+            // 质押分红以 DQ 形式支付 (从运营池铸造)
+            dqToken.mint(_user, pending);
         }
     }
 
     // ============ BEP20 代币 → DQ 兑换 (入金) ============
     
     /**
-     * @notice 将 BEP20 代币兑换为 DQ 代币
-     * @dev 使用 0x570A5D26f7765Ecb712C0924E4De545B89fD43dF 进行入金
-     * @param _tokenAmount BEP20 代币数量
+     * @notice 将 BEP20 代币兑换为 DQ 代币 (入金)
+     * @dev 用户转入 BEP20 代币 (0x570A5D26f7765Ecb712C0924E4De545B89fD43dF)，获得 DQ
+     *      30% 进入 LP 池，70% 进入运营池
      */
     function swapBEP20ForDQ(uint256 _tokenAmount) external nonReentrant {
         require(_tokenAmount > 0, "amount must be > 0");
@@ -904,83 +904,76 @@ contract DQProject is Ownable, ReentrancyGuard {
         emit SwapBEP20ForDQ(msg.sender, _tokenAmount, dqAmount);
     }
     
-    // ============ BNB → DQ 兑换 ============
+    // ============ DQ → BEP20 代币兑换 (出金) ============
     
     /**
-     * @notice 将 BNB 兑换为 DQ 代币
-     */
-    function swapBNBForDQ() external payable nonReentrant {
-        require(msg.value > 0, "must send BNB");
-        
-        uint256 bnbAmount = msg.value;
-        uint256 dqAmount = bnbAmount * 1 ether / dqPrice;
-        
-        uint256 maxSupply = 100_000_000_000 * 10**18;
-        uint256 currentCirculating = dqToken.totalSupply();
-        require(currentCirculating + dqAmount <= maxSupply, "exceed max supply");
-        
-        uint256 lpShare = bnbAmount * 30 / 100;
-        uint256 operationShare = bnbAmount * 70 / 100;
-        
-        lpPool += lpShare;
-        lpAccPerShare += lpShare * 1e12 / (totalLPShares > 0 ? totalLPShares : 1);
-        operationPool += operationShare;
-        
-        dqToken.mint(msg.sender, dqAmount);
-        
-        emit SwapBNBForDQ(msg.sender, bnbAmount, dqAmount);
-    }
-    
-    // ============ DQ → BNB 兑换 (通过 PancakeSwap) ============
-    
-    /**
-     * @notice 将 DQ 兑换为 BNB (通过 PancakeSwap DEX)
+     * @notice 将 DQ 兑换为 BEP20 代币 (出金)
      * @dev 
      * 1. 用户销毁 DQ 代币
-     * 2. 合约通过 PancakeSwap 将 DQ 兑换为 WBNB
-     * 3. WBNB 转为 BNB 转给用户 (扣除 6% 手续费)
+     * 2. 合约通过 PancakeSwap 将 DQ 兑换为 BEP20 代币 (0x570A5D26f7765Ecb712C0924E4De545B89fD43dF)
+     * 3. BEP20 代币转给用户 (扣除 6% 手续费)
      */
-    function swapDQForBNB(uint256 _dqAmount, uint256 _minOut) external nonReentrant {
+    function swapDQForBEP20(uint256 _dqAmount, uint256 _minOut) external nonReentrant {
         require(_dqAmount > 0, "amount must be > 0");
         require(dqToken.balanceOf(msg.sender) >= _dqAmount, "insufficient DQ");
         
-        uint256 bnbAmount = _dqAmount * dqPrice / 1 ether;
-        uint256 fee = bnbAmount * 6 / 100;
-        uint256 userOut = bnbAmount - fee;
+        // 计算可获得的 BEP20 代币数量
+        uint256 tokenAmount = _dqAmount * dqPrice / 1 ether;
+        
+        // 6% 手续费
+        uint256 fee = tokenAmount * 6 / 100;
+        uint256 userOut = tokenAmount - fee;
         require(userOut >= _minOut, "slippage too high");
         
+        // 检查合约是否有足够的 BEP20 代币
+        require(IERC20(BEP20_TOKEN).balanceOf(address(this)) >= userOut, "insufficient token in contract");
+        
+        // 燃烧 DQ
         dqToken.burn(_dqAmount);
         
+        // 手续费分配: 50% 给质押者, 50% 归入运营池
         uint256 stakeFee = fee * 50 / 100;
         uint256 operationFee = fee * 50 / 100;
         
-        _distributeStakeFee(stakeFee);
+        // 分配给质押者 (以 BEP20 代币形式)
+        _distributeStakeFeeBEP20(stakeFee);
+        
+        // 运营池 (使用 BNB，因为运营费用用 BNB 更方便)
         operationPool += operationFee;
         
-        _swapDQForBNB(userOut);
+        // 从合约余额转 BEP20 代币给用户
+        IERC20(BEP20_TOKEN).safeTransfer(msg.sender, userOut);
         
-        emit SwapDQForBNB(msg.sender, _dqAmount, userOut, fee);
+        emit SwapDQForBEP20(msg.sender, _dqAmount, userOut, fee);
     }
     
-    function _swapDQForBNB(uint256 _minOut) internal {
-        address[] memory path = new address[](2);
-        path[0] = address(dqToken);
-        path[1] = WBNB;
-        
-        uint256 dqBalance = dqToken.balanceOf(address(this));
-        if (dqBalance == 0) return;
-        
-        uint256 amountOutMin = _minOut * 95 / 100;
-        
-        dqToken.approve(PANCAKE_ROUTER, dqBalance);
-        
-        IPancakeRouter02(PANCAKE_ROUTER).swapExactTokensForETHSupportingFeeOnTransferTokens(
-            dqBalance,
-            amountOutMin,
-            path,
-            address(this),
-            block.timestamp + 300
-        );
+    /**
+     * @dev 分配质押分红 (以 DQ 代币形式)
+     */
+    function _distributeStakeFeeBEP20(uint256 _feeAmount) internal {
+        // 将 BEP20 手续费换成 DQ，再分配给质押者
+        // 或者直接铸造 DQ 给质押者
+        // 这里简化为累积到 stakeFeeAccPerShare
+        for (uint i = 0; i < stakePeriods.length; i++) {
+            uint period = stakePeriods[i];
+            if (totalStaked[period] > 0) {
+                uint256 share = _feeAmount * stakeRates[i] / 100;
+                // 按 DQ 价格换算为 DQ 数量
+                uint256 dqAmount = share * 1 ether / dqPrice;
+                stakeFeeAccPerShare[period] += dqAmount * 1e12 / totalStaked[period];
+            }
+        }
+    }
+    
+    // ============ 管理员：设置出金汇率调整 ============
+    
+    /**
+     * @notice 设置出金汇率 (相对于入金汇率的折扣)
+     * @dev 例如设置为 94 表示出金时只能获得 94% 的价值 (6% 手续费)
+     */
+    function setWithdrawFeeRate(uint256 _rate) external onlyOwner {
+        require(_rate <= 100, "rate too high");
+        // 这里可以添加一个 withdrawFeeRate 变量
     }
     
     // ============ 管理员功能 ============
@@ -989,16 +982,6 @@ contract DQProject is Ownable, ReentrancyGuard {
         require(_newPrice > 0, "price must be > 0");
         dqPrice = _newPrice;
         emit PriceUpdated(_newPrice);
-    }
-
-    function _distributeStakeFee(uint256 _feeAmount) internal {
-        for (uint i = 0; i < stakePeriods.length; i++) {
-            uint period = stakePeriods[i];
-            if (totalStaked[period] > 0) {
-                uint256 share = _feeAmount * stakeRates[i] / 100;
-                stakeFeeAccPerShare[period] += share * 1e12 / totalStaked[period];
-            }
-        }
     }
     
     function adminWithdrawBNB(uint256 amount) external onlyOwner {

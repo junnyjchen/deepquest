@@ -16,9 +16,9 @@
 
 | 名称 | 地址 | 说明 |
 |------|------|------|
-| **入金代币 (BEP20)** | `0x570A5D26f7765Ecb712C0924E4De545B89fD43dF` | 用户用于质押入金的代币 |
+| **BEP20 代币** | `0x570A5D26f7765Ecb712C0924E4De545B89fD43dF` | 入金/出金使用的代币 |
 | **PancakeSwap V2 Router** | `0x10ed43c718714EB63D5AA4B43D3f6452BC7f4ce6` | BSC 上的 DEX 交易所 |
-| **WBNB** | `0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c` | Wrapped BNB，用于 DEX 交易 |
+| **WBNB** | `0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c` | Wrapped BNB |
 
 ---
 
@@ -42,29 +42,21 @@ await bep20TokenContract.approve(contractAddress, amount);
 await contract.swapBEP20ForDQ(ethers.utils.parseEther("1000"));
 ```
 
-### 2. BNB 入金 → DQ
+### 2. DQ 出金 → BEP20 代币
 
-也可以直接使用 BNB 进行入金。
-
-```javascript
-await contract.swapBNBForDQ({ value: ethers.utils.parseEther("1.0") });
-```
-
-### 3. DQ 出金 → BNB (PancakeSwap)
-
-用户销毁 DQ 代币，合约通过 PancakeSwap 将 DQ 兑换为 BNB 转给用户。
+用户销毁 DQ 代币，合约将 BEP20 代币转给用户。
 
 **手续费:** 6% (50% 质押分红 + 50% 运营)
 
 ```javascript
-// 兑换 1000 DQ 为 BNB
-await contract.swapDQForBNB(
+// 兑换 1000 DQ 为 BEP20 代币
+await contract.swapDQForBEP20(
   ethers.utils.parseEther("1000"),
   0  // 最小输出
 );
 ```
 
-### 4. DQ 质押系统
+### 3. DQ 质押系统
 
 **质押周期:**
 | 周期 | 收益 |
@@ -74,6 +66,8 @@ await contract.swapDQForBNB(
 | 180 天 | 15% |
 | 360 天 | 20% |
 
+**分红来源:** 出金手续费的 50% 分配给质押者
+
 ```javascript
 // 质押
 await contract.stakeDQ(ethers.utils.parseEther("1000"), 0); // 30天
@@ -82,11 +76,45 @@ await contract.stakeDQ(ethers.utils.parseEther("1000"), 0); // 30天
 await contract.unstakeDQ(0);
 ```
 
-### 5. 节点 NFT 购买
+### 4. 节点 NFT 购买
+
+使用 BNB 购买节点卡牌。
 
 ```javascript
 // 购买节点卡 (A=500, B=1000, C=3000 BNB)
 await contract.buyNode(1, { value: ethers.utils.parseEther("500") });
+```
+
+---
+
+## 资金流程图
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         入金流程                              │
+│                                                             │
+│   用户 ──BEP20──▶ 合约                                      │
+│              │                                              │
+│              ├──30%──▶ LP质押池                              │
+│              │                                              │
+│              └──70%──▶ 运营池                                │
+│                                                             │
+│              ◀──── DQ 代币 ◀──── 铸造                        │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                         出金流程                              │
+│                                                             │
+│   用户 ──DQ──▶ 合约 ──燃烧──▶ 销毁                           │
+│              │                                              │
+│              ├──6%手续费──┬──50%──▶ 质押分红池               │
+│              │            │                                 │
+│              │            └──50%──▶ 运营池                   │
+│              │                                              │
+│              └──94%──▶ BEP20 代币 ──▶ 用户                  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -96,38 +124,56 @@ await contract.buyNode(1, { value: ethers.utils.parseEther("500") });
 ### 常量地址
 
 ```solidity
-// 入金代币地址
+// BEP20 代币地址 (入金/出金)
 address public constant BEP20_TOKEN = 0x570A5D26f7765Ecb712C0924E4De545B89fD43dF;
 
 // PancakeSwap DEX
 address public constant PANCAKE_ROUTER = 0x10ed43c718714EB63D5AA4B43D3f6452BC7f4ce6;
 
-// WBNB (用于 DEX 交易)
+// WBNB
 address public constant WBNB = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c;
 
-// DQ 价格 (1 DQ = 1 BEP20)
+// DQ 价格 (1 DQ = 1 BEP20 代币)
 uint256 public dqPrice = 1 ether;
 ```
 
 ---
 
+## 核心函数列表
+
+| 函数 | 说明 |
+|------|------|
+| `swapBEP20ForDQ(_tokenAmount)` | BEP20 代币入金 → DQ |
+| `swapDQForBEP20(_dqAmount, _minOut)` | DQ 出金 → BEP20 代币 |
+| `stakeDQ(_amount, _periodIndex)` | 质押 DQ (30/90/180/360天) |
+| `unstakeDQ(_periodIndex)` | 解质押 |
+| `buyNode(_type)` | 购买节点 NFT (A/B/C级) |
+| `claimLp()` | 领取 LP 分红 |
+| `claimNft()` | 领取 NFT 分红 |
+| `claimFee()` | 领取手续费分红 |
+| `withdraw()` | 领取动态奖金 |
+| `setPrice(_newPrice)` | 设置 DQ 价格 |
+
+---
+
 ## 常见问题
 
-### Q1: BEP20 代币地址是什么?
+### Q1: 出金时 BEP20 代币从哪里来?
 
-**答**: `0x570A5D26f7765Ecb712C0924E4De545B89fD43dF` 是用户用于质押入金的 BEP20 代币合约地址。
+**答**: 
+- 用户入金时，BEP20 代币进入合约
+- 出金时，从合约持有的 BEP20 余额中转给用户
+- **注意**: 合约需要有足够的 BEP20 余额才能出金
 
-### Q2: 如何设置 DQ 价格?
+### Q2: 如何确保合约有足够的 BEP20 出金?
 
-```javascript
-// 1 DQ = 0.0001 BEP20 代币
-await contract.setPrice(ethers.utils.parseUnits("0.0001", "ether"));
-```
+**答**: 
+- 需要有足够的用户入金来支撑出金
+- 或者项目方定期向合约转入 BEP20 代币
 
-### Q3: 出金时的手续费分配?
+### Q3: 质押分红从哪里来?
 
-- 50% → 质押分红池
-- 50% → 运营池
+**答**: 出金手续费的 50% 分配给质押者，以 DQ 代币形式铸造。
 
 ---
 
