@@ -1,0 +1,27 @@
+[package]
+name = "dq-project"
+version = "0.1.0"
+edition = "2021"
+description = "DQProject - DeepQuest DeFi Platform on Solana"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-token = []
+
+[dependencies]
+anchor-lang = "0.30.0"
+anchor-spl = "0.30.0"
+spl-token = "0.40.0"
+spl-associated-token-account = "3.0.0"
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "1.0"
+
+[profile.release]
+lto = true
+opt-level = 3
+codegen-units = 1
+panic = "abort"
