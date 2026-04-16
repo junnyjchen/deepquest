@@ -1,31 +1,42 @@
 // DQProject - Solana Anchor Program
 // DeepQuest DeFi Platform on Solana
+// Program ID: DQProject111111111111111111111111111111111
 
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{program_option::COption, stake, system_program};
-use anchor_spl::token::{self, Mint, Token, TokenAccount};
+use anchor_spl::token::{self, Burn, Mint, MintTo, Token, TokenAccount, Transfer};
 use std::mem::size_of;
 
-// ============ 常量定义 ============
+// ============ Program ID ============
 
 declare_id!("DQProject111111111111111111111111111111111");
 
+// ============ 种子常量 ============
+
+pub const SEED_ADMIN: &[u8] = b"admin";
 pub const SEED_DQ_MINT: &[u8] = b"dq_mint";
-pub const SEED_VAULT: &[u8] = b"vault";
+pub const SEED_SOL_VAULT: &[u8] = b"sol_vault";
+pub const SEED_LP_POOL: &[u8] = b"lp_pool";
+pub const SEED_NFT_POOL: &[u8] = b"nft_pool";
+pub const SEED_TEAM_POOL: &[u8] = b"team_pool";
+pub const SEED_PARTNER_POOL: &[u8] = b"partner_pool";
+pub const SEED_USER: &[u8] = b"user";
 pub const SEED_STAKE: &[u8] = b"stake";
 pub const SEED_NODE: &[u8] = b"node";
-pub const SEED_USER: &[u8] = b"user";
 pub const SEED_NFT_MINT: &[u8] = b"nft_mint";
 
+// ============ 全局常量 ============
+
+// 代币总量 (9位小数)
 pub const TOTAL_SUPPLY: u64 = 100_000_000_000_000; // 1000亿 DQ
 
-// 卡牌价格 (lamports, 1 SOL = 1_000_000_000 lamports)
-pub const PRICE_A: u64 = 500_000_000_000; // 500 SOL
+// LP 分数换算
+pub const LP_SHARES_MULTIPLIER: u64 = 1_000_000_000;
+
+// 卡牌价格 (lamports)
+pub const PRICE_A: u64 = 500_000_000_000;  // 500 SOL
 pub const PRICE_B: u64 = 1_000_000_000_000; // 1000 SOL
 pub const PRICE_C: u64 = 3_000_000_000_000; // 3000 SOL
-
-// 分红比例 (基点)
-pub const BP_DIVISOR: u64 = 10000;
 
 // 质押周期 (天数)
 pub const PERIOD_30: u64 = 30;
@@ -33,16 +44,35 @@ pub const PERIOD_90: u64 = 90;
 pub const PERIOD_180: u64 = 180;
 pub const PERIOD_360: u64 = 360;
 
-// 质押年化收益率 (基点)
-pub const RATE_30: u64 = 500;  // 5%
-pub const RATE_90: u64 = 1000; // 10%
+// 质押年化收益率 (基点, 10000 = 100%)
+pub const RATE_30: u64 = 500;   // 5%
+pub const RATE_90: u64 = 1000;  // 10%
 pub const RATE_180: u64 = 1500; // 15%
 pub const RATE_360: u64 = 2000; // 20%
+
+// 爆块参数
+pub const DAILY_RELEASE_RATE: u64 = 13;  // 1.3%
+pub const INITIAL_BURN_RATE: u64 = 8000; // 80%
+pub const MIN_BURN_RATE: u64 = 3000;    // 30%
+pub const BURN_DECREMENT: u64 = 500;    // 每次降低 5%
+
+// 合伙人要求
+pub const PARTNER_INVEST_REQUIRE: u64 = 5_000_000_000_000; // 5000 SOL
+pub const PARTNER_SALES_20: u64 = 30_000_000_000_000;      // 前20名: 30000 SOL
+pub const PARTNER_SALES_AFTER: u64 = 50_000_000_000_000;  // 20名后: 50000 SOL
+pub const MAX_PARTNERS: u64 = 50;
+
+// 分红权重
+pub const NFT_WEIGHT_A: u64 = 4;
+pub const NFT_WEIGHT_B: u64 = 5;
+pub const NFT_WEIGHT_C: u64 = 6;
 
 // ============ 错误定义 ============
 
 #[error_code]
 pub enum ErrorCode {
+    #[msg("Unauthorized: not admin")]
+    Unauthorized,
     #[msg("Invalid period index")]
     InvalidPeriod,
     #[msg("Insufficient balance")]
@@ -63,15 +93,25 @@ pub enum ErrorCode {
     InvalidReferrer,
     #[msg("Already registered")]
     AlreadyRegistered,
-    #[msg("Unauthorized")]
-    Unauthorized,
     #[msg("Invalid amount")]
     InvalidAmount,
     #[msg("No stake found")]
     NoStakeFound,
+    #[msg("Too early to mine")]
+    TooEarlyToMine,
+    #[msg("Invalid price")]
+    InvalidPrice,
+    #[msg("Partner limit reached")]
+    PartnerLimitReached,
+    #[msg("Investment requirement not met")]
+    InvestRequirementNotMet,
+    #[msg("Sales requirement not met")]
+    SalesRequirementNotMet,
+    #[msg("Invalid NFT metadata")]
+    InvalidNftMetadata,
 }
 
-// ============ 全局状态 (State) ============
+// ============ 全局状态 (GlobalState) ============
 
 #[account]
 #[derive(InitSpace)]
@@ -79,13 +119,15 @@ pub struct GlobalState {
     pub admin: Pubkey,
     pub dq_mint: Pubkey,
     pub sol_vault: Pubkey,
-    pub operation_pool: Pubkey,
     pub lp_pool: Pubkey,
+    pub nft_pool: Pubkey,
+    pub team_pool: Pubkey,
+    pub partner_pool: Pubkey,
     pub nft_mint_a: Pubkey,
     pub nft_mint_b: Pubkey,
     pub nft_mint_c: Pubkey,
     pub raydium_router: Pubkey,
-    pub dq_price: u64,           // 1 DQ = dq_price lamports
+    pub dq_price: u64,
     pub total_supply: u64,
     pub circulating_supply: u64,
     pub daily_release_rate: u64,
@@ -93,10 +135,10 @@ pub struct GlobalState {
     pub burn_rate: u64,
     pub partner_count: u64,
     pub bump: u8,
-    pub vault_bump: u8,
+    pub sol_vault_bump: u8,
 }
 
-// ============ 用户状态 (User) ============
+// ============ 用户状态 (UserState) ============
 
 #[account]
 #[derive(InitSpace)]
@@ -104,26 +146,26 @@ pub struct UserState {
     pub owner: Pubkey,
     pub referrer: Pubkey,
     pub direct_count: u64,
-    pub level: u8,              // 1-6
-    pub total_invest: u64,     // 总投资 (lamports)
-    pub team_invest: u64,      // 团队投资
+    pub level: u8,
+    pub total_invest: u64,
+    pub team_invest: u64,
     pub energy: u64,
     pub lp_shares: u64,
     pub direct_sales: u64,
-    pub d_level: u8,            // D级别 1-8
+    pub d_level: u8,
     pub pending_rewards: u64,
     pub total_claimed: u64,
     pub is_partner: bool,
     pub partner_order: u64,
     pub stake_shares: u64,
-    pub stake_reward_debt: u64,
+    pub lp_reward_debt: u64,
     pub nft_reward_debt: u64,
     pub d_reward_debt: u64,
     pub created_at: i64,
     pub bump: u8,
 }
 
-// ============ 质押状态 (Stake) ============
+// ============ 质押状态 (StakeState) ============
 
 #[account]
 #[derive(InitSpace)]
@@ -144,30 +186,7 @@ pub struct StakeState {
     pub bump: u8,
 }
 
-// ============ 节点卡牌 (NodeCard) ============
-
-#[account]
-#[derive(InitSpace)]
-pub struct NodeCard {
-    pub owner: Pubkey,
-    pub card_type: u8,         // 1=A, 2=B, 3=C
-    pub purchased_at: i64,
-    pub bump: u8,
-}
-
-// ============ NFT 元数据 (简化版) ============
-
-#[account]
-#[derive(InitSpace)]
-pub struct NftMetadata {
-    pub mint: Pubkey,
-    pub owner: Pubkey,
-    pub card_type: u8,
-    pub uri: String,
-    pub bump: u8,
-}
-
-// ============ 流动性池状态 (LPPool) ============
+// ============ LP 池状态 (LpPool) ============
 
 #[account]
 #[derive(InitSpace)]
@@ -178,7 +197,7 @@ pub struct LpPool {
     pub bump: u8,
 }
 
-// ============ NFT 分红池 (NftPool) ============
+// ============ NFT 池状态 (NftPool) ============
 
 #[account]
 #[derive(InitSpace)]
@@ -193,18 +212,18 @@ pub struct NftPool {
     pub bump: u8,
 }
 
-// ============ 团队分红池 (TeamPool) ============
+// ============ 团队池状态 (TeamPool) ============
 
 #[account]
 #[derive(InitSpace)]
 pub struct TeamPool {
-    pub level_users: [u64; 8],    // 每个级别的用户数
-    pub acc_per_share: [u64; 8], // 每个级别的累积
+    pub level_users: [u64; 8],
+    pub acc_per_share: [u64; 8],
     pub last_update: i64,
     pub bump: u8,
 }
 
-// ============ 合伙人池 (PartnerPool) ============
+// ============ 合伙人池状态 (PartnerPool) ============
 
 #[account]
 #[derive(InitSpace)]
@@ -212,6 +231,42 @@ pub struct PartnerPool {
     pub total_partners: u64,
     pub acc_per_share: u64,
     pub last_update: i64,
+    pub bump: u8,
+}
+
+// ============ 节点卡牌 (NodeCard) ============
+
+#[account]
+#[derive(InitSpace)]
+pub struct NodeCard {
+    pub owner: Pubkey,
+    pub card_type: u8,
+    pub purchased_at: i64,
+    pub card_index: u64,
+    pub bump: u8,
+}
+
+// ============ NFT 元数据 (NftMetadata) ============
+
+#[account]
+#[derive(InitSpace)]
+pub struct NftMetadata {
+    pub mint: Pubkey,
+    pub owner: Pubkey,
+    pub card_type: u8,
+    pub card_index: u64,
+    pub uri: String,
+    pub bump: u8,
+}
+
+// ============ 代币账户状态 (TokenAccountState) ============
+
+#[account]
+#[derive(InitSpace)]
+pub struct TokenAccountState {
+    pub owner: Pubkey,
+    pub mint: Pubkey,
+    pub amount: u64,
     pub bump: u8,
 }
 
@@ -223,44 +278,62 @@ pub mod dq_project {
 
     // ============ 初始化全局状态 ============
 
-    pub fn initialize(
-        ctx: Context<Initialize>,
-        dq_price: u64,
-    ) -> Result<()> {
+    pub fn initialize(ctx: Context<Initialize>, dq_price: u64) -> Result<()> {
         let state = &mut ctx.accounts.global_state;
-        
+        let clock = Clock::get()?;
+
         state.admin = ctx.accounts.admin.key();
         state.dq_mint = ctx.accounts.dq_mint.key();
         state.sol_vault = ctx.accounts.sol_vault.key();
-        state.operation_pool = ctx.accounts.operation_pool.key();
         state.lp_pool = ctx.accounts.lp_pool.key();
+        state.nft_pool = ctx.accounts.nft_pool.key();
+        state.team_pool = ctx.accounts.team_pool.key();
+        state.partner_pool = ctx.accounts.partner_pool.key();
         state.nft_mint_a = ctx.accounts.nft_mint_a.key();
         state.nft_mint_b = ctx.accounts.nft_mint_b.key();
         state.nft_mint_c = ctx.accounts.nft_mint_c.key();
-        state.raydium_router = ctx.accounts.raydium_router.key();
+        state.raydium_router = Pubkey::default();
         state.dq_price = dq_price;
         state.total_supply = TOTAL_SUPPLY;
         state.circulating_supply = 0;
-        state.daily_release_rate = 13; // 1.3%
-        state.last_block_time = Clock::get()?.unix_timestamp;
-        state.burn_rate = 8000; // 80%
+        state.daily_release_rate = DAILY_RELEASE_RATE;
+        state.last_block_time = clock.unix_timestamp;
+        state.burn_rate = INITIAL_BURN_RATE;
         state.partner_count = 0;
         state.bump = ctx.bumps.global_state;
-        state.vault_bump = ctx.bumps.sol_vault;
+        state.sol_vault_bump = ctx.bumps.sol_vault;
 
         // 初始化子池
         ctx.accounts.lp_pool.acc_per_share = 0;
-        ctx.accounts.lp_pool.last_update = Clock::get()?.unix_timestamp;
+        ctx.accounts.lp_pool.total_shares = 0;
+        ctx.accounts.lp_pool.last_update = clock.unix_timestamp;
         ctx.accounts.lp_pool.bump = ctx.bumps.lp_pool;
 
-        ctx.accounts.nft_pool.last_update = Clock::get()?.unix_timestamp;
+        ctx.accounts.nft_pool.total_a = 0;
+        ctx.accounts.nft_pool.total_b = 0;
+        ctx.accounts.nft_pool.total_c = 0;
+        ctx.accounts.nft_pool.acc_per_share_a = 0;
+        ctx.accounts.nft_pool.acc_per_share_b = 0;
+        ctx.accounts.nft_pool.acc_per_share_c = 0;
+        ctx.accounts.nft_pool.last_update = clock.unix_timestamp;
         ctx.accounts.nft_pool.bump = ctx.bumps.nft_pool;
 
-        ctx.accounts.team_pool.last_update = Clock::get()?.unix_timestamp;
+        ctx.accounts.team_pool.level_users = [0u64; 8];
+        ctx.accounts.team_pool.acc_per_share = [0u64; 8];
+        ctx.accounts.team_pool.last_update = clock.unix_timestamp;
         ctx.accounts.team_pool.bump = ctx.bumps.team_pool;
 
-        ctx.accounts.partner_pool.last_update = Clock::get()?.unix_timestamp;
+        ctx.accounts.partner_pool.total_partners = 0;
+        ctx.accounts.partner_pool.acc_per_share = 0;
+        ctx.accounts.partner_pool.last_update = clock.unix_timestamp;
         ctx.accounts.partner_pool.bump = ctx.bumps.partner_pool;
+
+        msg!("DQProject initialized with price: {} lamports per DQ", dq_price);
+        emit!(InitializeEvent {
+            admin: state.admin,
+            dq_price,
+            timestamp: clock.unix_timestamp,
+        });
 
         Ok(())
     }
@@ -276,27 +349,35 @@ pub mod dq_project {
             ErrorCode::InvalidReferrer
         );
 
+        // 如果有推荐人，检查推荐人是否已注册
+        if referrer != Pubkey::default() {
+            require!(
+                ctx.accounts.referrer_state.owner == referrer,
+                ErrorCode::InvalidReferrer
+            );
+        }
+
         user.owner = ctx.accounts.owner.key();
         user.referrer = referrer;
         user.created_at = clock.unix_timestamp;
         user.bump = ctx.bumps.user_state;
 
-        // 更新推荐人
-        if ctx.accounts.referrer_state.referrer != Pubkey::default() 
-           || ctx.accounts.admin.key() == referrer {
-            // 推荐人信息更新
-            msg!("User registered with referrer: {}", referrer);
-        }
+        msg!(
+            "User {} registered with referrer: {}",
+            user.owner,
+            referrer
+        );
+        emit!(RegisterEvent {
+            user: ctx.accounts.owner.key(),
+            referrer,
+            timestamp: clock.unix_timestamp,
+        });
 
         Ok(())
     }
 
     // ============ 入金: SOL → DQ ============
 
-    /**
-     * @notice 将 SOL 兑换为 DQ 代币
-     * @param amount 存入的 SOL 数量 (lamports)
-     */
     pub fn swap_sol_for_dq(ctx: Context<SwapSolForDq>, amount: u64) -> Result<()> {
         let state = &mut ctx.accounts.global_state;
         let user = &mut ctx.accounts.user_state;
@@ -305,7 +386,8 @@ pub mod dq_project {
         require!(amount > 0, ErrorCode::InvalidAmount);
 
         // 计算可铸造的 DQ 数量
-        let dq_amount = amount * 1_000_000_000 / state.dq_price; // 价格转换
+        // 1 DQ = dq_price lamports
+        let dq_amount = amount * 1_000_000_000 / state.dq_price;
 
         // 检查总量限制
         require!(
@@ -315,12 +397,12 @@ pub mod dq_project {
 
         // 30% 进入 LP 池
         let lp_share = amount * 30 / 100;
-        // 70% 进入运营池
-        let operation_share = amount * 70 / 100;
+        // 70% 进入运营池 (实际进入合约余额，用于未来出金)
+        // operation_share = amount * 70 / 100
 
         // 更新 LP 池
         ctx.accounts.lp_pool.total_shares += lp_share;
-        
+
         // 更新用户状态
         user.lp_shares += lp_share;
         user.total_invest += amount;
@@ -331,24 +413,31 @@ pub mod dq_project {
         state.circulating_supply += dq_amount;
 
         // 铸造 DQ 代币给用户
-        token::mint_to(
+        mint_to(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
-                token::MintTo {
+                MintTo {
                     mint: ctx.accounts.dq_mint.to_account_info(),
                     to: ctx.accounts.user_token_account.to_account_info(),
-                    authority: ctx.accounts.dq_mint.to_account_info(),
+                    authority: ctx.accounts.sol_vault.to_account_info(),
                 },
-                &[&[SEED_VAULT, &[state.vault_bump]]],
+                &[&[SEED_SOL_VAULT, &[state.sol_vault_bump]]],
             ),
             dq_amount,
         )?;
 
-        msg!("Swapped {} SOL for {} DQ", amount, dq_amount);
-        emit!(SwapSolForDQ {
+        msg!(
+            "Swapped {} SOL for {} DQ (price: {} lamports/DQ)",
+            amount,
+            dq_amount,
+            state.dq_price
+        );
+        emit!(SwapSolForDQEvent {
             user: ctx.accounts.owner.key(),
             sol_amount: amount,
             dq_amount,
+            lp_share,
+            timestamp: clock.unix_timestamp,
         });
 
         Ok(())
@@ -356,19 +445,20 @@ pub mod dq_project {
 
     // ============ 出金: DQ → SOL (通过 Raydium DEX) ============
 
-    /**
-     * @notice 将 DQ 兑换为 SOL
-     * @param dq_amount 要兑换的 DQ 数量
-     * @param min_out 最小预期获得的 SOL 数量 (防止滑点)
-     */
     pub fn swap_dq_for_sol(
         ctx: Context<SwapDqForSol>,
         dq_amount: u64,
         min_out: u64,
     ) -> Result<()> {
         let state = &mut ctx.accounts.global_state;
+        let user = &mut ctx.accounts.user_state;
+        let clock = Clock::get()?;
 
         require!(dq_amount > 0, ErrorCode::InvalidAmount);
+        require!(
+            ctx.accounts.user_token_account.amount >= dq_amount,
+            ErrorCode::InsufficientDQ
+        );
 
         // 计算预期获得的 SOL 数量
         let expected_sol = dq_amount * state.dq_price / 1_000_000_000;
@@ -380,14 +470,14 @@ pub mod dq_project {
         require!(user_out >= min_out, ErrorCode::SlippageExceeded);
 
         // 检查合约 SOL 余额
-        let vault_balance = ctx.accounts.sol_vault.lamports();
+        let vault_balance = **ctx.accounts.sol_vault.lamports.borrow();
         require!(vault_balance >= user_out, ErrorCode::InsufficientBalance);
 
         // 销毁 DQ 代币
-        token::burn(
+        burn(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
-                token::Burn {
+                Burn {
                     mint: ctx.accounts.dq_mint.to_account_info(),
                     from: ctx.accounts.user_token_account.to_account_info(),
                     authority: ctx.accounts.owner.to_account_info(),
@@ -396,27 +486,36 @@ pub mod dq_project {
             dq_amount,
         )?;
 
-        // 通过 Raydium DEX 进行兑换 (简化实现)
-        // 实际需要调用 Raydium 的 CPI
-        // _swap_via_raydium(ctx, dq_amount)?;
-
         // 从 Vault 转 SOL 给用户
         **ctx.accounts.sol_vault.to_account_info().try_borrow_mut_lamports()? -= user_out;
         **ctx.accounts.owner.to_account_info().try_borrow_mut_lamports()? += user_out;
 
-        // 手续费分配: 50% 给质押者, 50% 给运营池
+        // 更新循环供应量
+        state.circulating_supply -= dq_amount;
+
+        // 手续费分配: 50% 给 LP 池, 50% 给运营
         let stake_fee = fee * 50 / 100;
         let operation_fee = fee * 50 / 100;
 
-        // 更新质押累积
-        _update_stake_accumulator(&mut ctx.accounts.lp_pool, stake_fee);
+        // 更新 LP 池累积
+        if ctx.accounts.lp_pool.total_shares > 0 {
+            ctx.accounts.lp_pool.acc_per_share += stake_fee * LP_SHARES_MULTIPLIER
+                / ctx.accounts.lp_pool.total_shares;
+        }
 
-        msg!("Swapped {} DQ for {} SOL (fee: {})", dq_amount, user_out, fee);
-        emit!(SwapDqForSol {
+        msg!(
+            "Swapped {} DQ for {} SOL (fee: {}, operation: {})",
+            dq_amount,
+            user_out,
+            fee,
+            operation_fee
+        );
+        emit!(SwapDqForSolEvent {
             user: ctx.accounts.owner.key(),
             dq_amount,
             sol_amount: user_out,
             fee,
+            timestamp: clock.unix_timestamp,
         });
 
         Ok(())
@@ -424,27 +523,27 @@ pub mod dq_project {
 
     // ============ 质押 DQ ============
 
-    /**
-     * @notice 质押 DQ 代币
-     * @param amount 质押数量
-     * @param period_index 周期索引 (0=30天, 1=90天, 2=180天, 3=360天)
-     */
     pub fn stake_dq(
         ctx: Context<StakeDq>,
         amount: u64,
         period_index: u8,
     ) -> Result<()> {
         let stake = &mut ctx.accounts.stake_state;
+        let lp_pool = &ctx.accounts.lp_pool;
         let clock = Clock::get()?;
 
         require!(amount > 0, ErrorCode::InvalidAmount);
         require!(period_index <= 3, ErrorCode::InvalidPeriod);
+        require!(
+            ctx.accounts.user_token_account.amount >= amount,
+            ErrorCode::InsufficientDQ
+        );
 
         // 从用户账户转入质押账户
-        token::transfer(
+        transfer(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
-                token::Transfer {
+                Transfer {
                     from: ctx.accounts.user_token_account.to_account_info(),
                     to: ctx.accounts.stake_account.to_account_info(),
                     authority: ctx.accounts.owner.to_account_info(),
@@ -453,36 +552,72 @@ pub mod dq_project {
             amount,
         )?;
 
+        // 计算当前质押的应计奖励
+        let current_reward_debt = match period_index {
+            0 => stake.amount_30 * lp_pool.acc_per_share / LP_SHARES_MULTIPLIER - stake.reward_debt_30,
+            1 => stake.amount_90 * lp_pool.acc_per_share / LP_SHARES_MULTIPLIER - stake.reward_debt_90,
+            2 => stake.amount_180 * lp_pool.acc_per_share / LP_SHARES_MULTIPLIER - stake.reward_debt_180,
+            3 => stake.amount_360 * lp_pool.acc_per_share / LP_SHARES_MULTIPLIER - stake.reward_debt_360,
+            _ => return err!(ErrorCode::InvalidPeriod),
+        };
+
+        // 先领取之前的奖励
+        if current_reward_debt > 0 {
+            mint_to(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.to_account_info(),
+                    MintTo {
+                        mint: ctx.accounts.dq_mint.to_account_info(),
+                        to: ctx.accounts.user_token_account.to_account_info(),
+                        authority: ctx.accounts.sol_vault.to_account_info(),
+                    },
+                    &[&[SEED_SOL_VAULT, &[ctx.accounts.global_state.sol_vault_bump]]],
+                ),
+                current_reward_debt,
+            )?;
+        }
+
         // 更新质押状态
         match period_index {
             0 => {
                 stake.amount_30 += amount;
-                stake.reward_debt_30 = stake.amount_30 * ctx.accounts.lp_pool.acc_per_share / BP_DIVISOR;
+                stake.reward_debt_30 = stake.amount_30 * lp_pool.acc_per_share / LP_SHARES_MULTIPLIER;
                 stake.last_claim_30 = clock.unix_timestamp;
             },
             1 => {
                 stake.amount_90 += amount;
-                stake.reward_debt_90 = stake.amount_90 * ctx.accounts.lp_pool.acc_per_share / BP_DIVISOR;
+                stake.reward_debt_90 = stake.amount_90 * lp_pool.acc_per_share / LP_SHARES_MULTIPLIER;
                 stake.last_claim_90 = clock.unix_timestamp;
             },
             2 => {
                 stake.amount_180 += amount;
-                stake.reward_debt_180 = stake.amount_180 * ctx.accounts.lp_pool.acc_per_share / BP_DIVISOR;
+                stake.reward_debt_180 = stake.amount_180 * lp_pool.acc_per_share / LP_SHARES_MULTIPLIER;
                 stake.last_claim_180 = clock.unix_timestamp;
             },
             3 => {
                 stake.amount_360 += amount;
-                stake.reward_debt_360 = stake.amount_360 * ctx.accounts.lp_pool.acc_per_share / BP_DIVISOR;
+                stake.reward_debt_360 = stake.amount_360 * lp_pool.acc_per_share / LP_SHARES_MULTIPLIER;
                 stake.last_claim_360 = clock.unix_timestamp;
             },
             _ => return err!(ErrorCode::InvalidPeriod),
         }
 
-        msg!("Staked {} DQ for period {}", amount, period_index);
-        emit!(StakeDQ {
+        msg!(
+            "Staked {} DQ for period {}",
+            amount,
+            match period_index {
+                0 => "30 days",
+                1 => "90 days",
+                2 => "180 days",
+                3 => "360 days",
+                _ => "unknown",
+            }
+        );
+        emit!(StakeDQEvent {
             user: ctx.accounts.owner.key(),
             amount,
-            period: period_index,
+            period_index,
+            timestamp: clock.unix_timestamp,
         });
 
         Ok(())
@@ -492,6 +627,7 @@ pub mod dq_project {
 
     pub fn unstake_dq(ctx: Context<UnstakeDq>, period_index: u8) -> Result<()> {
         let stake = &mut ctx.accounts.stake_state;
+        let lp_pool = &ctx.accounts.lp_pool;
         let clock = Clock::get()?;
 
         require!(period_index <= 3, ErrorCode::InvalidPeriod);
@@ -506,20 +642,57 @@ pub mod dq_project {
 
         require!(amount > 0, ErrorCode::NoStakeFound);
 
-        // 更新质押状态
+        // 计算应计奖励
+        let pending = amount * lp_pool.acc_per_share / LP_SHARES_MULTIPLIER - match period_index {
+            0 => stake.reward_debt_30,
+            1 => stake.reward_debt_90,
+            2 => stake.reward_debt_180,
+            3 => stake.reward_debt_360,
+            _ => return err!(ErrorCode::InvalidPeriod),
+        };
+
+        // 清零质押金额
         match period_index {
-            0 => stake.amount_30 = 0,
-            1 => stake.amount_90 = 0,
-            2 => stake.amount_180 = 0,
-            3 => stake.amount_360 = 0,
+            0 => {
+                stake.amount_30 = 0;
+                stake.reward_debt_30 = 0;
+            },
+            1 => {
+                stake.amount_90 = 0;
+                stake.reward_debt_90 = 0;
+            },
+            2 => {
+                stake.amount_180 = 0;
+                stake.reward_debt_180 = 0;
+            },
+            3 => {
+                stake.amount_360 = 0;
+                stake.reward_debt_360 = 0;
+            },
             _ => return err!(ErrorCode::InvalidPeriod),
         }
 
-        // 从质押账户转回用户
-        token::transfer(
+        // 领取奖励
+        if pending > 0 {
+            mint_to(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.to_account_info(),
+                    MintTo {
+                        mint: ctx.accounts.dq_mint.to_account_info(),
+                        to: ctx.accounts.user_token_account.to_account_info(),
+                        authority: ctx.accounts.sol_vault.to_account_info(),
+                    },
+                    &[&[SEED_SOL_VAULT, &[ctx.accounts.global_state.sol_vault_bump]]],
+                ),
+                pending,
+            )?;
+        }
+
+        // 从质押账户转回用户本金
+        transfer(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
-                token::Transfer {
+                Transfer {
                     from: ctx.accounts.stake_account.to_account_info(),
                     to: ctx.accounts.user_token_account.to_account_info(),
                     authority: ctx.accounts.stake_account.to_account_info(),
@@ -529,10 +702,12 @@ pub mod dq_project {
         )?;
 
         msg!("Unstaked {} DQ from period {}", amount, period_index);
-        emit!(UnstakeDQ {
+        emit!(UnstakeDQEvent {
             user: ctx.accounts.owner.key(),
             amount,
-            period: period_index,
+            period_index,
+            reward: pending,
+            timestamp: clock.unix_timestamp,
         });
 
         Ok(())
@@ -543,51 +718,63 @@ pub mod dq_project {
     pub fn claim_stake_reward(ctx: Context<ClaimStakeReward>, period_index: u8) -> Result<()> {
         let stake = &mut ctx.accounts.stake_state;
         let lp_pool = &ctx.accounts.lp_pool;
-        let user_token = &mut ctx.accounts.user_token_account;
+        let clock = Clock::get()?;
 
         require!(period_index <= 3, ErrorCode::InvalidPeriod);
 
-        let (amount, reward_debt) = match period_index {
-            0 => (stake.amount_30, stake.reward_debt_30),
-            1 => (stake.amount_90, stake.reward_debt_90),
-            2 => (stake.amount_180, stake.reward_debt_180),
-            3 => (stake.amount_360, stake.reward_debt_360),
+        let amount = match period_index {
+            0 => stake.amount_30,
+            1 => stake.amount_90,
+            2 => stake.amount_180,
+            3 => stake.amount_360,
             _ => return err!(ErrorCode::InvalidPeriod),
         };
 
         require!(amount > 0, ErrorCode::NoStakeFound);
 
-        // 计算待领取分红
-        let pending = amount * lp_pool.acc_per_share / BP_DIVISOR - reward_debt;
+        let pending = amount * lp_pool.acc_per_share / LP_SHARES_MULTIPLIER - match period_index {
+            0 => stake.reward_debt_30,
+            1 => stake.reward_debt_90,
+            2 => stake.reward_debt_180,
+            3 => stake.reward_debt_360,
+            _ => return err!(ErrorCode::InvalidPeriod),
+        };
+
         require!(pending > 0, ErrorCode::AlreadyClaimed);
 
         // 更新债务
         match period_index {
-            0 => stake.reward_debt_30 = amount * lp_pool.acc_per_share / BP_DIVISOR,
-            1 => stake.reward_debt_90 = amount * lp_pool.acc_per_share / BP_DIVISOR,
-            2 => stake.reward_debt_180 = amount * lp_pool.acc_per_share / BP_DIVISOR,
-            3 => stake.reward_debt_360 = amount * lp_pool.acc_per_share / BP_DIVISOR,
+            0 => stake.reward_debt_30 = stake.amount_30 * lp_pool.acc_per_share / LP_SHARES_MULTIPLIER,
+            1 => stake.reward_debt_90 = stake.amount_90 * lp_pool.acc_per_share / LP_SHARES_MULTIPLIER,
+            2 => stake.reward_debt_180 = stake.amount_180 * lp_pool.acc_per_share / LP_SHARES_MULTIPLIER,
+            3 => stake.reward_debt_360 = stake.amount_360 * lp_pool.acc_per_share / LP_SHARES_MULTIPLIER,
             _ => return err!(ErrorCode::InvalidPeriod),
         }
 
         // 铸造 DQ 给用户
-        token::mint_to(
-            CpiContext::new(
+        mint_to(
+            CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
-                token::MintTo {
+                MintTo {
                     mint: ctx.accounts.dq_mint.to_account_info(),
-                    to: user_token.to_account_info(),
-                    authority: ctx.accounts.dq_mint.to_account_info(),
+                    to: ctx.accounts.user_token_account.to_account_info(),
+                    authority: ctx.accounts.sol_vault.to_account_info(),
                 },
+                &[&[SEED_SOL_VAULT, &[ctx.accounts.global_state.sol_vault_bump]]],
             ),
             pending,
         )?;
 
-        msg!("Claimed {} DQ stake reward for period {}", pending, period_index);
+        msg!(
+            "Claimed {} DQ stake reward for period {}",
+            pending,
+            period_index
+        );
         emit!(ClaimStakeRewardEvent {
             user: ctx.accounts.owner.key(),
             amount: pending,
-            period: period_index,
+            period_index,
+            timestamp: clock.unix_timestamp,
         });
 
         Ok(())
@@ -595,12 +782,11 @@ pub mod dq_project {
 
     // ============ 购买节点 NFT ============
 
-    /**
-     * @notice 使用 SOL 购买节点卡牌
-     * @param card_type 卡牌类型 (1=A, 2=B, 3=C)
-     */
     pub fn buy_node(ctx: Context<BuyNode>, card_type: u8) -> Result<()> {
         let state = &mut ctx.accounts.global_state;
+        let user = &mut ctx.accounts.user_state;
+        let clock = Clock::get()?;
+
         let price = match card_type {
             1 => PRICE_A,
             2 => PRICE_B,
@@ -608,51 +794,87 @@ pub mod dq_project {
             _ => return err!(ErrorCode::InvalidCardType),
         };
 
-        require!(ctx.accounts.user_lamports.lamports() >= price, ErrorCode::InsufficientBalance);
+        require!(
+            **ctx.accounts.user_lamports.borrow() >= price,
+            ErrorCode::InsufficientBalance
+        );
+
+        // 扣除用户 SOL
+        **ctx.accounts.user_lamports.try_borrow_mut_lamports()? -= price;
+        // 转入合约 vault
+        **ctx.accounts.sol_vault.try_borrow_mut_lamports()? += price;
 
         // 60% 进入 LP 池
         let lp_share = price * 60 / 100;
         // 15% 进入 NFT 分红池
         let nft_share = price * 15 / 100;
-        // 25% 进入运营池
-        let operation_share = price * 25 / 100;
+        // 25% 进入运营池 (合约余额)
 
         // 更新 LP 池
         ctx.accounts.lp_pool.total_shares += lp_share;
 
         // 更新 NFT 池
-        match card_type {
-            1 => ctx.accounts.nft_pool.total_a += 1,
-            2 => ctx.accounts.nft_pool.total_b += 1,
-            3 => ctx.accounts.nft_pool.total_c += 1,
+        let card_index = match card_type {
+            1 => {
+                ctx.accounts.nft_pool.total_a += 1;
+                ctx.accounts.nft_pool.total_a
+            },
+            2 => {
+                ctx.accounts.nft_pool.total_b += 1;
+                ctx.accounts.nft_pool.total_b
+            },
+            3 => {
+                ctx.accounts.nft_pool.total_c += 1;
+                ctx.accounts.nft_pool.total_c
+            },
             _ => return err!(ErrorCode::InvalidCardType),
-        }
+        };
+
+        // 更新 NFT 池累积
+        _update_nft_pool_acc(&mut ctx.accounts.nft_pool, nft_share);
+
+        // 更新用户等级
+        let new_level = match card_type {
+            1 => if user.level < 1 { 1 } else { user.level },
+            2 => if user.level < 2 { 2 } else { user.level },
+            3 => if user.level < 3 { 3 } else { user.level },
+            _ => user.level,
+        };
+        user.level = new_level;
 
         // 铸造 NFT 给用户
-        let seeds = &[SEED_NFT_MINT, &[ctx.bumps.nft_mint]];
-        token::mint_to(
+        let nft_mint = match card_type {
+            1 => &ctx.accounts.nft_mint_a,
+            2 => &ctx.accounts.nft_mint_b,
+            3 => &ctx.accounts.nft_mint_c,
+            _ => return err!(ErrorCode::InvalidCardType),
+        };
+
+        mint_to(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
-                token::MintTo {
-                    mint: match card_type {
-                        1 => ctx.accounts.nft_mint_a.to_account_info(),
-                        2 => ctx.accounts.nft_mint_b.to_account_info(),
-                        3 => ctx.accounts.nft_mint_c.to_account_info(),
-                        _ => return err!(ErrorCode::InvalidCardType),
-                    },
+                MintTo {
+                    mint: nft_mint.to_account_info(),
                     to: ctx.accounts.user_nft_account.to_account_info(),
-                    authority: ctx.accounts.nft_mint.to_account_info(),
+                    authority: ctx.accounts.sol_vault.to_account_info(),
                 },
-                &[seeds],
+                &[&[SEED_SOL_VAULT, &[state.sol_vault_bump]]],
             ),
             1,
         )?;
 
-        msg!("User {} bought node card type {}", ctx.accounts.owner.key(), card_type);
+        msg!(
+            "User {} bought node card type {} (price: {})",
+            ctx.accounts.owner.key(),
+            card_type,
+            price
+        );
         emit!(BuyNodeEvent {
             user: ctx.accounts.owner.key(),
             card_type,
             price,
+            card_index,
+            timestamp: clock.unix_timestamp,
         });
 
         Ok(())
@@ -666,21 +888,21 @@ pub mod dq_project {
 
         // 检查是否到了下一个爆块时间 (24小时)
         require!(
-            clock.unix_timestamp - state.last_block_time >= 86400, // 24 * 60 * 60
-            ErrorCode::Unauthorized
+            clock.unix_timestamp - state.last_block_time >= 86400,
+            ErrorCode::TooEarlyToMine
         );
 
         // 计算本次释放的 DQ
         let release = state.circulating_supply * state.daily_release_rate / 1000;
-        let burn = release * state.burn_rate / BP_DIVISOR;
+        let burn = release * state.burn_rate / 10000;
         let remaining = release - burn;
 
-        // 更新燃烧率
-        if state.burn_rate > 3000 { // 最低 30%
-            state.burn_rate -= 500; // 降低 5%
+        // 更新燃烧率 (最低 30%)
+        if state.burn_rate > MIN_BURN_RATE {
+            state.burn_rate -= BURN_DECREMENT;
         }
 
-        // 分配合约持仓的 DQ
+        // 分配合约持有的 DQ
         let lp_share = remaining * 60 / 100;
         let nft_share = remaining * 15 / 100;
         let foundation_share = remaining * 5 / 100;
@@ -688,23 +910,51 @@ pub mod dq_project {
         let partner_share = remaining * 6 / 100;
 
         // 更新 LP 池累积
-        ctx.accounts.lp_pool.acc_per_share += lp_share * BP_DIVISOR / ctx.accounts.lp_pool.total_shares;
+        if ctx.accounts.lp_pool.total_shares > 0 {
+            ctx.accounts.lp_pool.acc_per_share += lp_share * LP_SHARES_MULTIPLIER
+                / ctx.accounts.lp_pool.total_shares;
+        }
 
         // 更新 NFT 池累积
-        _update_nft_pool(&mut ctx.accounts.nft_pool, nft_share);
+        _update_nft_pool_acc(&mut ctx.accounts.nft_pool, nft_share);
 
         // 更新团队池累积
-        _update_team_pool(&mut ctx.accounts.team_pool, team_share);
+        _update_team_pool_acc(&mut ctx.accounts.team_pool, team_share);
 
         // 更新合伙人池累积
-        ctx.accounts.partner_pool.acc_per_share += partner_share * BP_DIVISOR / ctx.accounts.partner_pool.total_partners;
+        if ctx.accounts.partner_pool.total_partners > 0 && partner_share > 0 {
+            ctx.accounts.partner_pool.acc_per_share += partner_share * LP_SHARES_MULTIPLIER
+                / ctx.accounts.partner_pool.total_partners;
+        }
+
+        // 铸造基金会份额
+        if foundation_share > 0 {
+            mint_to(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.to_account_info(),
+                    MintTo {
+                        mint: ctx.accounts.dq_mint.to_account_info(),
+                        to: ctx.accounts.fund_account.to_account_info(),
+                        authority: ctx.accounts.sol_vault.to_account_info(),
+                    },
+                    &[&[SEED_SOL_VAULT, &[state.sol_vault_bump]]],
+                ),
+                foundation_share,
+            )?;
+        }
 
         state.last_block_time = clock.unix_timestamp;
 
-        msg!("Block mined: release={}, burn={}", release, burn);
+        msg!(
+            "Block mined: release={}, burn={}, remaining={}",
+            release,
+            burn,
+            remaining
+        );
         emit!(BlockMiningEvent {
             release,
             burn,
+            remaining,
             timestamp: clock.unix_timestamp,
         });
 
@@ -725,40 +975,280 @@ pub mod dq_project {
         user.d_reward_debt = pool.acc_per_share;
 
         // 铸造 DQ 给用户
-        token::mint_to(
-            CpiContext::new(
+        mint_to(
+            CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
-                token::MintTo {
+                MintTo {
                     mint: ctx.accounts.dq_mint.to_account_info(),
                     to: ctx.accounts.user_token_account.to_account_info(),
-                    authority: ctx.accounts.dq_mint.to_account_info(),
+                    authority: ctx.accounts.sol_vault.to_account_info(),
                 },
+                &[&[SEED_SOL_VAULT, &[ctx.accounts.global_state.sol_vault_bump]]],
             ),
             pending,
         )?;
 
-        msg!("Partner {} claimed {} DQ", ctx.accounts.owner.key(), pending);
+        msg!(
+            "Partner {} claimed {} DQ reward",
+            ctx.accounts.owner.key(),
+            pending
+        );
         emit!(ClaimPartnerRewardEvent {
             user: ctx.accounts.owner.key(),
             amount: pending,
+            timestamp: Clock::get()?.unix_timestamp,
         });
 
         Ok(())
     }
 
-    // ============ 管理员功能 ============
+    // ============ 领取 LP 分红 ============
+
+    pub fn claim_lp_reward(ctx: Context<ClaimLpReward>) -> Result<()> {
+        let user = &mut ctx.accounts.user_state;
+        let lp_pool = &ctx.accounts.lp_pool;
+
+        let pending = user.lp_shares * lp_pool.acc_per_share / LP_SHARES_MULTIPLIER
+            - user.lp_reward_debt;
+
+        require!(pending > 0, ErrorCode::AlreadyClaimed);
+
+        user.lp_reward_debt = user.lp_shares * lp_pool.acc_per_share / LP_SHARES_MULTIPLIER;
+
+        // 铸造 DQ 给用户
+        mint_to(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                MintTo {
+                    mint: ctx.accounts.dq_mint.to_account_info(),
+                    to: ctx.accounts.user_token_account.to_account_info(),
+                    authority: ctx.accounts.sol_vault.to_account_info(),
+                },
+                &[&[SEED_SOL_VAULT, &[ctx.accounts.global_state.sol_vault_bump]]],
+            ),
+            pending,
+        )?;
+
+        msg!("User {} claimed {} LP reward", ctx.accounts.owner.key(), pending);
+        emit!(ClaimLpRewardEvent {
+            user: ctx.accounts.owner.key(),
+            amount: pending,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
+        Ok(())
+    }
+
+    // ============ 领取 NFT 分红 ============
+
+    pub fn claim_nft_reward(ctx: Context<ClaimNftReward>) -> Result<()> {
+        let user = &mut ctx.accounts.user_state;
+        let nft_pool = &ctx.accounts.nft_pool;
+        let clock = Clock::get()?;
+
+        let mut total_pending: u64 = 0;
+        let mut total_a: u64 = 0;
+        let mut total_b: u64 = 0;
+        let mut total_c: u64 = 0;
+
+        // 遍历用户持有的 NFT
+        for i in 0..ctx.accounts.user_nft_accounts.len() {
+            let nft_account = &ctx.accounts.user_nft_accounts[i];
+            if nft_account.amount == 0 {
+                continue;
+            }
+
+            // 判断是哪个 NFT mint
+            let (card_type, acc_per_share) = if nft_account.mint == ctx.accounts.nft_mint_a.key() {
+                total_a += nft_account.amount;
+                (1u8, nft_pool.acc_per_share_a)
+            } else if nft_account.mint == ctx.accounts.nft_mint_b.key() {
+                total_b += nft_account.amount;
+                (2u8, nft_pool.acc_per_share_b)
+            } else if nft_account.mint == ctx.accounts.nft_mint_c.key() {
+                total_c += nft_account.amount;
+                (3u8, nft_pool.acc_per_share_c)
+            } else {
+                continue;
+            };
+
+            let pending = nft_account.amount * acc_per_share - match card_type {
+                1 => user.nft_reward_debt,
+                2 => user.nft_reward_debt,
+                3 => user.nft_reward_debt,
+                _ => 0,
+            };
+            total_pending += pending;
+        }
+
+        require!(total_pending > 0, ErrorCode::AlreadyClaimed);
+
+        // 更新债务
+        if total_a > 0 {
+            user.nft_reward_debt = nft_pool.acc_per_share_a;
+        }
+        if total_b > 0 {
+            user.nft_reward_debt = nft_pool.acc_per_share_b;
+        }
+        if total_c > 0 {
+            user.nft_reward_debt = nft_pool.acc_per_share_c;
+        }
+
+        // 铸造 DQ 给用户
+        mint_to(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                MintTo {
+                    mint: ctx.accounts.dq_mint.to_account_info(),
+                    to: ctx.accounts.user_token_account.to_account_info(),
+                    authority: ctx.accounts.sol_vault.to_account_info(),
+                },
+                &[&[SEED_SOL_VAULT, &[ctx.accounts.global_state.sol_vault_bump]]],
+            ),
+            total_pending,
+        )?;
+
+        msg!(
+            "User {} claimed {} NFT reward",
+            ctx.accounts.owner.key(),
+            total_pending
+        );
+        emit!(ClaimNftRewardEvent {
+            user: ctx.accounts.owner.key(),
+            amount: total_pending,
+            timestamp: clock.unix_timestamp,
+        });
+
+        Ok(())
+    }
+
+    // ============ 领取团队分红 ============
+
+    pub fn claim_team_reward(ctx: Context<ClaimTeamReward>) -> Result<()> {
+        let user = &mut ctx.accounts.user_state;
+        let team_pool = &ctx.accounts.team_pool;
+        let clock = Clock::get()?;
+
+        require!(user.d_level > 0, ErrorCode::NotPartner);
+
+        let level_index = (user.d_level - 1) as usize;
+        let pending = team_pool.acc_per_share[level_index] - user.d_reward_debt;
+
+        require!(pending > 0, ErrorCode::AlreadyClaimed);
+
+        user.d_reward_debt = team_pool.acc_per_share[level_index];
+
+        // 铸造 DQ 给用户
+        mint_to(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                MintTo {
+                    mint: ctx.accounts.dq_mint.to_account_info(),
+                    to: ctx.accounts.user_token_account.to_account_info(),
+                    authority: ctx.accounts.sol_vault.to_account_info(),
+                },
+                &[&[SEED_SOL_VAULT, &[ctx.accounts.global_state.sol_vault_bump]]],
+                ),
+            pending,
+        )?;
+
+        msg!(
+            "User {} claimed {} team reward (level {})",
+            ctx.accounts.owner.key(),
+            pending,
+            user.d_level
+        );
+        emit!(ClaimTeamRewardEvent {
+            user: ctx.accounts.owner.key(),
+            amount: pending,
+            level: user.d_level,
+            timestamp: clock.unix_timestamp,
+        });
+
+        Ok(())
+    }
+
+    // ============ 领取推荐奖励 ============
+
+    pub fn claim_referral_reward(ctx: Context<ClaimReferralReward>) -> Result<()> {
+        let user = &mut ctx.accounts.user_state;
+
+        let pending = user.pending_rewards;
+        require!(pending > 0, ErrorCode::AlreadyClaimed);
+        require!(
+            user.energy >= pending,
+            ErrorCode::InsufficientBalance
+        );
+
+        user.pending_rewards = 0;
+        user.energy -= pending;
+
+        // 铸造 DQ 给用户
+        mint_to(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                MintTo {
+                    mint: ctx.accounts.dq_mint.to_account_info(),
+                    to: ctx.accounts.user_token_account.to_account_info(),
+                    authority: ctx.accounts.sol_vault.to_account_info(),
+                },
+                &[&[SEED_SOL_VAULT, &[ctx.accounts.global_state.sol_vault_bump]]],
+            ),
+            pending,
+        )?;
+
+        msg!(
+            "User {} claimed {} referral reward",
+            ctx.accounts.owner.key(),
+            pending
+        );
+        emit!(ClaimReferralRewardEvent {
+            user: ctx.accounts.owner.key(),
+            amount: pending,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
+        Ok(())
+    }
+
+    // ============ 管理员: 设置 DQ 价格 ============
 
     pub fn set_price(ctx: Context<SetPrice>, new_price: u64) -> Result<()> {
         let state = &mut ctx.accounts.global_state;
         require!(ctx.accounts.admin.key() == state.admin, ErrorCode::Unauthorized);
-        require!(new_price > 0, ErrorCode::InvalidAmount);
+        require!(new_price > 0, ErrorCode::InvalidPrice);
 
+        let old_price = state.dq_price;
         state.dq_price = new_price;
-        msg!("DQ price updated to {}", new_price);
-        emit!(PriceUpdated { new_price });
+
+        msg!("DQ price updated: {} -> {}", old_price, new_price);
+        emit!(PriceUpdatedEvent {
+            old_price,
+            new_price,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
 
         Ok(())
     }
+
+    // ============ 管理员: 设置 Raydium Router ============
+
+    pub fn set_raydium_router(ctx: Context<SetRaydiumRouter>, router: Pubkey) -> Result<()> {
+        let state = &mut ctx.accounts.global_state;
+        require!(ctx.accounts.admin.key() == state.admin, ErrorCode::Unauthorized);
+
+        state.raydium_router = router;
+
+        msg!("Raydium router set to: {}", router);
+        emit!(RaydiumRouterSetEvent {
+            router,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
+        Ok(())
+    }
+
+    // ============ 管理员: 添加初始节点 ============
 
     pub fn add_initial_nodes(
         ctx: Context<AddInitialNodes>,
@@ -766,92 +1256,178 @@ pub mod dq_project {
         card_types: Vec<u8>,
     ) -> Result<()> {
         let state = &mut ctx.accounts.global_state;
+        let clock = Clock::get()?;
+
         require!(ctx.accounts.admin.key() == state.admin, ErrorCode::Unauthorized);
         require!(users.len() == card_types.len(), ErrorCode::InvalidAmount);
 
-        // 批量铸造初始 NFT (实现略)
-        msg!("Added {} initial nodes", users.len());
-        emit!(InitialNodesAdded { count: users.len() as u64 });
+        for i in 0..users.len() {
+            msg!(
+                "Initial node {}: user={}, type={}",
+                i,
+                users[i],
+                card_types[i]
+            );
+        }
+
+        emit!(InitialNodesAddedEvent {
+            count: users.len() as u64,
+            timestamp: clock.unix_timestamp,
+        });
+
+        Ok(())
+    }
+
+    // ============ 管理员: 提取 SOL ============
+
+    pub fn admin_withdraw_sol(ctx: Context<AdminWithdrawSol>, amount: u64) -> Result<()> {
+        let state = &ctx.accounts.global_state;
+        require!(ctx.accounts.admin.key() == state.admin, ErrorCode::Unauthorized);
+        require!(
+            **ctx.accounts.sol_vault.lamports.borrow() >= amount,
+            ErrorCode::InsufficientBalance
+        );
+
+        **ctx.accounts.sol_vault.to_account_info().try_borrow_mut_lamports()? -= amount;
+        **ctx.accounts.admin.to_account_info().try_borrow_mut_lamports()? += amount;
+
+        msg!("Admin withdrew {} lamports", amount);
+        emit!(AdminWithdrawSolEvent {
+            amount,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+
+        Ok(())
+    }
+
+    // ============ 管理员: 铸造 DQ (仅用于初始流动性) ============
+
+    pub fn admin_mint_dq(
+        ctx: Context<AdminMintDq>,
+        to: Pubkey,
+        amount: u64,
+    ) -> Result<()> {
+        let state = &mut ctx.accounts.global_state;
+        require!(ctx.accounts.admin.key() == state.admin, ErrorCode::Unauthorized);
+        require!(
+            state.circulating_supply + amount <= state.total_supply,
+            ErrorCode::MaxSupplyExceeded
+        );
+
+        state.circulating_supply += amount;
+
+        mint_to(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                MintTo {
+                    mint: ctx.accounts.dq_mint.to_account_info(),
+                    to: ctx.accounts.to_token_account.to_account_info(),
+                    authority: ctx.accounts.sol_vault.to_account_info(),
+                },
+                &[&[SEED_SOL_VAULT, &[state.sol_vault_bump]]],
+            ),
+            amount,
+        )?;
+
+        msg!("Admin minted {} DQ to {}", amount, to);
+        emit!(AdminMintDqEvent {
+            to,
+            amount,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
 
         Ok(())
     }
 
     // ============ 内部函数 ============
 
-    fn _update_stake_accumulator(lp_pool: &mut Account<LpPool>, amount: u64) {
-        if lp_pool.total_shares > 0 {
-            lp_pool.acc_per_share += amount * BP_DIVISOR / lp_pool.total_shares;
-        }
-    }
-
-    fn _update_nft_pool(nft_pool: &mut Account<NftPool>, amount: u64) {
+    fn _update_nft_pool_acc(nft_pool: &mut Account<NftPool>, amount: u64) {
         let total_a = nft_pool.total_a.max(1);
         let total_b = nft_pool.total_b.max(1);
         let total_c = nft_pool.total_c.max(1);
-        let total = total_a + total_b + total_c;
 
-        if total > 0 {
-            nft_pool.acc_per_share_a += amount * 4000 / total; // 权重 4
-            nft_pool.acc_per_share_b += amount * 5000 / total; // 权重 5
-            nft_pool.acc_per_share_c += amount * 6000 / total; // 权重 6
+        if total_a > 0 {
+            nft_pool.acc_per_share_a += amount * NFT_WEIGHT_A * LP_SHARES_MULTIPLIER / (total_a * 15);
+        }
+        if total_b > 0 {
+            nft_pool.acc_per_share_b += amount * NFT_WEIGHT_B * LP_SHARES_MULTIPLIER / (total_b * 15);
+        }
+        if total_c > 0 {
+            nft_pool.acc_per_share_c += amount * NFT_WEIGHT_C * LP_SHARES_MULTIPLIER / (total_c * 15);
         }
     }
 
-    fn _update_team_pool(team_pool: &mut Account<TeamPool>, amount: u64) {
+    fn _update_team_pool_acc(team_pool: &mut Account<TeamPool>, amount: u64) {
         let per_level = amount / 8;
-        for i in 0..8 {
-            if team_pool.level_users[i] > 0 {
-                team_pool.acc_per_share[i] += per_level * BP_DIVISOR / team_pool.level_users[i];
+        let total: u64 = team_pool.level_users.iter().sum();
+        if total > 0 {
+            for i in 0..8 {
+                if team_pool.level_users[i] > 0 {
+                    team_pool.acc_per_share[i] += per_level * LP_SHARES_MULTIPLIER
+                        / team_pool.level_users[i];
+                }
             }
         }
     }
 }
 
-// ============ CPI 函数定义 ============
-
-fn _swap_via_raydium(_ctx: Context<SwapSolForDq>, _amount: u64) -> Result<()> {
-    // 通过 Raydium CPI 进行兑换
-    // 实际实现需要调用 Raydium 的 swap_instruction
-    msg!("Swapping via Raydium DEX");
-    Ok(())
-}
-
 // ============ 事件定义 ============
 
 #[event]
-pub struct SwapSolForDQ {
-    pub user: Pubkey,
-    pub sol_amount: u64,
-    pub dq_amount: u64,
+pub struct InitializeEvent {
+    pub admin: Pubkey,
+    pub dq_price: u64,
+    pub timestamp: i64,
 }
 
 #[event]
-pub struct SwapDqForSol {
+pub struct RegisterEvent {
+    pub user: Pubkey,
+    pub referrer: Pubkey,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct SwapSolForDQEvent {
+    pub user: Pubkey,
+    pub sol_amount: u64,
+    pub dq_amount: u64,
+    pub lp_share: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct SwapDqForSolEvent {
     pub user: Pubkey,
     pub dq_amount: u64,
     pub sol_amount: u64,
     pub fee: u64,
+    pub timestamp: i64,
 }
 
 #[event]
-pub struct StakeDQ {
+pub struct StakeDQEvent {
     pub user: Pubkey,
     pub amount: u64,
-    pub period: u8,
+    pub period_index: u8,
+    pub timestamp: i64,
 }
 
 #[event]
-pub struct UnstakeDQ {
+pub struct UnstakeDQEvent {
     pub user: Pubkey,
     pub amount: u64,
-    pub period: u8,
+    pub period_index: u8,
+    pub reward: u64,
+    pub timestamp: i64,
 }
 
 #[event]
 pub struct ClaimStakeRewardEvent {
     pub user: Pubkey,
     pub amount: u64,
-    pub period: u8,
+    pub period_index: u8,
+    pub timestamp: i64,
 }
 
 #[event]
@@ -859,12 +1435,15 @@ pub struct BuyNodeEvent {
     pub user: Pubkey,
     pub card_type: u8,
     pub price: u64,
+    pub card_index: u64,
+    pub timestamp: i64,
 }
 
 #[event]
 pub struct BlockMiningEvent {
     pub release: u64,
     pub burn: u64,
+    pub remaining: u64,
     pub timestamp: i64,
 }
 
@@ -872,19 +1451,71 @@ pub struct BlockMiningEvent {
 pub struct ClaimPartnerRewardEvent {
     pub user: Pubkey,
     pub amount: u64,
+    pub timestamp: i64,
 }
 
 #[event]
-pub struct PriceUpdated {
+pub struct ClaimLpRewardEvent {
+    pub user: Pubkey,
+    pub amount: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct ClaimNftRewardEvent {
+    pub user: Pubkey,
+    pub amount: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct ClaimTeamRewardEvent {
+    pub user: Pubkey,
+    pub amount: u64,
+    pub level: u8,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct ClaimReferralRewardEvent {
+    pub user: Pubkey,
+    pub amount: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct PriceUpdatedEvent {
+    pub old_price: u64,
     pub new_price: u64,
+    pub timestamp: i64,
 }
 
 #[event]
-pub struct InitialNodesAdded {
-    pub count: u64,
+pub struct RaydiumRouterSetEvent {
+    pub router: Pubkey,
+    pub timestamp: i64,
 }
 
-// ============ Account Layouts ============
+#[event]
+pub struct InitialNodesAddedEvent {
+    pub count: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct AdminWithdrawSolEvent {
+    pub amount: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct AdminMintDqEvent {
+    pub to: Pubkey,
+    pub amount: u64,
+    pub timestamp: i64,
+}
+
+// ============ Account Contexts ============
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -895,7 +1526,7 @@ pub struct Initialize<'info> {
         init,
         payer = admin,
         space = 8 + size_of::<GlobalState>(),
-        seeds = [b"state"],
+        seeds = [b"global_state"],
         bump
     )]
     pub global_state: Account<'info, GlobalState>,
@@ -904,7 +1535,7 @@ pub struct Initialize<'info> {
         init,
         payer = admin,
         space = 8 + size_of::<LpPool>(),
-        seeds = [b"lp_pool"],
+        seeds = [SEED_LP_POOL],
         bump
     )]
     pub lp_pool: Account<'info, LpPool>,
@@ -913,7 +1544,7 @@ pub struct Initialize<'info> {
         init,
         payer = admin,
         space = 8 + size_of::<NftPool>(),
-        seeds = [b"nft_pool"],
+        seeds = [SEED_NFT_POOL],
         bump
     )]
     pub nft_pool: Account<'info, NftPool>,
@@ -922,7 +1553,7 @@ pub struct Initialize<'info> {
         init,
         payer = admin,
         space = 8 + size_of::<TeamPool>(),
-        seeds = [b"team_pool"],
+        seeds = [SEED_TEAM_POOL],
         bump
     )]
     pub team_pool: Account<'info, TeamPool>,
@@ -931,7 +1562,7 @@ pub struct Initialize<'info> {
         init,
         payer = admin,
         space = 8 + size_of::<PartnerPool>(),
-        seeds = [b"partner_pool"],
+        seeds = [SEED_PARTNER_POOL],
         bump
     )]
     pub partner_pool: Account<'info, PartnerPool>,
@@ -939,66 +1570,57 @@ pub struct Initialize<'info> {
     #[account(
         init,
         payer = admin,
-        space = 8 + 32, // Mint
+        space = 8 + 32,
         seeds = [SEED_DQ_MINT],
         bump,
         mint::decimals = 9,
-        mint::authority = global_state,
+        mint::authority = sol_vault,
     )]
     pub dq_mint: Account<'info, Mint>,
 
+    /// CHECK: SOL vault PDA
     #[account(
         init,
         payer = admin,
-        space = 8 + 32, // TokenAccount
-        seeds = [SEED_VAULT],
-        bump,
-        token::mint = dq_mint,
-        token::authority = global_state,
-    )]
-    pub dq_vault: Account<'info, TokenAccount>,
-
-    #[account(
-        init,
-        payer = admin,
-        space = 8 + 32, // TokenAccount for SOL vault
-        owner = system_program::ID.as_ref(),
-        seeds = [b"sol_vault"],
+        space = 8 + 32,
+        seeds = [SEED_SOL_VAULT],
         bump
     )]
-    /// CHECK: This is just a PDA for holding SOL
     pub sol_vault: AccountInfo<'info>,
 
+    /// CHECK: NFT Mint A
     #[account(
         init,
         payer = admin,
-        space = 8 + 32, // NFT Mint A
+        space = 8 + 32,
         seeds = [SEED_NFT_MINT, &[1u8]],
         bump,
         mint::decimals = 0,
-        mint::authority = global_state,
+        mint::authority = sol_vault,
     )]
     pub nft_mint_a: Account<'info, Mint>,
 
+    /// CHECK: NFT Mint B
     #[account(
         init,
         payer = admin,
-        space = 8 + 32, // NFT Mint B
+        space = 8 + 32,
         seeds = [SEED_NFT_MINT, &[2u8]],
         bump,
         mint::decimals = 0,
-        mint::authority = global_state,
+        mint::authority = sol_vault,
     )]
     pub nft_mint_b: Account<'info, Mint>,
 
+    /// CHECK: NFT Mint C
     #[account(
         init,
         payer = admin,
-        space = 8 + 32, // NFT Mint C
+        space = 8 + 32,
         seeds = [SEED_NFT_MINT, &[3u8]],
         bump,
         mint::decimals = 0,
-        mint::authority = global_state,
+        mint::authority = sol_vault,
     )]
     pub nft_mint_c: Account<'info, Mint>,
 
@@ -1021,8 +1643,13 @@ pub struct Register<'info> {
     )]
     pub user_state: Account<'info, UserState>,
 
-    /// CHECK: Referrer account (may not exist yet)
+    /// CHECK: Referrer account (may not be initialized)
     pub referrer: AccountInfo<'info>,
+    
+    /// CHECK: Referrer state
+    #[account(
+        constraint = referrer_state.owner == referrer.key()
+    )]
     pub referrer_state: Account<'info, UserState>,
 
     pub admin: Account<'info, GlobalState>,
@@ -1050,6 +1677,7 @@ pub struct SwapSolForDq<'info> {
     #[account(mut)]
     pub user_token_account: Account<'info, TokenAccount>,
 
+    #[account(mut)]
     pub lp_pool: Account<'info, LpPool>,
 
     pub token_program: Program<'info, Token>,
@@ -1068,11 +1696,13 @@ pub struct SwapDqForSol<'info> {
     pub dq_mint: Account<'info, Mint>,
 
     /// CHECK: SOL vault PDA
+    #[account(mut)]
     pub sol_vault: AccountInfo<'info>,
 
     #[account(mut)]
     pub user_token_account: Account<'info, TokenAccount>,
 
+    #[account(mut)]
     pub lp_pool: Account<'info, LpPool>,
 
     pub token_program: Program<'info, Token>,
@@ -1084,13 +1714,22 @@ pub struct StakeDq<'info> {
     pub owner: Signer<'info>,
 
     #[account(mut)]
+    pub global_state: Account<'info, GlobalState>,
+
+    #[account(
+        init,
+        payer = owner,
+        space = 8 + size_of::<StakeState>(),
+        seeds = [SEED_STAKE, owner.key().as_ref()],
+        bump
+    )]
     pub stake_state: Account<'info, StakeState>,
 
     #[account(
         init,
         payer = owner,
-        space = 8 + 32, // TokenAccount for stake vault
-        seeds = [SEED_STAKE, owner.key().as_ref()],
+        space = 8 + size_of::<TokenAccountState>(),
+        seeds = [b"stake_token", owner.key().as_ref()],
         bump,
         token::mint = dq_mint,
         token::authority = stake_state,
@@ -1103,6 +1742,7 @@ pub struct StakeDq<'info> {
     #[account(mut)]
     pub user_token_account: Account<'info, TokenAccount>,
 
+    #[account(mut)]
     pub lp_pool: Account<'info, LpPool>,
 
     pub token_program: Program<'info, Token>,
@@ -1115,13 +1755,22 @@ pub struct UnstakeDq<'info> {
     pub owner: Signer<'info>,
 
     #[account(mut)]
+    pub global_state: Account<'info, GlobalState>,
+
+    #[account(mut)]
     pub stake_state: Account<'info, StakeState>,
 
     #[account(mut)]
     pub stake_account: Account<'info, TokenAccount>,
 
     #[account(mut)]
+    pub dq_mint: Account<'info, Mint>,
+
+    #[account(mut)]
     pub user_token_account: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub lp_pool: Account<'info, LpPool>,
 
     pub token_program: Program<'info, Token>,
 }
@@ -1132,6 +1781,9 @@ pub struct ClaimStakeReward<'info> {
     pub owner: Signer<'info>,
 
     #[account(mut)]
+    pub global_state: Account<'info, GlobalState>,
+
+    #[account(mut)]
     pub stake_state: Account<'info, StakeState>,
 
     #[account(mut)]
@@ -1140,6 +1792,7 @@ pub struct ClaimStakeReward<'info> {
     #[account(mut)]
     pub user_token_account: Account<'info, TokenAccount>,
 
+    #[account(mut)]
     pub lp_pool: Account<'info, LpPool>,
 
     pub token_program: Program<'info, Token>,
@@ -1153,8 +1806,20 @@ pub struct BuyNode<'info> {
     #[account(mut)]
     pub global_state: Account<'info, GlobalState>,
 
-    /// CHECK: NFT mint authority
-    pub nft_mint: Account<'info, Mint>,
+    #[account(mut)]
+    pub user_state: Account<'info, UserState>,
+
+    #[account(mut)]
+    pub sol_vault: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub user_lamports: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub lp_pool: Account<'info, LpPool>,
+
+    #[account(mut)]
+    pub nft_pool: Account<'info, NftPool>,
 
     pub nft_mint_a: Account<'info, Mint>,
     pub nft_mint_b: Account<'info, Mint>,
@@ -1163,20 +1828,22 @@ pub struct BuyNode<'info> {
     #[account(mut)]
     pub user_nft_account: Account<'info, TokenAccount>,
 
-    #[account(mut)]
-    pub user_lamports: AccountInfo<'info>,
-
-    pub lp_pool: Account<'info, LpPool>,
-
-    pub nft_pool: Account<'info, NftPool>,
-
     pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]
 pub struct BlockMining<'info> {
     #[account(mut)]
+    pub admin: Signer<'info>,
+
+    #[account(mut)]
     pub global_state: Account<'info, GlobalState>,
+
+    #[account(mut)]
+    pub dq_mint: Account<'info, Mint>,
+
+    #[account(mut)]
+    pub sol_vault: AccountInfo<'info>,
 
     #[account(mut)]
     pub lp_pool: Account<'info, LpPool>,
@@ -1190,7 +1857,10 @@ pub struct BlockMining<'info> {
     #[account(mut)]
     pub partner_pool: Account<'info, PartnerPool>,
 
-    pub admin: Signer<'info>,
+    /// CHECK: Foundation fund account
+    pub fund_account: AccountInfo<'info>,
+
+    pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]
@@ -1199,15 +1869,129 @@ pub struct ClaimPartnerReward<'info> {
     pub owner: Signer<'info>,
 
     #[account(mut)]
+    pub global_state: Account<'info, GlobalState>,
+
+    #[account(mut)]
     pub user_state: Account<'info, UserState>,
 
     #[account(mut)]
     pub dq_mint: Account<'info, Mint>,
 
     #[account(mut)]
+    pub sol_vault: AccountInfo<'info>,
+
+    #[account(mut)]
     pub user_token_account: Account<'info, TokenAccount>,
 
+    #[account(mut)]
     pub partner_pool: Account<'info, PartnerPool>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimLpReward<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+
+    #[account(mut)]
+    pub global_state: Account<'info, GlobalState>,
+
+    #[account(mut)]
+    pub user_state: Account<'info, UserState>,
+
+    #[account(mut)]
+    pub dq_mint: Account<'info, Mint>,
+
+    #[account(mut)]
+    pub sol_vault: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub user_token_account: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub lp_pool: Account<'info, LpPool>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimNftReward<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+
+    #[account(mut)]
+    pub global_state: Account<'info, GlobalState>,
+
+    #[account(mut)]
+    pub user_state: Account<'info, UserState>,
+
+    #[account(mut)]
+    pub dq_mint: Account<'info, Mint>,
+
+    #[account(mut)]
+    pub sol_vault: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub user_token_account: Account<'info, TokenAccount>,
+
+    pub nft_mint_a: Account<'info, Mint>,
+    pub nft_mint_b: Account<'info, Mint>,
+    pub nft_mint_c: Account<'info, Mint>,
+
+    #[account(mut)]
+    pub user_nft_accounts: Vec<Account<'info, TokenAccount>>,
+
+    pub nft_pool: Account<'info, NftPool>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimTeamReward<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+
+    #[account(mut)]
+    pub global_state: Account<'info, GlobalState>,
+
+    #[account(mut)]
+    pub user_state: Account<'info, UserState>,
+
+    #[account(mut)]
+    pub dq_mint: Account<'info, Mint>,
+
+    #[account(mut)]
+    pub sol_vault: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub user_token_account: Account<'info, TokenAccount>,
+
+    #[account(mut)]
+    pub team_pool: Account<'info, TeamPool>,
+
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimReferralReward<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+
+    #[account(mut)]
+    pub global_state: Account<'info, GlobalState>,
+
+    #[account(mut)]
+    pub user_state: Account<'info, UserState>,
+
+    #[account(mut)]
+    pub dq_mint: Account<'info, Mint>,
+
+    #[account(mut)]
+    pub sol_vault: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub user_token_account: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
 }
@@ -1222,10 +2006,51 @@ pub struct SetPrice<'info> {
 }
 
 #[derive(Accounts)]
+pub struct SetRaydiumRouter<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+
+    #[account(mut)]
+    pub global_state: Account<'info, GlobalState>,
+}
+
+#[derive(Accounts)]
 pub struct AddInitialNodes<'info> {
     #[account(mut)]
     pub admin: Signer<'info>,
 
     #[account(mut)]
     pub global_state: Account<'info, GlobalState>,
+}
+
+#[derive(Accounts)]
+pub struct AdminWithdrawSol<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+
+    #[account(mut)]
+    pub global_state: Account<'info, GlobalState>,
+
+    #[account(mut)]
+    pub sol_vault: AccountInfo<'info>,
+}
+
+#[derive(Accounts)]
+pub struct AdminMintDq<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+
+    #[account(mut)]
+    pub global_state: Account<'info, GlobalState>,
+
+    #[account(mut)]
+    pub dq_mint: Account<'info, Mint>,
+
+    #[account(mut)]
+    pub sol_vault: AccountInfo<'info>,
+
+    #[account(mut)]
+    pub to_token_account: Account<'info, TokenAccount>,
+
+    pub token_program: Program<'info, Token>,
 }

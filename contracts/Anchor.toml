@@ -1,0 +1,12 @@
+[program]
+dq_project = "DQProject111111111111111111111111111111111"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "Devnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "yarn run mocha -p ts/programs/dq_project -c ts/config.ts 'tests/**/*.ts'"

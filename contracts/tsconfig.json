@@ -1,22 +1,15 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
+    "types": ["mocha", "chai"],
+    "typeRoots": ["./node_modules/@types"],
+    "lib": ["es2020"],
     "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "es2020",
     "esModuleInterop": true,
+    "skipLibCheck": true,
     "strict": true,
     "resolveJsonModule": true,
-    "outDir": "./dist",
-    "rootDir": "./",
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
-  },
-  "include": [
-    "hardhat.config.ts",
-    "deploy/**/*",
-    "test/**/*",
-    "typechain/**/*"
-  ],
-  "files": [
-    "./src/DQProject.sol"
-  ]
+    "outDir": "./dist"
+  }
 }

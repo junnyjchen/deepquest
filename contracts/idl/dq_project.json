@@ -1,0 +1,418 @@
+{
+  "version": "0.1.0",
+  "name": "dq_project",
+  "instructions": [
+    {
+      "name": "initialize",
+      "accounts": [
+        { "name": "admin", "isMut": true, "isSigner": true },
+        { "name": "globalState", "isMut": true, "isSigner": false },
+        { "name": "lpPool", "isMut": true, "isSigner": false },
+        { "name": "nftPool", "isMut": true, "isSigner": false },
+        { "name": "teamPool", "isMut": true, "isSigner": false },
+        { "name": "partnerPool", "isMut": true, "isSigner": false },
+        { "name": "dqMint", "isMut": true, "isSigner": false },
+        { "name": "solVault", "isMut": true, "isSigner": false },
+        { "name": "nftMintA", "isMut": true, "isSigner": false },
+        { "name": "nftMintB", "isMut": true, "isSigner": false },
+        { "name": "nftMintC", "isMut": true, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false },
+        { "name": "rent", "isMut": false, "isSigner": false }
+      ],
+      "args": [{ "name": "dqPrice", "type": "u64" }]
+    },
+    {
+      "name": "register",
+      "accounts": [
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "userState", "isMut": true, "isSigner": false },
+        { "name": "referrer", "isMut": false, "isSigner": false },
+        { "name": "referrerState", "isMut": false, "isSigner": false },
+        { "name": "admin", "isMut": false, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [{ "name": "referrer", "type": "publicKey" }]
+    },
+    {
+      "name": "swapSolForDq",
+      "accounts": [
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "globalState", "isMut": true, "isSigner": false },
+        { "name": "userState", "isMut": true, "isSigner": false },
+        { "name": "dqMint", "isMut": true, "isSigner": false },
+        { "name": "solVault", "isMut": false, "isSigner": false },
+        { "name": "userTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "lpPool", "isMut": true, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [{ "name": "amount", "type": "u64" }]
+    },
+    {
+      "name": "swapDqForSol",
+      "accounts": [
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "globalState", "isMut": true, "isSigner": false },
+        { "name": "dqMint", "isMut": true, "isSigner": false },
+        { "name": "solVault", "isMut": true, "isSigner": false },
+        { "name": "userTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "lpPool", "isMut": true, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "dqAmount", "type": "u64" },
+        { "name": "minOut", "type": "u64" }
+      ]
+    },
+    {
+      "name": "stakeDq",
+      "accounts": [
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "globalState", "isMut": true, "isSigner": false },
+        { "name": "stakeState", "isMut": true, "isSigner": false },
+        { "name": "stakeAccount", "isMut": true, "isSigner": false },
+        { "name": "dqMint", "isMut": true, "isSigner": false },
+        { "name": "userTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "lpPool", "isMut": true, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "amount", "type": "u64" },
+        { "name": "periodIndex", "type": "u8" }
+      ]
+    },
+    {
+      "name": "unstakeDq",
+      "accounts": [
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "globalState", "isMut": true, "isSigner": false },
+        { "name": "stakeState", "isMut": true, "isSigner": false },
+        { "name": "stakeAccount", "isMut": true, "isSigner": false },
+        { "name": "dqMint", "isMut": true, "isSigner": false },
+        { "name": "userTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "lpPool", "isMut": true, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [{ "name": "periodIndex", "type": "u8" }]
+    },
+    {
+      "name": "claimStakeReward",
+      "accounts": [
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "globalState", "isMut": true, "isSigner": false },
+        { "name": "stakeState", "isMut": true, "isSigner": false },
+        { "name": "dqMint", "isMut": true, "isSigner": false },
+        { "name": "userTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "lpPool", "isMut": true, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [{ "name": "periodIndex", "type": "u8" }]
+    },
+    {
+      "name": "buyNode",
+      "accounts": [
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "globalState", "isMut": true, "isSigner": false },
+        { "name": "userState", "isMut": true, "isSigner": false },
+        { "name": "solVault", "isMut": true, "isSigner": false },
+        { "name": "userLamports", "isMut": true, "isSigner": false },
+        { "name": "lpPool", "isMut": true, "isSigner": false },
+        { "name": "nftPool", "isMut": true, "isSigner": false },
+        { "name": "nftMintA", "isMut": true, "isSigner": false },
+        { "name": "nftMintB", "isMut": true, "isSigner": false },
+        { "name": "nftMintC", "isMut": true, "isSigner": false },
+        { "name": "userNftAccount", "isMut": true, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [{ "name": "cardType", "type": "u8" }]
+    },
+    {
+      "name": "blockMining",
+      "accounts": [
+        { "name": "admin", "isMut": true, "isSigner": true },
+        { "name": "globalState", "isMut": true, "isSigner": false },
+        { "name": "dqMint", "isMut": true, "isSigner": false },
+        { "name": "solVault", "isMut": true, "isSigner": false },
+        { "name": "lpPool", "isMut": true, "isSigner": false },
+        { "name": "nftPool", "isMut": true, "isSigner": false },
+        { "name": "teamPool", "isMut": true, "isSigner": false },
+        { "name": "partnerPool", "isMut": true, "isSigner": false },
+        { "name": "fundAccount", "isMut": false, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
+      "name": "claimPartnerReward",
+      "accounts": [
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "globalState", "isMut": true, "isSigner": false },
+        { "name": "userState", "isMut": true, "isSigner": false },
+        { "name": "dqMint", "isMut": true, "isSigner": false },
+        { "name": "solVault", "isMut": true, "isSigner": false },
+        { "name": "userTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "partnerPool", "isMut": true, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
+      "name": "claimLpReward",
+      "accounts": [
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "globalState", "isMut": true, "isSigner": false },
+        { "name": "userState", "isMut": true, "isSigner": false },
+        { "name": "dqMint", "isMut": true, "isSigner": false },
+        { "name": "solVault", "isMut": true, "isSigner": false },
+        { "name": "userTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "lpPool", "isMut": true, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
+      "name": "claimNftReward",
+      "accounts": [
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "globalState", "isMut": true, "isSigner": false },
+        { "name": "userState", "isMut": true, "isSigner": false },
+        { "name": "dqMint", "isMut": true, "isSigner": false },
+        { "name": "solVault", "isMut": true, "isSigner": false },
+        { "name": "userTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "nftMintA", "isMut": true, "isSigner": false },
+        { "name": "nftMintB", "isMut": true, "isSigner": false },
+        { "name": "nftMintC", "isMut": true, "isSigner": false },
+        { "name": "userNftAccounts", "isMut": true, "isSigner": false },
+        { "name": "nftPool", "isMut": true, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
+      "name": "claimTeamReward",
+      "accounts": [
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "globalState", "isMut": true, "isSigner": false },
+        { "name": "userState", "isMut": true, "isSigner": false },
+        { "name": "dqMint", "isMut": true, "isSigner": false },
+        { "name": "solVault", "isMut": true, "isSigner": false },
+        { "name": "userTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "teamPool", "isMut": true, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
+      "name": "claimReferralReward",
+      "accounts": [
+        { "name": "owner", "isMut": true, "isSigner": true },
+        { "name": "globalState", "isMut": true, "isSigner": false },
+        { "name": "userState", "isMut": true, "isSigner": false },
+        { "name": "dqMint", "isMut": true, "isSigner": false },
+        { "name": "solVault", "isMut": true, "isSigner": false },
+        { "name": "userTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
+      "name": "setPrice",
+      "accounts": [
+        { "name": "admin", "isMut": true, "isSigner": true },
+        { "name": "globalState", "isMut": true, "isSigner": false }
+      ],
+      "args": [{ "name": "newPrice", "type": "u64" }]
+    },
+    {
+      "name": "setRaydiumRouter",
+      "accounts": [
+        { "name": "admin", "isMut": true, "isSigner": true },
+        { "name": "globalState", "isMut": true, "isSigner": false }
+      ],
+      "args": [{ "name": "router", "type": "publicKey" }]
+    },
+    {
+      "name": "adminWithdrawSol",
+      "accounts": [
+        { "name": "admin", "isMut": true, "isSigner": true },
+        { "name": "globalState", "isMut": true, "isSigner": false },
+        { "name": "solVault", "isMut": true, "isSigner": false }
+      ],
+      "args": [{ "name": "amount", "type": "u64" }]
+    },
+    {
+      "name": "adminMintDq",
+      "accounts": [
+        { "name": "admin", "isMut": true, "isSigner": true },
+        { "name": "globalState", "isMut": true, "isSigner": false },
+        { "name": "dqMint", "isMut": true, "isSigner": false },
+        { "name": "solVault", "isMut": true, "isSigner": false },
+        { "name": "toTokenAccount", "isMut": true, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "to", "type": "publicKey" },
+        { "name": "amount", "type": "u64" }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "GlobalState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "admin", "type": "publicKey" },
+          { "name": "dqMint", "type": "publicKey" },
+          { "name": "solVault", "type": "publicKey" },
+          { "name": "lpPool", "type": "publicKey" },
+          { "name": "nftPool", "type": "publicKey" },
+          { "name": "teamPool", "type": "publicKey" },
+          { "name": "partnerPool", "type": "publicKey" },
+          { "name": "nftMintA", "type": "publicKey" },
+          { "name": "nftMintB", "type": "publicKey" },
+          { "name": "nftMintC", "type": "publicKey" },
+          { "name": "raydiumRouter", "type": "publicKey" },
+          { "name": "dqPrice", "type": "u64" },
+          { "name": "totalSupply", "type": "u64" },
+          { "name": "circulatingSupply", "type": "u64" },
+          { "name": "dailyReleaseRate", "type": "u64" },
+          { "name": "lastBlockTime", "type": "i64" },
+          { "name": "burnRate", "type": "u64" },
+          { "name": "partnerCount", "type": "u64" },
+          { "name": "bump", "type": "u8" },
+          { "name": "solVaultBump", "type": "u8" }
+        ]
+      }
+    },
+    {
+      "name": "UserState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "owner", "type": "publicKey" },
+          { "name": "referrer", "type": "publicKey" },
+          { "name": "directCount", "type": "u64" },
+          { "name": "level", "type": "u8" },
+          { "name": "totalInvest", "type": "u64" },
+          { "name": "teamInvest", "type": "u64" },
+          { "name": "energy", "type": "u64" },
+          { "name": "lpShares", "type": "u64" },
+          { "name": "directSales", "type": "u64" },
+          { "name": "dLevel", "type": "u8" },
+          { "name": "pendingRewards", "type": "u64" },
+          { "name": "totalClaimed", "type": "u64" },
+          { "name": "isPartner", "type": "bool" },
+          { "name": "partnerOrder", "type": "u64" },
+          { "name": "stakeShares", "type": "u64" },
+          { "name": "lpRewardDebt", "type": "u64" },
+          { "name": "nftRewardDebt", "type": "u64" },
+          { "name": "dRewardDebt", "type": "u64" },
+          { "name": "createdAt", "type": "i64" },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
+    },
+    {
+      "name": "StakeState",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "owner", "type": "publicKey" },
+          { "name": "amount30", "type": "u64" },
+          { "name": "amount90", "type": "u64" },
+          { "name": "amount180", "type": "u64" },
+          { "name": "amount360", "type": "u64" },
+          { "name": "rewardDebt30", "type": "u64" },
+          { "name": "rewardDebt90", "type": "u64" },
+          { "name": "rewardDebt180", "type": "u64" },
+          { "name": "rewardDebt360", "type": "u64" },
+          { "name": "lastClaim30", "type": "i64" },
+          { "name": "lastClaim90", "type": "i64" },
+          { "name": "lastClaim180", "type": "i64" },
+          { "name": "lastClaim360", "type": "i64" },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
+    },
+    {
+      "name": "LpPool",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "totalShares", "type": "u64" },
+          { "name": "accPerShare", "type": "u64" },
+          { "name": "lastUpdate", "type": "i64" },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
+    },
+    {
+      "name": "NftPool",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "totalA", "type": "u64" },
+          { "name": "totalB", "type": "u64" },
+          { "name": "totalC", "type": "u64" },
+          { "name": "accPerShareA", "type": "u64" },
+          { "name": "accPerShareB", "type": "u64" },
+          { "name": "accPerShareC", "type": "u64" },
+          { "name": "lastUpdate", "type": "i64" },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
+    },
+    {
+      "name": "TeamPool",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "levelUsers", "type": { "array": ["u64", 8] } },
+          { "name": "accPerShare", "type": { "array": ["u64", 8] } },
+          { "name": "lastUpdate", "type": "i64" },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
+    },
+    {
+      "name": "PartnerPool",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "totalPartners", "type": "u64" },
+          { "name": "accPerShare", "type": "u64" },
+          { "name": "lastUpdate", "type": "i64" },
+          { "name": "bump", "type": "u8" }
+        ]
+      }
+    }
+  ],
+  "events": [
+    { "name": "InitializeEvent", "fields": [{ "name": "admin", "type": "publicKey", "index": false }, { "name": "dqPrice", "type": "u64", "index": false }, { "name": "timestamp", "type": "i64", "index": false }] },
+    { "name": "SwapSolForDQEvent", "fields": [{ "name": "user", "type": "publicKey", "index": false }, { "name": "solAmount", "type": "u64", "index": false }, { "name": "dqAmount", "type": "u64", "index": false }, { "name": "lpShare", "type": "u64", "index": false }, { "name": "timestamp", "type": "i64", "index": false }] },
+    { "name": "SwapDqForSolEvent", "fields": [{ "name": "user", "type": "publicKey", "index": false }, { "name": "dqAmount", "type": "u64", "index": false }, { "name": "solAmount", "type": "u64", "index": false }, { "name": "fee", "type": "u64", "index": false }, { "name": "timestamp", "type": "i64", "index": false }] },
+    { "name": "StakeDQEvent", "fields": [{ "name": "user", "type": "publicKey", "index": false }, { "name": "amount", "type": "u64", "index": false }, { "name": "periodIndex", "type": "u8", "index": false }, { "name": "timestamp", "type": "i64", "index": false }] },
+    { "name": "BuyNodeEvent", "fields": [{ "name": "user", "type": "publicKey", "index": false }, { "name": "cardType", "type": "u8", "index": false }, { "name": "price", "type": "u64", "index": false }, { "name": "cardIndex", "type": "u64", "index": false }, { "name": "timestamp", "type": "i64", "index": false }] },
+    { "name": "BlockMiningEvent", "fields": [{ "name": "release", "type": "u64", "index": false }, { "name": "burn", "type": "u64", "index": false }, { "name": "remaining", "type": "u64", "index": false }, { "name": "timestamp", "type": "i64", "index": false }] }
+  ],
+  "errors": [
+    { "code": 100, "name": "Unauthorized", "msg": "Unauthorized: not admin" },
+    { "code": 101, "name": "InvalidPeriod", "msg": "Invalid period index" },
+    { "code": 102, "name": "InsufficientBalance", "msg": "Insufficient balance" },
+    { "code": 103, "name": "InsufficientDQ", "msg": "Insufficient DQ tokens" },
+    { "code": 104, "name": "AlreadyClaimed", "msg": "Already claimed" },
+    { "code": 105, "name": "NotPartner", "msg": "Not partner" },
+    { "code": 106, "name": "MaxSupplyExceeded", "msg": "Max supply exceeded" },
+    { "code": 107, "name": "SlippageExceeded", "msg": "Slippage exceeded" },
+    { "code": 108, "name": "InvalidCardType", "msg": "Invalid card type" },
+    { "code": 109, "name": "InvalidReferrer", "msg": "Invalid referrer" },
+    { "code": 110, "name": "AlreadyRegistered", "msg": "Already registered" },
+    { "code": 111, "name": "InvalidAmount", "msg": "Invalid amount" },
+    { "code": 112, "name": "NoStakeFound", "msg": "No stake found" },
+    { "code": 113, "name": "TooEarlyToMine", "msg": "Too early to mine" },
+    { "code": 114, "name": "InvalidPrice", "msg": "Invalid price" }
+  ]
+}
