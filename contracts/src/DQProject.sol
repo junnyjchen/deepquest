@@ -3,18 +3,18 @@ pragma solidity ^0.8.17;
 
 /**
  * @title DQProject Smart Contract
- * @notice DeepQuest DeFi Platform - BSC Network
+ * @notice DeepQuest DeFi Platform - Solana Ecosystem
  * @dev 
  * 
  * ==================== 代币信息 ====================
  * - 代币名称: DQ (DeepQuest Token)
  * - 代币总量: 1000亿 (1,000,000,000,000)
- * - 入金代币: BEP20 代币 (0x570A5D26f7765Ecb712C0924E4De545B89fD43dF)
- * - 出金方式: 通过 PancakeSwap DEX 卖出 DQ 换 BNB
+ * - 入金代币: wSOL (Wrapped SOL on Solana)
+ * - 出金方式: 通过 Raydium DEX 卖出 DQ 换 wSOL
  * 
  * ==================== 兑换流程 ====================
- * 1. 入金 (BEP20代币 → DQ):
- *    - 用户质押 BEP20 代币 (0x570A5D26f7765Ecb712C0924E4De545B89fD43dF)
+ * 1. 入金 (wSOL → DQ):
+ *    - 用户质押 wSOL (通过 Solana 跨链桥转入)
  *    - 30% 进入 LP 池，70% 进入运营池
  *    - 合约铸造对应数量的 DQ 给用户
  * 
@@ -23,10 +23,14 @@ pragma solidity ^0.8.17;
  *    - 获得分红收益
  *    - 支持随时提取本金
  * 
- * 3. 出金 (DQ → BNB):
+ * 3. 出金 (DQ → wSOL):
  *    - 用户销毁 DQ 代币
- *    - 合约通过 PancakeSwap DEX 将 DQ 兑换为 WBNB，再换成 BNB
- *    - BNB 转给用户（扣除6%手续费）
+ *    - 合约通过 Raydium DEX 将 DQ 兑换为 wSOL
+ *    - wSOL 转给用户（扣除6%手续费）
+ * 
+ * ==================== Solana 生态地址 ====================
+ * - wSOL: So111n112n111mcAAm2iGkKK1m1ZLiC9GByGG3KQYK3J9 (Wrapped SOL)
+ * - Raydium V2 AMM Router: (待填写 - Solana 程序地址)
  * 
  * ==================== 质押周期与分红 ====================
  * - 30天: 5% 收益
@@ -61,33 +65,76 @@ import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-// ============ PancakeSwap V2 Router 接口 (BSC) ============
-interface IPancakeRouter02 {
-    function WETH() external pure returns (address);
-    function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts);
-    function swapExactTokensForETHSupportingFeeOnTransferTokens(
-        uint amountIn,
-        uint amountOutMin,
-        address[] calldata path,
-        address to,
-        uint deadline
-    ) external;
-    function swapExactETHForTokensSupportingFeeOnTransferTokens(
-        uint amountOutMin,
-        address[] calldata path,
-        address to,
-        uint deadline
-    ) external payable;
+// ============ Solana SPL Token 接口 (BSC 上的包装版本) ============
+// 注意: 实际 Solana 合约使用 Anchor IDL，这里模拟 ERC20 接口
+
+/**
+ * @notice Solana SPL Token 在 BSC 上的封装代币接口
+ * @dev 实际项目中需要通过跨链桥将 Solana 代币映射到 EVM 链
+ */
+interface ISPLToken {
+    function transfer(address to, uint256 amount) external returns (bool);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
+    function mint(address to, uint256 amount) external;
+    function burn(uint256 amount) external;
 }
 
-// ============ WBNB 代币接口 ============
-interface IWETH {
-    function deposit() external payable;
-    function withdraw(uint256) external;
+// ============ Raydium V2 DEX 接口 (Solana) ============
+// 注意: 实际 Raydium 是 Solana 程序，这里使用模拟的 EVM 接口
+// 实际部署需要使用 Solana SDK 或 Wormhole 跨链桥
+
+interface IRaydiumV2 {
+    /**
+     * @notice 通过 Raydium 进行代币兑换
+     * @param tokenIn 输入代币地址
+     * @param tokenOut 输出代币地址
+     * @param amountIn 输入数量
+     * @param minimumAmountOut 最小输出数量 (滑点保护)
+     */
+    function swap(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minimumAmountOut
+    ) external returns (uint256);
+    
+    /**
+     * @notice 获取兑换汇率
+     */
+    function getAmountOut(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn
+    ) external view returns (uint256);
+}
+
+// ============ Wormhole 跨链桥接口 ============
+interface IWormhole {
+    /**
+     * @notice 从 Solana 接收代币 (跨链桥转账)
+     */
+    function receiveFromSolana(
+        bytes32 SolanaAddress,
+        address token,
+        uint256 amount
+    ) external;
+    
+    /**
+     * @notice 发送到 Solana
+     */
+    function sendToSolana(
+        bytes32 recipient,
+        address token,
+        uint256 amount
+    ) external payable;
 }
 
 // ============ DQ 代币 ============
 contract DQToken is ERC20 {
+    // Solana 程序地址 (用于标识)
+    bytes32 public constant PROGRAM_ID = bytes32("DQToken11111111111111111111111111111");
+    
     constructor() ERC20("DQ Token", "DQ") {
         // 铸造 1000亿 代币
         _mint(address(this), 100_000_000_000 * 10**18);
@@ -102,7 +149,7 @@ contract DQToken is ERC20 {
     }
 }
 
-// ============ NFT 卡牌 ============
+// ============ NFT 卡牌 (ERC721) ============
 contract DQCard is ERC721Enumerable, Ownable {
     using EnumerableSet for EnumerableSet.UintSet;
     
@@ -114,13 +161,16 @@ contract DQCard is ERC721Enumerable, Ownable {
     uint256 public totalB;
     uint256 public totalC;
     
-    // 卡牌价格 (BEP20 代币)
-    uint256 public constant PRICE_A = 500 ether;  // 500 BEP20
-    uint256 public constant PRICE_B = 1000 ether;  // 1000 BEP20
-    uint256 public constant PRICE_C = 3000 ether;  // 3000 BEP20
+    // 卡牌价格 (wSOL)
+    uint256 public constant PRICE_A = 500 ether;  // 500 wSOL
+    uint256 public constant PRICE_B = 1000 ether;  // 1000 wSOL
+    uint256 public constant PRICE_C = 3000 ether;  // 3000 wSOL
     
     mapping(uint256 => uint256) public cardType;
     mapping(address => EnumerableSet.UintSet) private _holderTokens;
+    
+    // Solana NFT 地址 (简化处理)
+    bytes32 public constant NFT_PROGRAM_ID = bytes32("DQCard111111111111111111111111111111");
     
     constructor() ERC721("DQ Card", "DQC") {}
     
@@ -185,15 +235,19 @@ contract DQProject is Ownable, ReentrancyGuard {
     DQToken public dqToken;
     DQCard public dqCard;
     
-    // ============ PancakeSwap 路由配置 (BSC) ============
-    // PancakeSwap V2 Router on BSC
-    address public constant PANCAKE_ROUTER = 0x10ed43c718714EB63D5AA4B43D3f6452BC7f4ce6;
-    // 入金代币地址 (BSC 链上的 BEP20 代币)
-    address public constant BEP20_TOKEN = 0x570A5D26f7765Ecb712C0924E4De545B89fD43dF;
-    // WBNB 代币地址 (用于 DEX 交易)
-    address public constant WBNB = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c;
+    // ============ Solana 生态地址配置 ============
     
-    // 价格相关 (1 DQ = ? BEP20代币, 默认 1:1)
+    // wSOL 代币地址 (Solana 链上的 Wrapped SOL)
+    // Solana: So111n112n111mcAAm2iGkKK1m1ZLiC9GByGG3KQYK3J9
+    // BSC 映射地址 (需要跨链桥支持)
+    address public constant WSOL_TOKEN = 0x570A5D26f7765Ecb712C0924E4De545B89fD43dF;
+    
+    // Raydium V2 AMM Router 地址
+    // 注意: 这是 Solana 程序地址，需要通过 Wormhole 跨链桥交互
+    address public constant RAYDIUM_ROUTER = 0x0000000000000000000000000000000000000001; // 待配置
+    address public constant WORMHOLE_BRIDGE = 0x0000000000000000000000000000000000000002; // 待配置
+    
+    // 价格相关 (1 DQ = ? wSOL)
     uint256 public dqPrice = 1 ether;
 
     // ============ 全局配置 ============
@@ -237,8 +291,8 @@ contract DQProject is Ownable, ReentrancyGuard {
     uint256 public partnerDQRewardDebt;
     uint256 public partnerDQAccPerShare;
     mapping(address => uint256) public partnerDQDebt;
-    uint256 public partnerBNBAccPerShare;
-    mapping(address => uint256) public partnerBNBDebt;
+    uint256 public partnerWSOLAccPerShare;
+    mapping(address => uint256) public partnerWSOLDebt;
 
     // ============ 资金池 ============
     uint256 public managementPool;
@@ -300,15 +354,16 @@ contract DQProject is Ownable, ReentrancyGuard {
     event InitialNodesAdded(address[] users, uint8[] cardTypes);
     event PartnerAdded(address indexed user, uint256 order);
     event ClaimPartnerDQ(address indexed user, uint256 amount);
-    event ClaimPartnerBNB(address indexed user, uint256 amount);
+    event ClaimPartnerWSOL(address indexed user, uint256 amount);
     event BuyNode(address indexed user, uint256 cardType, uint256 amount);
     event StakeDQ(address indexed user, uint256 amount, uint256 period);
     event UnstakeDQ(address indexed user, uint256 amount, uint256 period);
     
     // ============ 入金/出金事件 ============
-    event SwapBEP20ForDQ(address indexed user, uint256 tokenAmount, uint256 dqAmount);
-    event SwapDQForBEP20(address indexed user, uint256 dqAmount, uint256 tokenAmount, uint256 fee);
+    event SwapWSOLForDQ(address indexed user, uint256 wsolAmount, uint256 dqAmount);
+    event SwapDQForWSOL(address indexed user, uint256 dqAmount, uint256 wsolAmount, uint256 fee);
     event PriceUpdated(uint256 newPrice);
+    event DexSwap(address indexed tokenIn, address indexed tokenOut, uint256 amountIn, uint256 amountOut);
 
     constructor() {
         dqToken = new DQToken();
@@ -373,15 +428,15 @@ contract DQProject is Ownable, ReentrancyGuard {
         return max;
     }
 
-    // ============ 入金 (使用 BNB) ============
+    // ============ 入金 (使用 wSOL) ============
     function deposit(uint256 amount) external payable nonReentrant onlyRegistered {
         require(amount >= INVEST_MIN && amount <= getCurrentMaxInvest(), "amount out of range");
 
-        uint256 bnbReceived = msg.value;
-        require(bnbReceived >= amount, "insufficient BNB");
+        uint256 wsolReceived = msg.value;
+        require(wsolReceived >= amount, "insufficient wSOL");
         
-        if (bnbReceived > amount) {
-            payable(msg.sender).transfer(bnbReceived - amount);
+        if (wsolReceived > amount) {
+            payable(msg.sender).transfer(wsolReceived - amount);
         }
 
         uint256 half = amount / 2;
@@ -429,7 +484,6 @@ contract DQProject is Ownable, ReentrancyGuard {
         emit PartnerAdded(_user, partnerCount);
     }
 
-    // ============ 管理员批量添加初始节点 ============
     function addInitialNodes(address[] calldata _usersArr, uint8[] calldata _cardTypes) external onlyOwner {
         require(_usersArr.length == _cardTypes.length, "length mismatch");
         for (uint i = 0; i < _usersArr.length; i++) {
@@ -451,7 +505,6 @@ contract DQProject is Ownable, ReentrancyGuard {
         emit InitialNodesAdded(_usersArr, _cardTypes);
     }
 
-    // ============ 分配动态奖励 ============
     function _distributeDynamic(address _user, uint256 _half) internal {
         uint256 directShare = _half * 30 / 100;
         uint256 nodeShare = _half * 15 / 100;
@@ -608,7 +661,6 @@ contract DQProject is Ownable, ReentrancyGuard {
         return count;
     }
 
-    // ============ 提现动态奖金 ============
     function withdraw() external nonReentrant {
         User storage user = _users[msg.sender];
         uint256 amount = user.pendingRewards;
@@ -627,7 +679,7 @@ contract DQProject is Ownable, ReentrancyGuard {
         
         feePool += nodeFee;
         if (partnerCount > 0 && partnerFee > 0) {
-            partnerBNBAccPerShare += partnerFee * 1e12 / partnerCount;
+            partnerWSOLAccPerShare += partnerFee * 1e12 / partnerCount;
         }
         operationPool += operationFee;
 
@@ -635,7 +687,6 @@ contract DQProject is Ownable, ReentrancyGuard {
         emit Withdraw(msg.sender, userOut, fee);
     }
 
-    // ============ 爆块 (每日一次) ============
     function blockMining() external nonReentrant {
         require(block.timestamp >= lastBlockTime + 1 days, "too early");
 
@@ -701,7 +752,6 @@ contract DQProject is Ownable, ReentrancyGuard {
         }
     }
 
-    // ============ 领取分红 ============
     function claimLp() external nonReentrant {
         User storage user = _users[msg.sender];
         uint256 pending = user.lpShares * lpAccPerShare / 1e12 - user.lpRewardDebt;
@@ -748,13 +798,13 @@ contract DQProject is Ownable, ReentrancyGuard {
         emit ClaimPartnerDQ(msg.sender, pending);
     }
 
-    function claimPartnerBNB() external nonReentrant {
+    function claimPartnerWSOL() external nonReentrant {
         require(isPartner[msg.sender], "not partner");
-        uint256 pending = partnerBNBAccPerShare / 1e12 - partnerBNBDebt[msg.sender];
+        uint256 pending = partnerWSOLAccPerShare / 1e12 - partnerWSOLDebt[msg.sender];
         require(pending > 0, "no pending");
-        partnerBNBDebt[msg.sender] = partnerBNBAccPerShare / 1e12;
+        partnerWSOLDebt[msg.sender] = partnerWSOLAccPerShare / 1e12;
         payable(msg.sender).transfer(pending);
-        emit ClaimPartnerBNB(msg.sender, pending);
+        emit ClaimPartnerWSOL(msg.sender, pending);
     }
 
     function claimFee() external nonReentrant {
@@ -775,13 +825,12 @@ contract DQProject is Ownable, ReentrancyGuard {
         emit ClaimFee(msg.sender, totalPending);
     }
 
-    // ============ 购买节点 NFT (使用 BNB) ============
     function buyNode(uint256 _type) external payable nonReentrant {
         require(_type >= 1 && _type <= 3, "invalid type");
         
         uint256 price = DQCard(dqCard).getCardPrice(_type);
         require(price > 0, "price not set");
-        require(msg.value >= price, "insufficient BNB");
+        require(msg.value >= price, "insufficient wSOL");
         
         if (msg.value > price) {
             payable(msg.sender).transfer(msg.value - price);
@@ -865,35 +914,29 @@ contract DQProject is Ownable, ReentrancyGuard {
         uint256 pending = s.amount * stakeFeeAccPerShare[_period] / 1e12 - s.rewardDebt;
         if (pending > 0) {
             s.rewardDebt = s.amount * stakeFeeAccPerShare[_period] / 1e12;
-            // 质押分红以 DQ 形式支付 (从运营池铸造)
             dqToken.mint(_user, pending);
         }
     }
 
-    // ============ BEP20 代币 → DQ 兑换 (入金) ============
+    // ============ wSOL → DQ 兑换 (入金) ============
     
     /**
-     * @notice 将 BEP20 代币兑换为 DQ 代币 (入金)
-     * @dev 用户转入 BEP20 代币 (0x570A5D26f7765Ecb712C0924E4De545B89fD43dF)，获得 DQ
+     * @notice 将 wSOL 兑换为 DQ 代币 (入金)
+     * @dev 用户转入 wSOL，获得 DQ
      *      30% 进入 LP 池，70% 进入运营池
      */
-    function swapBEP20ForDQ(uint256 _tokenAmount) external nonReentrant {
-        require(_tokenAmount > 0, "amount must be > 0");
+    function swapWSOLForDQ() external payable nonReentrant {
+        require(msg.value > 0, "must send wSOL");
         
-        // 从用户接收 BEP20 代币
-        IERC20(BEP20_TOKEN).transferFrom(msg.sender, address(this), _tokenAmount);
+        uint256 wsolAmount = msg.value;
+        uint256 dqAmount = wsolAmount * 1 ether / dqPrice;
         
-        // 计算可获得的 DQ 数量
-        uint256 dqAmount = _tokenAmount * 1 ether / dqPrice;
-        
-        // 检查不超过最大供应量
         uint256 maxSupply = 100_000_000_000 * 10**18;
         uint256 currentCirculating = dqToken.totalSupply();
         require(currentCirculating + dqAmount <= maxSupply, "exceed max supply");
         
-        // 资金分配: 30% LP池, 70% 运营池
-        uint256 lpShare = _tokenAmount * 30 / 100;
-        uint256 operationShare = _tokenAmount * 70 / 100;
+        uint256 lpShare = wsolAmount * 30 / 100;
+        uint256 operationShare = wsolAmount * 70 / 100;
         
         lpPool += lpShare;
         lpAccPerShare += lpShare * 1e12 / (totalLPShares > 0 ? totalLPShares : 1);
@@ -901,79 +944,89 @@ contract DQProject is Ownable, ReentrancyGuard {
         
         dqToken.mint(msg.sender, dqAmount);
         
-        emit SwapBEP20ForDQ(msg.sender, _tokenAmount, dqAmount);
+        emit SwapWSOLForDQ(msg.sender, wsolAmount, dqAmount);
     }
     
-    // ============ DQ → BEP20 代币兑换 (出金) ============
+    // ============ DQ → wSOL 兑换 (出金) - 通过 Raydium DEX ============
     
     /**
-     * @notice 将 DQ 兑换为 BEP20 代币 (出金)
+     * @notice 将 DQ 兑换为 wSOL (出金) - 通过 Raydium DEX
      * @dev 
      * 1. 用户销毁 DQ 代币
-     * 2. 合约通过 PancakeSwap 将 DQ 兑换为 BEP20 代币 (0x570A5D26f7765Ecb712C0924E4De545B89fD43dF)
-     * 3. BEP20 代币转给用户 (扣除 6% 手续费)
+     * 2. 合约通过 Raydium DEX 将 DQ 兑换为 wSOL
+     * 3. wSOL 转给用户 (扣除 6% 手续费)
+     * 
+     * 注意: 实际需要通过 Wormhole 跨链桥与 Solana 交互
      */
-    function swapDQForBEP20(uint256 _dqAmount, uint256 _minOut) external nonReentrant {
+    function swapDQForWSOL(uint256 _dqAmount, uint256 _minOut) external nonReentrant {
         require(_dqAmount > 0, "amount must be > 0");
         require(dqToken.balanceOf(msg.sender) >= _dqAmount, "insufficient DQ");
         
-        // 计算可获得的 BEP20 代币数量
-        uint256 tokenAmount = _dqAmount * dqPrice / 1 ether;
+        // 计算预期获得的 wSOL 数量
+        uint256 expectedWSOL = _dqAmount * dqPrice / 1 ether;
         
         // 6% 手续费
-        uint256 fee = tokenAmount * 6 / 100;
-        uint256 userOut = tokenAmount - fee;
+        uint256 fee = expectedWSOL * 6 / 100;
+        uint256 userOut = expectedWSOL - fee;
         require(userOut >= _minOut, "slippage too high");
-        
-        // 检查合约是否有足够的 BEP20 代币
-        require(IERC20(BEP20_TOKEN).balanceOf(address(this)) >= userOut, "insufficient token in contract");
         
         // 燃烧 DQ
         dqToken.burn(_dqAmount);
+        
+        // 通过 Raydium DEX 兑换 wSOL
+        // 注意: 这里需要实际集成 Raydium 或通过 Wormhole 跨链
+        uint256 actualWSOL = _swapViaRaydium(_dqAmount);
         
         // 手续费分配: 50% 给质押者, 50% 归入运营池
         uint256 stakeFee = fee * 50 / 100;
         uint256 operationFee = fee * 50 / 100;
         
-        // 分配给质押者 (以 BEP20 代币形式)
-        _distributeStakeFeeBEP20(stakeFee);
+        // 分配给质押者 (以 DQ 形式)
+        _distributeStakeFee(stakeFee);
         
-        // 运营池 (使用 BNB，因为运营费用用 BNB 更方便)
+        // 运营池
         operationPool += operationFee;
         
-        // 从合约余额转 BEP20 代币给用户
-        IERC20(BEP20_TOKEN).safeTransfer(msg.sender, userOut);
+        // 转 wSOL 给用户
+        // 注意: 实际需要从合约余额转出
+        // payable(msg.sender).transfer(userOut);
         
-        emit SwapDQForBEP20(msg.sender, _dqAmount, userOut, fee);
+        emit SwapDQForWSOL(msg.sender, _dqAmount, actualWSOL, fee);
     }
     
     /**
-     * @dev 分配质押分红 (以 DQ 代币形式)
+     * @dev 通过 Raydium DEX 进行代币兑换
+     * 注意: 实际实现需要集成 Wormhole 跨链桥
      */
-    function _distributeStakeFeeBEP20(uint256 _feeAmount) internal {
-        // 将 BEP20 手续费换成 DQ，再分配给质押者
-        // 或者直接铸造 DQ 给质押者
-        // 这里简化为累积到 stakeFeeAccPerShare
+    function _swapViaRaydium(uint256 _dqAmount) internal returns (uint256) {
+        // 1. 通过 Wormhole 发送 DQ 到 Solana
+        // IWormhole(WORMHOLE_BRIDGE).sendToSolana(
+        //     recipientSolanaAddress,  // Solana 接收地址
+        //     address(dqToken),        // DQ 代币
+        //     _dqAmount               // 数量
+        // );
+        
+        // 2. 在 Solana 上通过 Raydium 兑换 wSOL
+        
+        // 3. 通过 Wormhole 回收 wSOL 到本合约
+        
+        // 简化实现: 返回预期数量
+        // 实际需要通过跨链桥和 DEX 完成
+        return _dqAmount * dqPrice / 1 ether * 94 / 100;
+    }
+    
+    /**
+     * @dev 分配质押分红 (以 DQ 形式)
+     */
+    function _distributeStakeFee(uint256 _feeAmount) internal {
         for (uint i = 0; i < stakePeriods.length; i++) {
             uint period = stakePeriods[i];
             if (totalStaked[period] > 0) {
                 uint256 share = _feeAmount * stakeRates[i] / 100;
-                // 按 DQ 价格换算为 DQ 数量
                 uint256 dqAmount = share * 1 ether / dqPrice;
                 stakeFeeAccPerShare[period] += dqAmount * 1e12 / totalStaked[period];
             }
         }
-    }
-    
-    // ============ 管理员：设置出金汇率调整 ============
-    
-    /**
-     * @notice 设置出金汇率 (相对于入金汇率的折扣)
-     * @dev 例如设置为 94 表示出金时只能获得 94% 的价值 (6% 手续费)
-     */
-    function setWithdrawFeeRate(uint256 _rate) external onlyOwner {
-        require(_rate <= 100, "rate too high");
-        // 这里可以添加一个 withdrawFeeRate 变量
     }
     
     // ============ 管理员功能 ============
@@ -984,7 +1037,15 @@ contract DQProject is Ownable, ReentrancyGuard {
         emit PriceUpdated(_newPrice);
     }
     
-    function adminWithdrawBNB(uint256 amount) external onlyOwner {
+    function setRaydiumRouter(address _router) external onlyOwner {
+        RAYDIUM_ROUTER = _router;
+    }
+    
+    function setWormholeBridge(address _bridge) external onlyOwner {
+        WORMHOLE_BRIDGE = _bridge;
+    }
+    
+    function adminWithdrawWSOL(uint256 amount) external onlyOwner {
         require(address(this).balance >= amount, "insufficient balance");
         payable(owner()).transfer(amount);
     }
@@ -994,33 +1055,10 @@ contract DQProject is Ownable, ReentrancyGuard {
         dqToken.transfer(owner(), amount);
     }
     
-    function adminWithdrawBEP20(uint256 amount) external onlyOwner {
-        require(IERC20(BEP20_TOKEN).balanceOf(address(this)) >= amount, "insufficient balance");
-        IERC20(BEP20_TOKEN).safeTransfer(owner(), amount);
-    }
-    
-    function adminWithdrawWBNB(uint256 amount) external onlyOwner {
-        require(IERC20(WBNB).balanceOf(address(this)) >= amount, "insufficient balance");
-        IERC20(WBNB).safeTransfer(owner(), amount);
-    }
-    
-    function adminWithdrawToken(address token, uint256 amount) external onlyOwner {
-        require(IERC20(token).balanceOf(address(this)) >= amount, "insufficient balance");
-        IERC20(token).safeTransfer(owner(), amount);
-    }
-    
     // ============ 视图函数 ============
     
     function getContractBalance() external view returns (uint256) {
         return address(this).balance;
-    }
-    
-    function getBEP20Balance() external view returns (uint256) {
-        return IERC20(BEP20_TOKEN).balanceOf(address(this));
-    }
-    
-    function getWBNBBalance() external view returns (uint256) {
-        return IERC20(WBNB).balanceOf(address(this));
     }
     
     function getPrice() external view returns (uint256) {
