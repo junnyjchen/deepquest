@@ -8,7 +8,6 @@ import '../global.css';
 
 LogBox.ignoreLogs([
   "TurboModuleRegistry.getEnforcing(...): 'RNMapsAirModule' could not be found",
-  // 添加其它想暂时忽略的错误或警告信息
 ]);
 
 export default function RootLayout() {
@@ -35,6 +34,8 @@ export default function RootLayout() {
         <Stack.Screen name="node-applications" options={{ title: "Node Applications" }} />
         <Stack.Screen name="cards" options={{ title: "Cards" }} />
         <Stack.Screen name="stakes" options={{ title: "Stakes" }} />
+        {/* DApp 用户端 */}
+        <Stack.Screen name="(dapp)" options={{ headerShown: false }} />
       </Stack>
       <Toast />
     </Provider>
