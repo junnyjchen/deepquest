@@ -10,11 +10,11 @@ pragma solidity ^0.8.17;
  * - 代币名称: DQ (DeepQuest Token)
  * - 代币总量: 1000亿 (1,000,000,000,000)
  * - 入金代币: BEP20 代币 (0x570A5D26f7765Ecb712C0924E4De545B89fD43dF)
- * - 出金方式: 通过 PancakeSwap DEX 卖出 DQ 换 BNB
+ * - 出金代币: BEP20 代币 (0x570A5D26f7765Ecb712C0924E4De545B89fD43dF)
  * 
  * ==================== 兑换流程 ====================
  * 1. 入金 (BEP20代币 → DQ):
- *    - 用户质押 BEP20 代币 (0x570A5D26f7765Ecb712C0924E4De545B89fD43dF)
+ *    - 用户质押 BEP20 代币
  *    - 30% 进入 LP 池，70% 进入运营池
  *    - 合约铸造对应数量的 DQ 给用户
  * 
@@ -23,10 +23,9 @@ pragma solidity ^0.8.17;
  *    - 获得分红收益
  *    - 支持随时提取本金
  * 
- * 3. 出金 (DQ → BNB):
+ * 3. 出金 (DQ → BEP20代币):
  *    - 用户销毁 DQ 代币
- *    - 合约通过 PancakeSwap DEX 将 DQ 兑换为 WBNB，再换成 BNB
- *    - BNB 转给用户（扣除6%手续费）
+ *    - 合约将 BEP20 代币转给用户 (扣除6%手续费)
  * 
  * ==================== 质押周期与分红 ====================
  * - 30天: 5% 收益
@@ -963,17 +962,6 @@ contract DQProject is Ownable, ReentrancyGuard {
                 stakeFeeAccPerShare[period] += dqAmount * 1e12 / totalStaked[period];
             }
         }
-    }
-    
-    // ============ 管理员：设置出金汇率调整 ============
-    
-    /**
-     * @notice 设置出金汇率 (相对于入金汇率的折扣)
-     * @dev 例如设置为 94 表示出金时只能获得 94% 的价值 (6% 手续费)
-     */
-    function setWithdrawFeeRate(uint256 _rate) external onlyOwner {
-        require(_rate <= 100, "rate too high");
-        // 这里可以添加一个 withdrawFeeRate 变量
     }
     
     // ============ 管理员功能 ============
