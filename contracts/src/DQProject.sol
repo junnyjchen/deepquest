@@ -2,7 +2,7 @@
 pragma solidity ^0.8.17;
 
 /**
- * @title DQProject Smart Contract v3.2
+ * @title DQProject Smart Contract v3.3
  * @notice DeepQuest DeFi Platform - BSC Network
  * @dev 深度求索机制
  * 
@@ -10,22 +10,14 @@ pragma solidity ^0.8.17;
  * 1. SOL进SOL出（1-200 SOL）
  * 2. 入金分成：50%动态 + 50% LP质押
  * 3. LP质押分币：60% LP + 15%节点 + 5%基金会 + 6%合伙人 + 14%团队
- * 4. 节点达标条件：
- *    - A卡牌：需要5条线达标
- *    - B卡牌：需要10条线达标
- *    - C卡牌：需要20条线达标
- *    - 不达标只有资格，奖励不能获取
- * 5. 入金规则：
- *    - 注册：推荐人必须是节点
- *    - 首次入金：用户必须是节点
- *    - 后续入金：只要在节点下面有关系链即可
- * 6. DQ只能卖不能买，卖出即销毁
+ * 4. 合伙人：固定白名单地址，收益平均分配
+ * 5. 地址限制：可限制某地址领取奖励
+ * 6. 节点达标条件：5/10/20条线
  * 
  * ==================== 代币信息 ====================
  * - 代币名称: DQ (DeepQuest Token)
  * - 代币总量: 1000亿 (1,000,000,000,000)
  * - 入金代币: BEP20 代币 (0x570A5D26f7765Ecb712C0924E4De545B89fD43dF)
- * - 出金代币: BEP20 代币 (0x570A5D26f7765Ecb712C0924E4De545B89fD43dF)
  */
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -37,7 +29,6 @@ import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-// ============ BEP20 代币接口 ============
 interface IBEP20 {
     function balanceOf(address account) external view returns (uint256);
     function transfer(address to, uint256 amount) external returns (bool);
@@ -89,10 +80,9 @@ contract DQCard is ERC721Enumerable, Ownable {
     uint256 public constant WEIGHT_B = 5;
     uint256 public constant WEIGHT_C = 6;
     
-    // 达标所需线数
-    uint256 public constant LINE_A = 5;   // A卡牌需要5条线
-    uint256 public constant LINE_B = 10;   // B卡牌需要10条线
-    uint256 public constant LINE_C = 20;  // C卡牌需要20条线
+    uint256 public constant LINE_A = 5;
+    uint256 public constant LINE_B = 10;
+    uint256 public constant LINE_C = 20;
     
     mapping(uint256 => uint256) public cardType;
     mapping(address => EnumerableSet.UintSet) private _holderTokens;
@@ -186,10 +176,6 @@ contract DQProject is Ownable, ReentrancyGuard {
     uint256 public startTime;
     uint256 public lastBlockTime;
     
-    uint256 public constant LP_FEE_60DAYS = 20;
-    uint256 public constant LP_FEE_180DAYS = 10;
-    uint256 public constant LP_FEE_AFTER = 0;
-    
     uint256[7] public levelRates = [0, 5, 10, 15, 20, 25, 30];
     uint256[8] public dThresholds = [30, 120, 360, 1000, 4000, 10000, 15000, 30000];
 
@@ -204,8 +190,8 @@ contract DQProject is Ownable, ReentrancyGuard {
         uint256 energy;
         uint256 directSales;
         bool hasNode;
-        bool hasDeposited;          // 是否已首次入金
-        uint256 activeLineCount;     // 达标线数
+        bool hasDeposited;
+        uint256 activeLineCount;
         EnumerableSet.AddressSet children;
     }
 
@@ -225,12 +211,15 @@ contract DQProject is Ownable, ReentrancyGuard {
     mapping(uint => uint256) public stakeFeeAccPerShare;
     mapping(uint => uint256) public totalSingleStaked;
 
-    // 合伙人
-    address[] public partnerList;
-    mapping(address => bool) public isPartner;
-    uint256 public partnerCount;
-    uint256 public partnerAccPerShare;
-    mapping(address => uint256) public partnerDebt;
+    // ============ 合伙人白名单 ============
+    address[] public partnerWhiteList;              // 合伙人白名单地址列表
+    mapping(address => bool) public isPartnerWhite; // 是否在白名单中
+    mapping(address => uint256) public partnerDebt; // 合伙人待领取收益
+    uint256 public partnerAccPerShare;              // 合伙人累积收益份额
+
+    // ============ 地址限制 ============
+    mapping(address => bool) public isRestricted;  // 被限制领取奖励的地址
+    mapping(address => uint256) public restrictedDebt; // 限制前的待领取收益
 
     // 资金池
     uint256 public dynamicPool;
@@ -250,11 +239,7 @@ contract DQProject is Ownable, ReentrancyGuard {
     // 爆块
     uint256 public blockAccPerShare;
     mapping(address => uint256) public blockRewardDebt;
-    
-    // 达标线数累积
-    mapping(address => uint256) public lineCountAcc;
 
-    // ============ 结构体 ============
     struct LPStake {
         uint256 amount;
         uint256 startTime;
@@ -279,6 +264,12 @@ contract DQProject is Ownable, ReentrancyGuard {
     event LineQualified(address indexed user, uint256 lineCount);
     event PriceUpdated(uint256 newPrice);
     event SetFoundationWallet(address indexed wallet);
+    
+    // 合伙人事件
+    event AddPartnerWhiteList(address indexed partner);
+    event RemovePartnerWhiteList(address indexed partner);
+    event RestrictAddress(address indexed user, address indexed operator);
+    event UnrestrictAddress(address indexed user, address indexed operator);
 
     constructor(address _foundationWallet) {
         dqToken = new DQToken();
@@ -288,31 +279,25 @@ contract DQProject is Ownable, ReentrancyGuard {
         lastBlockTime = block.timestamp;
         _users[owner()].referrer = address(0);
         _users[owner()].hasNode = true;
-        _users[owner()].activeLineCount = type(uint256).max; // 基金会无限线
+        _users[owner()].activeLineCount = type(uint256).max;
         allUsers.push(owner());
     }
 
-    /**
-     * @notice 检查用户是否可以入金
-     * @dev 首次入金需要是节点，后续入金只需要在节点下面有关系链
-     */
     modifier onlyCanDeposit() {
         address referrer = _users[msg.sender].referrer;
         require(referrer != address(0), "not registered");
-        
-        // 检查推荐链上是否有节点
         require(_hasNodeInUpline(msg.sender), "no node in upline");
-        
-        // 如果是首次入金，需要自己是节点
         if (!_users[msg.sender].hasDeposited) {
             require(_users[msg.sender].hasNode, "first deposit requires node");
         }
         _;
     }
     
-    /**
-     * @notice 检查用户的上级链上是否有节点
-     */
+    modifier notRestricted() {
+        require(!isRestricted[msg.sender], "address is restricted");
+        _;
+    }
+    
     function _hasNodeInUpline(address _user) internal view returns (bool) {
         address current = _users[_user].referrer;
         uint256 depth = 0;
@@ -330,7 +315,6 @@ contract DQProject is Ownable, ReentrancyGuard {
     function register(address _referrer) external {
         require(_referrer != address(0) && _referrer != msg.sender, "invalid referrer");
         require(_users[msg.sender].referrer == address(0), "already registered");
-        // 推荐人必须是节点
         require(_users[_referrer].hasNode, "referrer must have node first");
 
         _users[msg.sender].referrer = _referrer;
@@ -355,10 +339,6 @@ contract DQProject is Ownable, ReentrancyGuard {
     }
 
     // ============ 购买节点 NFT ============
-    /**
-     * @notice 购买节点 NFT 卡牌
-     * @dev 购买后成为节点会员，有资格获得节点奖励
-     */
     function buyNode(uint256 _type) external nonReentrant {
         require(_type >= 1 && _type <= 3, "invalid type");
         
@@ -386,7 +366,6 @@ contract DQProject is Ownable, ReentrancyGuard {
             emit LevelUp(msg.sender, 3);
         }
         
-        // 如果用户未注册，推荐人为 owner
         if (user.referrer == address(0) && msg.sender != owner()) {
             _users[msg.sender].referrer = owner();
             _users[owner()].directCount++;
@@ -395,17 +374,11 @@ contract DQProject is Ownable, ReentrancyGuard {
             emit Register(msg.sender, owner());
         }
         
-        // 更新达标线数
         _updateActiveLines(msg.sender);
         
         emit BuyNode(msg.sender, _type, price);
     }
 
-    // ============ 更新达标线数 ============
-    /**
-     * @notice 更新用户的达标线数
-     * @dev 只有直接子节点中有入金用户的线才算达标
-     */
     function _updateActiveLines(address _user) internal {
         uint256 qualifiedLines = 0;
         address[] memory children = _users[_user].children.values();
@@ -423,13 +396,6 @@ contract DQProject is Ownable, ReentrancyGuard {
     }
 
     // ============ 入金 ============
-    /**
-     * @notice 入金：用户存入 BEP20，换取 DQ
-     * @dev 
-     * - 首次入金：用户必须是节点
-     * - 后续入金：只要在节点下面有关系链即可
-     * - 50% 动态池，50% LP池
-     */
     function deposit(uint256 _amount) external nonReentrant onlyCanDeposit {
         require(_amount >= INVEST_MIN, "below minimum");
         require(_amount <= getCurrentMaxInvest(), "exceed max");
@@ -454,16 +420,9 @@ contract DQProject is Ownable, ReentrancyGuard {
         user.directSales += _amount;
         user.hasDeposited = true;
         
-        // 更新团队业绩
         _updateTeamInvest(msg.sender, _amount);
-        
-        // 分发动态奖金
         _distributeDynamic(msg.sender, dynamicShare);
-        
-        // 更新所有上级的达标线数
         _notifyUplineOfDeposit(msg.sender);
-        
-        // 检查级别晋升
         _checkLevelUp(msg.sender);
         _checkDLevel(msg.sender);
         _checkAndAddPartner(msg.sender);
@@ -473,9 +432,6 @@ contract DQProject is Ownable, ReentrancyGuard {
         emit Deposit(msg.sender, _amount, dqAmount, isFirst);
     }
 
-    /**
-     * @notice 通知上级链上有新入金，更新达标线数
-     */
     function _notifyUplineOfDeposit(address _user) internal {
         address current = _users[_user].referrer;
         uint256 depth = 0;
@@ -488,11 +444,6 @@ contract DQProject is Ownable, ReentrancyGuard {
         }
     }
 
-    // ============ 检查节点是否达标 ============
-    /**
-     * @notice 检查用户的节点是否达标
-     * @dev A卡牌需要5条线，B卡牌需要10条线，C卡牌需要20条线
-     */
     function checkNodeQualified(address _user) public view returns (bool qualified, uint256 currentLines, uint256 requiredLines) {
         uint256 balance = dqCard.balanceOf(_user);
         if (balance == 0) {
@@ -525,8 +476,14 @@ contract DQProject is Ownable, ReentrancyGuard {
         
         address referrer = _users[_user].referrer;
         if (referrer != address(0)) {
-            if (_users[referrer].energy >= directShare) {
-                _users[referrer].energy -= directShare;
+            // 检查是否被限制
+            if (!isRestricted[referrer]) {
+                if (_users[referrer].energy >= directShare) {
+                    _users[referrer].energy -= directShare;
+                }
+            } else {
+                // 限制地址的收益进入运营池
+                operationPool += directShare;
             }
             _users[referrer].directSales += directShare;
         }
@@ -545,14 +502,18 @@ contract DQProject is Ownable, ReentrancyGuard {
         uint256 layer = 1;
         
         while (current != address(0) && layer <= 15) {
-            // 检查节点是否达标
             (bool qualified, , ) = checkNodeQualified(current);
             uint256 maxLayer = _users[current].directCount * 3;
             if (maxLayer > 15) maxLayer = 15;
             
             if (layer <= maxLayer && qualified) {
-                if (_users[current].energy >= perLayer) {
-                    _users[current].energy -= perLayer;
+                // 检查是否被限制
+                if (!isRestricted[current]) {
+                    if (_users[current].energy >= perLayer) {
+                        _users[current].energy -= perLayer;
+                    }
+                } else {
+                    insurancePool += perLayer;
                 }
             } else {
                 insurancePool += perLayer;
@@ -577,8 +538,13 @@ contract DQProject is Ownable, ReentrancyGuard {
             if (rate > lastRate) {
                 uint256 delta = rate - lastRate;
                 uint256 reward = _total * delta / 30;
-                if (_users[current].energy >= reward) {
-                    _users[current].energy -= reward;
+                
+                if (!isRestricted[current]) {
+                    if (_users[current].energy >= reward) {
+                        _users[current].energy -= reward;
+                    }
+                } else {
+                    operationPool += reward;
                 }
                 lastRate = rate;
             }
@@ -599,8 +565,13 @@ contract DQProject is Ownable, ReentrancyGuard {
             if (daoRate > lastRate) {
                 uint256 delta = daoRate - lastRate;
                 uint256 reward = _total * delta / 10;
-                if (_users[current].energy >= reward) {
-                    _users[current].energy -= reward;
+                
+                if (!isRestricted[current]) {
+                    if (_users[current].energy >= reward) {
+                        _users[current].energy -= reward;
+                    }
+                } else {
+                    operationPool += reward;
                 }
                 lastRate = daoRate;
             }
@@ -674,23 +645,21 @@ contract DQProject is Ownable, ReentrancyGuard {
     }
 
     function _checkAndAddPartner(address _user) internal {
-        if (isPartner[_user]) return;
-        if (partnerCount >= 50) return;
+        // 检查是否在合伙人白名单中
+        if (!isPartnerWhite[_user]) return;
 
         User storage user = _users[_user];
         uint256 investReq = 5000 ether;
         if (user.totalInvest < investReq) return;
 
-        uint256 salesReq = partnerCount < 20 ? 30000 ether : 50000 ether;
+        uint256 salesReq = partnerWhiteList.length <= 20 ? 30000 ether : 50000 ether;
         if (user.directSales < salesReq) return;
 
-        isPartner[_user] = true;
-        partnerList.push(_user);
-        partnerCount++;
+        partnerDebt[_user] = partnerAccPerShare / 1e12;
     }
 
     // ============ DQ 卖出 ============
-    function withdrawDQ(uint256 _dqAmount, uint256 _minOut) external nonReentrant {
+    function withdrawDQ(uint256 _dqAmount, uint256 _minOut) external nonReentrant notRestricted {
         require(_dqAmount > 0, "amount must > 0");
         require(dqToken.balanceOf(msg.sender) >= _dqAmount, "insufficient DQ");
         
@@ -721,7 +690,7 @@ contract DQProject is Ownable, ReentrancyGuard {
     }
 
     // ============ LP 质押分币 ============
-    function claimLP() external nonReentrant {
+    function claimLP() external nonReentrant notRestricted {
         uint256 pending = lpStakes[msg.sender].amount * lpAccPerShare / 1e12 - lpStakes[msg.sender].rewardDebt;
         require(pending > 0, "no pending");
         
@@ -736,7 +705,7 @@ contract DQProject is Ownable, ReentrancyGuard {
     // ============ 爆块机制 ============
     /**
      * @notice 每日爆块
-     * @dev 节点NFT分红需要达标才能领取
+     * @dev 合伙人收益由白名单地址平均分配
      */
     function blockMining() external nonReentrant {
         require(block.timestamp >= lastBlockTime + 1 days, "too early");
@@ -769,9 +738,8 @@ contract DQProject is Ownable, ReentrancyGuard {
         uint256 foundationDQ = foundationShare * 1 ether / dqPrice;
         dqToken.mint(foundationWallet, foundationDQ);
         
-        if (partnerCount > 0) {
-            partnerAccPerShare += partnerShare * 1e12 / partnerCount;
-        }
+        // 合伙人收益由白名单平均分配
+        _updatePartnerAcc(partnerShare);
         
         _updateTeamAcc(teamShare);
         
@@ -779,18 +747,24 @@ contract DQProject is Ownable, ReentrancyGuard {
         emit BlockMining(release, burn, block.timestamp);
     }
     
+    /**
+     * @notice 更新合伙人累积收益
+     */
+    function _updatePartnerAcc(uint256 _partnerShare) internal {
+        uint256 partnerCount = partnerWhiteList.length;
+        if (partnerCount > 0) {
+            partnerAccPerShare += _partnerShare * 1e12 / partnerCount;
+        }
+    }
+    
     function _updateNftAcc(uint256 _nftShare) internal {
         uint256[3] memory totals = [dqCard.totalA(), dqCard.totalB(), dqCard.totalC()];
         uint256[3] memory weights = [dqCard.WEIGHT_A(), dqCard.WEIGHT_B(), dqCard.WEIGHT_C()];
-        uint256[3] memory lines = [dqCard.LINE_A(), dqCard.LINE_B(), dqCard.LINE_C()];
         uint256 totalWeight = 15;
         
         for (uint i = 0; i < 3; i++) {
             if (totals[i] > 0) {
                 uint256 shareForType = _nftShare * weights[i] / totalWeight;
-                // 计算达标的卡牌数量
-                uint256 qualifiedCount = 0;
-                // 简化处理：所有卡牌都参与分红，由领取时检查
                 nftAccPerShare[i] += shareForType * 1e12 / totals[i];
             }
         }
@@ -806,11 +780,7 @@ contract DQProject is Ownable, ReentrancyGuard {
     }
     
     // ============ 领取 NFT 分红 ============
-    /**
-     * @notice 领取 NFT 分红
-     * @dev 只有达标节点的NFT才能领取分红
-     */
-    function claimNft() external nonReentrant {
+    function claimNft() external nonReentrant notRestricted {
         uint256 totalPending = 0;
         uint256 balance = dqCard.balanceOf(msg.sender);
         
@@ -835,7 +805,7 @@ contract DQProject is Ownable, ReentrancyGuard {
     }
     
     // ============ 领取 D 级团队分红 ============
-    function claimDTeam() external nonReentrant {
+    function claimDTeam() external nonReentrant notRestricted {
         User storage user = _users[msg.sender];
         require(user.dLevel > 0, "no d level");
         
@@ -851,8 +821,13 @@ contract DQProject is Ownable, ReentrancyGuard {
     }
     
     // ============ 领取合伙人分红 ============
-    function claimPartner() external nonReentrant {
-        require(isPartner[msg.sender], "not partner");
+    /**
+     * @notice 领取合伙人分红
+     * @dev 只有在白名单中的地址才能领取
+     */
+    function claimPartner() external nonReentrant notRestricted {
+        require(isPartnerWhite[msg.sender], "not in partner whitelist");
+        
         uint256 pending = partnerAccPerShare / 1e12 - partnerDebt[msg.sender];
         require(pending > 0, "no pending");
         
@@ -904,6 +879,93 @@ contract DQProject is Ownable, ReentrancyGuard {
     }
 
     // ============ 管理员功能 ============
+    
+    /**
+     * @notice 添加合伙人白名单
+     * @dev 合伙人收益由白名单地址平均分配
+     */
+    function addPartnerWhiteList(address _partner) external onlyOwner {
+        require(_partner != address(0), "invalid address");
+        require(!isPartnerWhite[_partner], "already in whitelist");
+        
+        isPartnerWhite[_partner] = true;
+        partnerWhiteList.push(_partner);
+        partnerDebt[_partner] = partnerAccPerShare / 1e12;
+        
+        emit AddPartnerWhiteList(_partner);
+    }
+    
+    /**
+     * @notice 批量添加合伙人白名单
+     */
+    function addPartnerWhiteListBatch(address[] calldata _partners) external onlyOwner {
+        for (uint i = 0; i < _partners.length; i++) {
+            address _partner = _partners[i];
+            if (_partner != address(0) && !isPartnerWhite[_partner]) {
+                isPartnerWhite[_partner] = true;
+                partnerWhiteList.push(_partner);
+                partnerDebt[_partner] = partnerAccPerShare / 1e12;
+                emit AddPartnerWhiteList(_partner);
+            }
+        }
+    }
+    
+    /**
+     * @notice 移除合伙人白名单
+     */
+    function removePartnerWhiteList(address _partner) external onlyOwner {
+        require(isPartnerWhite[_partner], "not in whitelist");
+        
+        isPartnerWhite[_partner] = false;
+        
+        // 从数组中移除
+        for (uint i = 0; i < partnerWhiteList.length; i++) {
+            if (partnerWhiteList[i] == _partner) {
+                partnerWhiteList[i] = partnerWhiteList[partnerWhiteList.length - 1];
+                partnerWhiteList.pop();
+                break;
+            }
+        }
+        
+        emit RemovePartnerWhiteList(_partner);
+    }
+    
+    /**
+     * @notice 限制地址领取奖励
+     * @dev 被限制的地址无法领取任何奖励，收益转入运营池
+     */
+    function restrictAddress(address _user) external onlyOwner {
+        require(_user != address(0), "invalid address");
+        require(!isRestricted[_user], "already restricted");
+        
+        isRestricted[_user] = true;
+        
+        emit RestrictAddress(_user, msg.sender);
+    }
+    
+    /**
+     * @notice 批量限制地址
+     */
+    function restrictAddressBatch(address[] calldata _users) external onlyOwner {
+        for (uint i = 0; i < _users.length; i++) {
+            if (_users[i] != address(0) && !isRestricted[_users[i]]) {
+                isRestricted[_users[i]] = true;
+                emit RestrictAddress(_users[i], msg.sender);
+            }
+        }
+    }
+    
+    /**
+     * @notice 解除地址限制
+     */
+    function unrestrictAddress(address _user) external onlyOwner {
+        require(isRestricted[_user], "not restricted");
+        
+        isRestricted[_user] = false;
+        
+        emit UnrestrictAddress(_user, msg.sender);
+    }
+    
     function setPrice(uint256 _newPrice) external onlyOwner {
         require(_newPrice > 0, "price must > 0");
         dqPrice = _newPrice;
@@ -975,14 +1037,32 @@ contract DQProject is Ownable, ReentrancyGuard {
         return singleStakes[_user][stakePeriods[_periodIndex]];
     }
     
-    /**
-     * @notice 检查用户是否可以入金
-     */
     function canDeposit(address _user) external view returns (bool) {
         if (_users[_user].referrer == address(0)) return false;
         if (!_hasNodeInUpline(_user)) return false;
         if (!_users[_user].hasDeposited && !_users[_user].hasNode) return false;
         return true;
+    }
+    
+    /**
+     * @notice 获取合伙人白名单列表
+     */
+    function getPartnerWhiteList() external view returns (address[] memory) {
+        return partnerWhiteList;
+    }
+    
+    /**
+     * @notice 获取合伙人数量
+     */
+    function getPartnerCount() external view returns (uint256) {
+        return partnerWhiteList.length;
+    }
+    
+    /**
+     * @notice 检查地址是否被限制
+     */
+    function isAddressRestricted(address _user) external view returns (bool) {
+        return isRestricted[_user];
     }
     
     receive() external payable {}

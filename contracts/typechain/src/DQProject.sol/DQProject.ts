@@ -33,11 +33,10 @@ export interface DQProjectInterface extends Interface {
       | "INVEST_MAX_START"
       | "INVEST_MAX_STEP"
       | "INVEST_MIN"
-      | "LP_FEE_180DAYS"
-      | "LP_FEE_60DAYS"
-      | "LP_FEE_AFTER"
       | "MIN_BURN_RATE"
       | "PHASE_DURATION"
+      | "addPartnerWhiteList"
+      | "addPartnerWhiteListBatch"
       | "adminWithdrawBEP20"
       | "adminWithdrawBNB"
       | "allUsers"
@@ -68,14 +67,17 @@ export interface DQProjectInterface extends Interface {
       | "getContractBalance"
       | "getCurrentMaxInvest"
       | "getLPStake"
+      | "getPartnerCount"
+      | "getPartnerWhiteList"
       | "getPrice"
       | "getSingleStake"
       | "getUser"
       | "insurancePool"
-      | "isPartner"
+      | "isAddressRestricted"
+      | "isPartnerWhite"
+      | "isRestricted"
       | "lastBlockTime"
       | "levelRates"
-      | "lineCountAcc"
       | "lpAccPerShare"
       | "lpPool"
       | "lpStakes"
@@ -84,11 +86,14 @@ export interface DQProjectInterface extends Interface {
       | "operationPool"
       | "owner"
       | "partnerAccPerShare"
-      | "partnerCount"
       | "partnerDebt"
-      | "partnerList"
+      | "partnerWhiteList"
       | "register"
+      | "removePartnerWhiteList"
       | "renounceOwnership"
+      | "restrictAddress"
+      | "restrictAddressBatch"
+      | "restrictedDebt"
       | "setFoundationWallet"
       | "setPrice"
       | "singleStakes"
@@ -100,12 +105,14 @@ export interface DQProjectInterface extends Interface {
       | "totalLPShares"
       | "totalSingleStaked"
       | "transferOwnership"
+      | "unrestrictAddress"
       | "unstakeSingle"
       | "withdrawDQ"
   ): FunctionFragment;
 
   getEvent(
     nameOrSignatureOrTopic:
+      | "AddPartnerWhiteList"
       | "BlockMining"
       | "BuyNode"
       | "ClaimDTeam"
@@ -120,8 +127,11 @@ export interface DQProjectInterface extends Interface {
       | "OwnershipTransferred"
       | "PriceUpdated"
       | "Register"
+      | "RemovePartnerWhiteList"
+      | "RestrictAddress"
       | "SetFoundationWallet"
       | "StakeSingle"
+      | "UnrestrictAddress"
       | "UnstakeSingle"
       | "Withdraw"
   ): EventFragment;
@@ -152,24 +162,20 @@ export interface DQProjectInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "LP_FEE_180DAYS",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "LP_FEE_60DAYS",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "LP_FEE_AFTER",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
     functionFragment: "MIN_BURN_RATE",
     values?: undefined
   ): string;
   encodeFunctionData(
     functionFragment: "PHASE_DURATION",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "addPartnerWhiteList",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "addPartnerWhiteListBatch",
+    values: [AddressLike[]]
   ): string;
   encodeFunctionData(
     functionFragment: "adminWithdrawBEP20",
@@ -270,6 +276,14 @@ export interface DQProjectInterface extends Interface {
     functionFragment: "getLPStake",
     values: [AddressLike]
   ): string;
+  encodeFunctionData(
+    functionFragment: "getPartnerCount",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getPartnerWhiteList",
+    values?: undefined
+  ): string;
   encodeFunctionData(functionFragment: "getPrice", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "getSingleStake",
@@ -284,7 +298,15 @@ export interface DQProjectInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "isPartner",
+    functionFragment: "isAddressRestricted",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "isPartnerWhite",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "isRestricted",
     values: [AddressLike]
   ): string;
   encodeFunctionData(
@@ -294,10 +316,6 @@ export interface DQProjectInterface extends Interface {
   encodeFunctionData(
     functionFragment: "levelRates",
     values: [BigNumberish]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "lineCountAcc",
-    values: [AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "lpAccPerShare",
@@ -326,15 +344,11 @@ export interface DQProjectInterface extends Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "partnerCount",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
     functionFragment: "partnerDebt",
     values: [AddressLike]
   ): string;
   encodeFunctionData(
-    functionFragment: "partnerList",
+    functionFragment: "partnerWhiteList",
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
@@ -342,8 +356,24 @@ export interface DQProjectInterface extends Interface {
     values: [AddressLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "removePartnerWhiteList",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "renounceOwnership",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "restrictAddress",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "restrictAddressBatch",
+    values: [AddressLike[]]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "restrictedDebt",
+    values: [AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "setFoundationWallet",
@@ -387,6 +417,10 @@ export interface DQProjectInterface extends Interface {
     values: [AddressLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "unrestrictAddress",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "unstakeSingle",
     values: [BigNumberish]
   ): string;
@@ -418,23 +452,19 @@ export interface DQProjectInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "INVEST_MIN", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "LP_FEE_180DAYS",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "LP_FEE_60DAYS",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "LP_FEE_AFTER",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
     functionFragment: "MIN_BURN_RATE",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
     functionFragment: "PHASE_DURATION",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "addPartnerWhiteList",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "addPartnerWhiteListBatch",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -518,6 +548,14 @@ export interface DQProjectInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "getLPStake", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "getPartnerCount",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getPartnerWhiteList",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "getPrice", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "getSingleStake",
@@ -528,16 +566,23 @@ export interface DQProjectInterface extends Interface {
     functionFragment: "insurancePool",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "isPartner", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "isAddressRestricted",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "isPartnerWhite",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "isRestricted",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "lastBlockTime",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "levelRates", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "lineCountAcc",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(
     functionFragment: "lpAccPerShare",
     data: BytesLike
@@ -562,20 +607,32 @@ export interface DQProjectInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "partnerCount",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
     functionFragment: "partnerDebt",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "partnerList",
+    functionFragment: "partnerWhiteList",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "register", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "removePartnerWhiteList",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "renounceOwnership",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "restrictAddress",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "restrictAddressBatch",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "restrictedDebt",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -614,10 +671,26 @@ export interface DQProjectInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "unrestrictAddress",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "unstakeSingle",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "withdrawDQ", data: BytesLike): Result;
+}
+
+export namespace AddPartnerWhiteListEvent {
+  export type InputTuple = [partner: AddressLike];
+  export type OutputTuple = [partner: string];
+  export interface OutputObject {
+    partner: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
 }
 
 export namespace BlockMiningEvent {
@@ -823,6 +896,31 @@ export namespace RegisterEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
+export namespace RemovePartnerWhiteListEvent {
+  export type InputTuple = [partner: AddressLike];
+  export type OutputTuple = [partner: string];
+  export interface OutputObject {
+    partner: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace RestrictAddressEvent {
+  export type InputTuple = [user: AddressLike, operator: AddressLike];
+  export type OutputTuple = [user: string, operator: string];
+  export interface OutputObject {
+    user: string;
+    operator: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
 export namespace SetFoundationWalletEvent {
   export type InputTuple = [wallet: AddressLike];
   export type OutputTuple = [wallet: string];
@@ -846,6 +944,19 @@ export namespace StakeSingleEvent {
     user: string;
     amount: bigint;
     period: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace UnrestrictAddressEvent {
+  export type InputTuple = [user: AddressLike, operator: AddressLike];
+  export type OutputTuple = [user: string, operator: string];
+  export interface OutputObject {
+    user: string;
+    operator: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -941,15 +1052,21 @@ export interface DQProject extends BaseContract {
 
   INVEST_MIN: TypedContractMethod<[], [bigint], "view">;
 
-  LP_FEE_180DAYS: TypedContractMethod<[], [bigint], "view">;
-
-  LP_FEE_60DAYS: TypedContractMethod<[], [bigint], "view">;
-
-  LP_FEE_AFTER: TypedContractMethod<[], [bigint], "view">;
-
   MIN_BURN_RATE: TypedContractMethod<[], [bigint], "view">;
 
   PHASE_DURATION: TypedContractMethod<[], [bigint], "view">;
+
+  addPartnerWhiteList: TypedContractMethod<
+    [_partner: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
+  addPartnerWhiteListBatch: TypedContractMethod<
+    [_partners: AddressLike[]],
+    [void],
+    "nonpayable"
+  >;
 
   adminWithdrawBEP20: TypedContractMethod<
     [amount: BigNumberish],
@@ -1029,6 +1146,10 @@ export interface DQProject extends BaseContract {
     "view"
   >;
 
+  getPartnerCount: TypedContractMethod<[], [bigint], "view">;
+
+  getPartnerWhiteList: TypedContractMethod<[], [string[]], "view">;
+
   getPrice: TypedContractMethod<[], [bigint], "view">;
 
   getSingleStake: TypedContractMethod<
@@ -1071,13 +1192,19 @@ export interface DQProject extends BaseContract {
 
   insurancePool: TypedContractMethod<[], [bigint], "view">;
 
-  isPartner: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
+  isAddressRestricted: TypedContractMethod<
+    [_user: AddressLike],
+    [boolean],
+    "view"
+  >;
+
+  isPartnerWhite: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
+
+  isRestricted: TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
 
   lastBlockTime: TypedContractMethod<[], [bigint], "view">;
 
   levelRates: TypedContractMethod<[arg0: BigNumberish], [bigint], "view">;
-
-  lineCountAcc: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
 
   lpAccPerShare: TypedContractMethod<[], [bigint], "view">;
 
@@ -1109,15 +1236,33 @@ export interface DQProject extends BaseContract {
 
   partnerAccPerShare: TypedContractMethod<[], [bigint], "view">;
 
-  partnerCount: TypedContractMethod<[], [bigint], "view">;
-
   partnerDebt: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
 
-  partnerList: TypedContractMethod<[arg0: BigNumberish], [string], "view">;
+  partnerWhiteList: TypedContractMethod<[arg0: BigNumberish], [string], "view">;
 
   register: TypedContractMethod<[_referrer: AddressLike], [void], "nonpayable">;
 
+  removePartnerWhiteList: TypedContractMethod<
+    [_partner: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
   renounceOwnership: TypedContractMethod<[], [void], "nonpayable">;
+
+  restrictAddress: TypedContractMethod<
+    [_user: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
+  restrictAddressBatch: TypedContractMethod<
+    [_users: AddressLike[]],
+    [void],
+    "nonpayable"
+  >;
+
+  restrictedDebt: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
 
   setFoundationWallet: TypedContractMethod<
     [_wallet: AddressLike],
@@ -1169,6 +1314,12 @@ export interface DQProject extends BaseContract {
     "nonpayable"
   >;
 
+  unrestrictAddress: TypedContractMethod<
+    [_user: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
   unstakeSingle: TypedContractMethod<
     [_periodIndex: BigNumberish],
     [void],
@@ -1207,20 +1358,17 @@ export interface DQProject extends BaseContract {
     nameOrSignature: "INVEST_MIN"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
-    nameOrSignature: "LP_FEE_180DAYS"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "LP_FEE_60DAYS"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "LP_FEE_AFTER"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
     nameOrSignature: "MIN_BURN_RATE"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "PHASE_DURATION"
   ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "addPartnerWhiteList"
+  ): TypedContractMethod<[_partner: AddressLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "addPartnerWhiteListBatch"
+  ): TypedContractMethod<[_partners: AddressLike[]], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "adminWithdrawBEP20"
   ): TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
@@ -1326,6 +1474,12 @@ export interface DQProject extends BaseContract {
     "view"
   >;
   getFunction(
+    nameOrSignature: "getPartnerCount"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "getPartnerWhiteList"
+  ): TypedContractMethod<[], [string[]], "view">;
+  getFunction(
     nameOrSignature: "getPrice"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
@@ -1372,7 +1526,13 @@ export interface DQProject extends BaseContract {
     nameOrSignature: "insurancePool"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
-    nameOrSignature: "isPartner"
+    nameOrSignature: "isAddressRestricted"
+  ): TypedContractMethod<[_user: AddressLike], [boolean], "view">;
+  getFunction(
+    nameOrSignature: "isPartnerWhite"
+  ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
+  getFunction(
+    nameOrSignature: "isRestricted"
   ): TypedContractMethod<[arg0: AddressLike], [boolean], "view">;
   getFunction(
     nameOrSignature: "lastBlockTime"
@@ -1380,9 +1540,6 @@ export interface DQProject extends BaseContract {
   getFunction(
     nameOrSignature: "levelRates"
   ): TypedContractMethod<[arg0: BigNumberish], [bigint], "view">;
-  getFunction(
-    nameOrSignature: "lineCountAcc"
-  ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
   getFunction(
     nameOrSignature: "lpAccPerShare"
   ): TypedContractMethod<[], [bigint], "view">;
@@ -1422,20 +1579,29 @@ export interface DQProject extends BaseContract {
     nameOrSignature: "partnerAccPerShare"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
-    nameOrSignature: "partnerCount"
-  ): TypedContractMethod<[], [bigint], "view">;
-  getFunction(
     nameOrSignature: "partnerDebt"
   ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
   getFunction(
-    nameOrSignature: "partnerList"
+    nameOrSignature: "partnerWhiteList"
   ): TypedContractMethod<[arg0: BigNumberish], [string], "view">;
   getFunction(
     nameOrSignature: "register"
   ): TypedContractMethod<[_referrer: AddressLike], [void], "nonpayable">;
   getFunction(
+    nameOrSignature: "removePartnerWhiteList"
+  ): TypedContractMethod<[_partner: AddressLike], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "renounceOwnership"
   ): TypedContractMethod<[], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "restrictAddress"
+  ): TypedContractMethod<[_user: AddressLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "restrictAddressBatch"
+  ): TypedContractMethod<[_users: AddressLike[]], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "restrictedDebt"
+  ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
   getFunction(
     nameOrSignature: "setFoundationWallet"
   ): TypedContractMethod<[_wallet: AddressLike], [void], "nonpayable">;
@@ -1478,6 +1644,9 @@ export interface DQProject extends BaseContract {
     nameOrSignature: "transferOwnership"
   ): TypedContractMethod<[newOwner: AddressLike], [void], "nonpayable">;
   getFunction(
+    nameOrSignature: "unrestrictAddress"
+  ): TypedContractMethod<[_user: AddressLike], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "unstakeSingle"
   ): TypedContractMethod<[_periodIndex: BigNumberish], [void], "nonpayable">;
   getFunction(
@@ -1488,6 +1657,13 @@ export interface DQProject extends BaseContract {
     "nonpayable"
   >;
 
+  getEvent(
+    key: "AddPartnerWhiteList"
+  ): TypedContractEvent<
+    AddPartnerWhiteListEvent.InputTuple,
+    AddPartnerWhiteListEvent.OutputTuple,
+    AddPartnerWhiteListEvent.OutputObject
+  >;
   getEvent(
     key: "BlockMining"
   ): TypedContractEvent<
@@ -1587,6 +1763,20 @@ export interface DQProject extends BaseContract {
     RegisterEvent.OutputObject
   >;
   getEvent(
+    key: "RemovePartnerWhiteList"
+  ): TypedContractEvent<
+    RemovePartnerWhiteListEvent.InputTuple,
+    RemovePartnerWhiteListEvent.OutputTuple,
+    RemovePartnerWhiteListEvent.OutputObject
+  >;
+  getEvent(
+    key: "RestrictAddress"
+  ): TypedContractEvent<
+    RestrictAddressEvent.InputTuple,
+    RestrictAddressEvent.OutputTuple,
+    RestrictAddressEvent.OutputObject
+  >;
+  getEvent(
     key: "SetFoundationWallet"
   ): TypedContractEvent<
     SetFoundationWalletEvent.InputTuple,
@@ -1599,6 +1789,13 @@ export interface DQProject extends BaseContract {
     StakeSingleEvent.InputTuple,
     StakeSingleEvent.OutputTuple,
     StakeSingleEvent.OutputObject
+  >;
+  getEvent(
+    key: "UnrestrictAddress"
+  ): TypedContractEvent<
+    UnrestrictAddressEvent.InputTuple,
+    UnrestrictAddressEvent.OutputTuple,
+    UnrestrictAddressEvent.OutputObject
   >;
   getEvent(
     key: "UnstakeSingle"
@@ -1616,6 +1813,17 @@ export interface DQProject extends BaseContract {
   >;
 
   filters: {
+    "AddPartnerWhiteList(address)": TypedContractEvent<
+      AddPartnerWhiteListEvent.InputTuple,
+      AddPartnerWhiteListEvent.OutputTuple,
+      AddPartnerWhiteListEvent.OutputObject
+    >;
+    AddPartnerWhiteList: TypedContractEvent<
+      AddPartnerWhiteListEvent.InputTuple,
+      AddPartnerWhiteListEvent.OutputTuple,
+      AddPartnerWhiteListEvent.OutputObject
+    >;
+
     "BlockMining(uint256,uint256,uint256)": TypedContractEvent<
       BlockMiningEvent.InputTuple,
       BlockMiningEvent.OutputTuple,
@@ -1770,6 +1978,28 @@ export interface DQProject extends BaseContract {
       RegisterEvent.OutputObject
     >;
 
+    "RemovePartnerWhiteList(address)": TypedContractEvent<
+      RemovePartnerWhiteListEvent.InputTuple,
+      RemovePartnerWhiteListEvent.OutputTuple,
+      RemovePartnerWhiteListEvent.OutputObject
+    >;
+    RemovePartnerWhiteList: TypedContractEvent<
+      RemovePartnerWhiteListEvent.InputTuple,
+      RemovePartnerWhiteListEvent.OutputTuple,
+      RemovePartnerWhiteListEvent.OutputObject
+    >;
+
+    "RestrictAddress(address,address)": TypedContractEvent<
+      RestrictAddressEvent.InputTuple,
+      RestrictAddressEvent.OutputTuple,
+      RestrictAddressEvent.OutputObject
+    >;
+    RestrictAddress: TypedContractEvent<
+      RestrictAddressEvent.InputTuple,
+      RestrictAddressEvent.OutputTuple,
+      RestrictAddressEvent.OutputObject
+    >;
+
     "SetFoundationWallet(address)": TypedContractEvent<
       SetFoundationWalletEvent.InputTuple,
       SetFoundationWalletEvent.OutputTuple,
@@ -1790,6 +2020,17 @@ export interface DQProject extends BaseContract {
       StakeSingleEvent.InputTuple,
       StakeSingleEvent.OutputTuple,
       StakeSingleEvent.OutputObject
+    >;
+
+    "UnrestrictAddress(address,address)": TypedContractEvent<
+      UnrestrictAddressEvent.InputTuple,
+      UnrestrictAddressEvent.OutputTuple,
+      UnrestrictAddressEvent.OutputObject
+    >;
+    UnrestrictAddress: TypedContractEvent<
+      UnrestrictAddressEvent.InputTuple,
+      UnrestrictAddressEvent.OutputTuple,
+      UnrestrictAddressEvent.OutputObject
     >;
 
     "UnstakeSingle(address,uint256,uint256)": TypedContractEvent<
