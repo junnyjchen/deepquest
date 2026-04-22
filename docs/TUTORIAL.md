@@ -68,7 +68,7 @@ DQProject (主合约)
 | 合伙人 | 6% (白名单平均分配) |
 | 团队奖励 | 14% |
 
-### 5. 合伙人白名单机制 (新增)
+### 5. 合伙人白名单机制
 
 > **合伙人收益由固定白名单地址平均分配**
 
@@ -93,7 +93,7 @@ function removePartnerWhiteList(address _partner) external onlyOwner
 - 总投资 ≥ 5000 BEP20
 - 直推业绩 ≥ 30000 BEP20 (前20席) / 50000 BEP20 (后30席)
 
-### 6. 地址限制功能 (新增)
+### 6. 地址限制功能
 
 > **可以限制某个地址领取奖励，被限制的地址无法领取任何奖励**
 
@@ -160,6 +160,38 @@ function unrestrictAddress(address _user) external onlyOwner
 
 ## 关键函数
 
+### 用户操作
+```solidity
+// 注册
+function register(address _referrer) external
+
+// 购买节点
+function buyNode(uint256 _type) external
+// _type: 1=A卡牌, 2=B卡牌, 3=C卡牌
+
+// 入金
+function deposit(uint256 _amount) external
+
+// 出金
+function withdrawDQ(uint256 _dqAmount, uint256 _minOut) external
+```
+
+### 领取分红
+```solidity
+function claimLP() external          // LP 质押分红
+function claimNft() external         // NFT 分红 (需达标)
+function claimDTeam() external       // D 级团队分红
+function claimPartner() external      // 合伙人分红
+```
+
+### 单币质押
+```solidity
+function stakeSingle(uint256 _amount, uint _periodIndex) external
+// _periodIndex: 0=30天, 1=90天, 2=180天, 3=360天
+
+function unstakeSingle(uint256 _periodIndex) external
+```
+
 ### 合伙人白名单管理
 ```solidity
 function addPartnerWhiteList(address _partner) external onlyOwner
@@ -185,6 +217,17 @@ function checkNodeQualified(address _user) external view returns (
     uint256 requiredLines
 )
 function canDeposit(address _user) external view returns (bool)
+function getUser(address _user) external view returns (...)
+function getCurrentMaxInvest() external view returns (uint256)
+```
+
+### 管理员函数
+```solidity
+function blockMining() external              // 每日爆块
+function setPrice(uint256 _newPrice) external onlyOwner
+function setFoundationWallet(address _wallet) external onlyOwner
+function adminWithdrawBEP20(uint256 amount) external onlyOwner
+function adminWithdrawBNB() external onlyOwner
 ```
 
 ## 事件列表
@@ -195,9 +238,17 @@ function canDeposit(address _user) external view returns (bool)
 | BuyNode | 购买节点 |
 | Deposit | 入金 |
 | Withdraw | 出金 |
-| LineQualified | 节点达标线数更新 |
+| StakeSingle | 单币质押 |
+| UnstakeSingle | 解除质押 |
+| BlockMining | 爆块 |
+| ClaimLP | 领取 LP 分红 |
+| ClaimSingle | 领取单币质押收益 |
 | ClaimNft | 领取 NFT 分红 |
+| ClaimDTeam | 领取团队分红 |
 | ClaimPartner | 领取合伙人分红 |
+| LevelUp | 级别晋升 |
+| DLevelUp | D 级晋升 |
+| LineQualified | 节点达标线数更新 |
 | AddPartnerWhiteList | 添加合伙人白名单 |
 | RemovePartnerWhiteList | 移除合伙人白名单 |
 | RestrictAddress | 限制地址领取奖励 |
@@ -208,6 +259,7 @@ function canDeposit(address _user) external view returns (bool)
 - **Solidity 版本**：0.8.17
 - **编译成功**：是
 - **EVM 版本**：London
+- **合约文件行数**：1500+ 行
 
 ## 合约更新日志
 
@@ -233,6 +285,31 @@ function canDeposit(address _user) external view returns (bool)
 
 ### v3.0
 - ✅ 初始版本
+
+---
+
+## 合约代码注释说明
+
+本合约代码已添加完整的中文注释，包括：
+
+1. **文件头注释**：合约概述、核心机制、架构图
+2. **结构体注释**：每个数据结构的字段说明
+3. **事件注释**：每个事件的参数说明
+4. **函数注释**：每个函数的功能、参数、返回值说明
+5. **修饰符注释**：检查条件的说明
+6. **内部函数注释**：业务逻辑的详细说明
+
+### 主要注释块
+
+| 注释块位置 | 说明 |
+|-----------|------|
+| 文件头部 | 合约版本、核心机制、架构图 |
+| 接口定义 | IBEP20 接口说明 |
+| DQToken | 代币信息、销毁机制 |
+| DQCard | 卡牌类型、价格、铸造上限、达标线数 |
+| User 结构体 | 所有用户字段说明 |
+| 修饰符 | 权限检查条件 |
+| 主要函数 | 功能、参数、返回值、业务逻辑 |
 
 ---
 
