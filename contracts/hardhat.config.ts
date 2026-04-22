@@ -22,6 +22,7 @@ const config: HardhatUserConfig = {
   },
   paths: {
     sources: "./src",
+    tests: "./test",
     cache: "./cache",
     artifacts: "./artifacts"
   },
@@ -52,12 +53,6 @@ const config: HardhatUserConfig = {
     currency: "USD",
     token: "BNB",
     coinmarketcap: process.env.COINMARKETCAP_API_KEY
-  },
-  paths: {
-    sources: "./",
-    tests: "./test",
-    cache: "./cache",
-    artifacts: "./artifacts"
   },
   typechain: {
     outDir: "./typechain",
