@@ -47,6 +47,7 @@ export interface DQProjectInterface extends Interface {
       | "burnRate"
       | "buyNode"
       | "buybackAndBurn"
+      | "canDeposit"
       | "claimDTeam"
       | "claimLP"
       | "claimNft"
@@ -202,6 +203,10 @@ export interface DQProjectInterface extends Interface {
   encodeFunctionData(
     functionFragment: "buybackAndBurn",
     values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "canDeposit",
+    values: [AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "claimDTeam",
@@ -455,6 +460,7 @@ export interface DQProjectInterface extends Interface {
     functionFragment: "buybackAndBurn",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "canDeposit", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "claimDTeam", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "claimLP", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "claimNft", data: BytesLike): Result;
@@ -970,6 +976,8 @@ export interface DQProject extends BaseContract {
 
   buybackAndBurn: TypedContractMethod<[], [void], "nonpayable">;
 
+  canDeposit: TypedContractMethod<[_user: AddressLike], [boolean], "view">;
+
   claimDTeam: TypedContractMethod<[], [void], "nonpayable">;
 
   claimLP: TypedContractMethod<[], [void], "nonpayable">;
@@ -1025,7 +1033,17 @@ export interface DQProject extends BaseContract {
   getUser: TypedContractMethod<
     [_user: AddressLike],
     [
-      [string, bigint, bigint, bigint, bigint, bigint, bigint, bigint] & {
+      [
+        string,
+        bigint,
+        bigint,
+        bigint,
+        bigint,
+        bigint,
+        bigint,
+        bigint,
+        boolean
+      ] & {
         referrer: string;
         directCount: bigint;
         level: bigint;
@@ -1034,6 +1052,7 @@ export interface DQProject extends BaseContract {
         teamInvest: bigint;
         energy: bigint;
         directSales: bigint;
+        hasNode: boolean;
       }
     ],
     "view"
@@ -1217,6 +1236,9 @@ export interface DQProject extends BaseContract {
     nameOrSignature: "buybackAndBurn"
   ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
+    nameOrSignature: "canDeposit"
+  ): TypedContractMethod<[_user: AddressLike], [boolean], "view">;
+  getFunction(
     nameOrSignature: "claimDTeam"
   ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
@@ -1295,7 +1317,17 @@ export interface DQProject extends BaseContract {
   ): TypedContractMethod<
     [_user: AddressLike],
     [
-      [string, bigint, bigint, bigint, bigint, bigint, bigint, bigint] & {
+      [
+        string,
+        bigint,
+        bigint,
+        bigint,
+        bigint,
+        bigint,
+        bigint,
+        bigint,
+        boolean
+      ] & {
         referrer: string;
         directCount: bigint;
         level: bigint;
@@ -1304,6 +1336,7 @@ export interface DQProject extends BaseContract {
         teamInvest: bigint;
         energy: bigint;
         directSales: bigint;
+        hasNode: boolean;
       }
     ],
     "view"

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.17;
 
 /**
- * @title DQProject Smart Contract v3.0
+ * @title DQProject Smart Contract v3.1
  * @notice DeepQuest DeFi Platform - BSC Network
  * @dev 深度求索机制
  * 
@@ -10,7 +10,9 @@ pragma solidity ^0.8.17;
  * 1. SOL进SOL出（1-200 SOL）
  * 2. 入金分成：50%动态 + 50% LP质押
  * 3. LP质押分币：60% LP + 15%节点 + 5%基金会 + 6%合伙人 + 14%团队
- * 4. 节点必须先购买，才能参与入金
+ * 4. 入金前置条件：
+ *    - 必须先购买节点 NFT
+ *    - 推荐人必须是已购买节点的会员（入金账号在节点下面）
  * 5. 入金资金分配：基金会优先，节点其次
  * 6. DQ只能卖不能买，卖出即销毁
  * 7. 单币质押分红
@@ -204,6 +206,7 @@ contract DQProject is Ownable, ReentrancyGuard {
         uint256 teamInvest;     // 团队业绩
         uint256 energy;         // 能量值 (入金额的6倍)
         uint256 directSales;     // 直推业绩
+        bool hasNode;           // 是否已购买节点
         EnumerableSet.AddressSet children;
     }
     
@@ -283,11 +286,22 @@ contract DQProject is Ownable, ReentrancyGuard {
         startTime = block.timestamp;
         lastBlockTime = block.timestamp;
         _users[owner()].referrer = address(0);
+        _users[owner()].hasNode = true;  // 基金会默认有节点权限
         allUsers.push(owner());
     }
 
-    modifier onlyWithNode() {
-        require(dqCard.balanceOf(msg.sender) > 0, "must buy node first");
+    /**
+     * @notice 检查用户是否可以入金
+     * @dev 需要满足：
+     *      1. 用户已购买节点 NFT
+     *      2. 推荐人已购买节点 NFT（入金账号在节点下面）
+     */
+    modifier onlyCanDeposit() {
+        require(_users[msg.sender].hasNode, "must buy node first");
+        address referrer = _users[msg.sender].referrer;
+        if (referrer != address(0)) {
+            require(_users[referrer].hasNode, "referrer must have node");
+        }
         _;
     }
     
@@ -297,10 +311,18 @@ contract DQProject is Ownable, ReentrancyGuard {
     }
 
     // ============ 注册 ============
+    /**
+     * @notice 注册成为会员
+     * @dev 推荐人必须是已购买节点的会员
+     */
     function register(address _referrer) external {
         require(_referrer != address(0) && _referrer != msg.sender, "invalid referrer");
         require(_users[msg.sender].referrer == address(0), "already registered");
+        
+        // 推荐人必须已注册或为 owner
         require(_users[_referrer].referrer != address(0) || _referrer == owner(), "referrer not registered");
+        // 推荐人必须有节点
+        require(_users[_referrer].hasNode, "referrer must have node first");
 
         _users[msg.sender].referrer = _referrer;
         _users[_referrer].directCount++;
@@ -329,7 +351,8 @@ contract DQProject is Ownable, ReentrancyGuard {
     /**
      * @notice 购买节点 NFT 卡牌
      * @dev A=500, B=1500, C=5000 BEP20
-     *      购买后自动获得对应级别
+     *      购买后自动获得对应级别和入金权限
+     *      推荐人必须先有节点（如果推荐人存在）
      */
     function buyNode(uint256 _type) external nonReentrant {
         require(_type >= 1 && _type <= 3, "invalid type");
@@ -342,6 +365,9 @@ contract DQProject is Ownable, ReentrancyGuard {
         
         // 铸造 NFT
         dqCard.mintByOwner(msg.sender, _type);
+        
+        // 标记用户已购买节点
+        _users[msg.sender].hasNode = true;
         
         // 资金分配：全部进入 LP 质押池
         lpPool += price;
@@ -360,7 +386,7 @@ contract DQProject is Ownable, ReentrancyGuard {
             emit LevelUp(msg.sender, 3);
         }
         
-        // 如果用户未注册，推荐人为合约创建者
+        // 如果用户未注册，推荐人为 owner
         if (user.referrer == address(0) && msg.sender != owner()) {
             _users[msg.sender].referrer = owner();
             _users[owner()].directCount++;
@@ -379,9 +405,9 @@ contract DQProject is Ownable, ReentrancyGuard {
      * 1. 50% 进入动态分币池
      * 2. 50% 进入 LP 质押池
      * 3. 铸造 DQ 给用户
-     * 4. 必须先购买节点才能入金
+     * 4. 前置条件：用户必须已购买节点，推荐人必须已购买节点
      */
-    function deposit(uint256 _amount) external nonReentrant onlyWithNode onlyRegistered {
+    function deposit(uint256 _amount) external nonReentrant onlyCanDeposit {
         require(_amount >= INVEST_MIN, "below minimum");
         require(_amount <= getCurrentMaxInvest(), "exceed max");
         require(IBEP20(BEP20_TOKEN).balanceOf(msg.sender) >= _amount, "insufficient balance");
@@ -892,7 +918,8 @@ contract DQProject is Ownable, ReentrancyGuard {
         uint256 totalInvest,
         uint256 teamInvest,
         uint256 energy,
-        uint256 directSales
+        uint256 directSales,
+        bool hasNode
     ) {
         User storage u = _users[_user];
         return (
@@ -903,7 +930,8 @@ contract DQProject is Ownable, ReentrancyGuard {
             u.totalInvest,
             u.teamInvest,
             u.energy,
-            u.directSales
+            u.directSales,
+            u.hasNode
         );
     }
     
@@ -925,6 +953,10 @@ contract DQProject is Ownable, ReentrancyGuard {
     
     function getSingleStake(address _user, uint _periodIndex) external view returns (uint256 amount) {
         return singleStakes[_user][stakePeriods[_periodIndex]];
+    }
+    
+    function canDeposit(address _user) external view returns (bool) {
+        return _users[_user].hasNode && _users[_users[_user].referrer].hasNode;
     }
     
     receive() external payable {}

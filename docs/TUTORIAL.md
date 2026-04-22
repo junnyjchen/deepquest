@@ -31,16 +31,31 @@ DQProject (主合约)
 - 50% 进入 **动态分币池**
 - 50% 进入 **LP 质押池**
 
-### 2. 资金分配优先级
+### 2. 入金前置条件 (重要)
 
-> **重要变更**：
-> 1. **入金资金分配**：基金会账号优先，节点其次
-> 2. **入金前置条件**：用户必须先购买节点 NFT 才能进行入金
+> **两项关键变更**：
+> 1. **基金会账号优先**：基金会钱包优先分配
+> 2. **节点其次**：其他入金账号按节点顺序分配
+> 3. **入金账号必须在节点下面**：用户的推荐人必须已购买节点
 
-**入金时**：
-1. 验证用户已持有节点 NFT
-2. 50% 动态分币 → 按直推/见点/管理奖分配
-3. 50% LP 质押 → 加入 LP 池
+**具体逻辑**：
+```
+用户要入金，必须同时满足：
+1. 用户自己已购买节点 NFT
+2. 用户的推荐人已购买节点 NFT
+```
+
+**注册规则**：
+- 新用户注册时，推荐人必须已购买节点
+- 推荐人必须是已注册用户
+
+**入金流程**：
+```
+1. 购买节点 NFT → 成为"节点会员"
+2. 寻找已购买节点的上线推荐
+3. 完成注册（推荐人也必须有节点）
+4. 入金（双方都必须是节点会员）
+```
 
 ### 3. LP 质押分币机制
 
@@ -152,16 +167,24 @@ DQProject (主合约)
 
 ## 关键函数
 
-### 节点购买
+### 注册 (必须通过有节点的上线)
+```solidity
+function register(address _referrer) external
+// _referrer: 推荐人地址（推荐人必须已购买节点）
+```
+
+### 购买节点
 ```solidity
 function buyNode(uint256 _type) external
 // _type: 1=A卡牌, 2=B卡牌, 3=C卡牌
+// 购买后 hasNode = true
 ```
 
-### 入金 (需要先购买节点)
+### 入金 (需要自己+推荐人都已购买节点)
 ```solidity
-function deposit(uint256 _amount) external onlyWithNode onlyRegistered
+function deposit(uint256 _amount) external
 // _amount: BEP20 代币数量 (最小 1)
+// 前置条件：msg.sender.hasNode = true && referrer.hasNode = true
 ```
 
 ### 出金 (DQ 换 BEP20)
@@ -190,6 +213,15 @@ function claimLP() external          // LP 质押分红
 function claimNft() external         // NFT 分红
 function claimDTeam() external       // D 级团队分红
 function claimPartner() external     // 合伙人分红
+```
+
+### 查询函数
+```solidity
+function getUser(address _user) external view returns (...)
+// 返回: referrer, directCount, level, dLevel, totalInvest, teamInvest, energy, directSales, hasNode
+
+function canDeposit(address _user) external view returns (bool)
+// 检查用户是否可以入金
 ```
 
 ### 管理员函数
@@ -224,22 +256,18 @@ function adminWithdrawBEP20(uint256 amount) external onlyOwner
 - **EVM 版本**：London
 - **优化器**：启用，200 次运行
 
-## 部署建议
+## 合约更新日志
 
-1. **测试网部署**：先在 BSC Testnet 部署并测试所有功能
-2. **主网部署**：确认测试无误后部署到 BSC Mainnet
-3. **验证合约**：部署后通过 BSCScan 验证合约源码
-4. **设置基金会钱包**：部署后立即设置 foundationWallet
-5. **初始配置**：
-   - 设置 DQ/BNB 价格
-   - 开启入金功能
+### v3.1 (当前版本)
+- ✅ 入金前置条件：用户必须先购买节点 NFT
+- ✅ 入金账号必须在节点下面：推荐人必须已购买节点
 
-## 安全建议
-
-1. **合约审计**：建议在主网部署前进行第三方安全审计
-2. **权限控制**：owner 地址应使用硬件钱包或多重签名
-3. **紧急暂停**：建议实现紧急暂停功能
-4. **升级机制**：考虑使用可升级代理模式
+### v3.0
+- ✅ 初始版本
+- ✅ 基础入金/出金
+- ✅ LP 质押
+- ✅ NFT 节点系统
+- ✅ 动态奖金
 
 ---
 
