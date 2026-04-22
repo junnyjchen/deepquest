@@ -2,7 +2,7 @@
 pragma solidity ^0.8.17;
 
 /**
- * @title DQProject Smart Contract v3.1
+ * @title DQProject Smart Contract v3.2
  * @notice DeepQuest DeFi Platform - BSC Network
  * @dev 深度求索机制
  * 
@@ -10,12 +10,16 @@ pragma solidity ^0.8.17;
  * 1. SOL进SOL出（1-200 SOL）
  * 2. 入金分成：50%动态 + 50% LP质押
  * 3. LP质押分币：60% LP + 15%节点 + 5%基金会 + 6%合伙人 + 14%团队
- * 4. 入金前置条件：
- *    - 必须先购买节点 NFT
- *    - 推荐人必须是已购买节点的会员（入金账号在节点下面）
- * 5. 入金资金分配：基金会优先，节点其次
+ * 4. 节点达标条件：
+ *    - A卡牌：需要5条线达标
+ *    - B卡牌：需要10条线达标
+ *    - C卡牌：需要20条线达标
+ *    - 不达标只有资格，奖励不能获取
+ * 5. 入金规则：
+ *    - 注册：推荐人必须是节点
+ *    - 首次入金：用户必须是节点
+ *    - 后续入金：只要在节点下面有关系链即可
  * 6. DQ只能卖不能买，卖出即销毁
- * 7. 单币质押分红
  * 
  * ==================== 代币信息 ====================
  * - 代币名称: DQ (DeepQuest Token)
@@ -45,7 +49,6 @@ contract DQToken is ERC20 {
     address public constant BLACKHOLE = address(0x000000000000000000000000000000000000dEaD);
     
     constructor() ERC20("DQ Token", "DQ") {
-        // 铸造 1000亿 代币，全部打入底池锁死
         _mint(address(this), 100_000_000_000 * 10**18);
     }
     
@@ -53,7 +56,6 @@ contract DQToken is ERC20 {
         _burn(msg.sender, amount);
     }
     
-    // 燃烧到黑洞地址
     function burnToBlackhole(uint256 amount) external {
         _transfer(msg.sender, BLACKHOLE, amount);
     }
@@ -61,40 +63,36 @@ contract DQToken is ERC20 {
     function mint(address to, uint256 amount) external {
         _mint(to, amount);
     }
-    
-    // 合约销毁自己的代币
-    function burnFromContract(uint256 amount) external {
-        require(msg.sender == address(this), "only contract");
-        _burn(address(this), amount);
-    }
 }
 
 // ============ NFT 卡牌 ============
 contract DQCard is ERC721Enumerable, Ownable {
     using EnumerableSet for EnumerableSet.UintSet;
     
-    uint256 public constant CARD_A = 1;  // S1级别
-    uint256 public constant CARD_B = 2;  // S2级别
-    uint256 public constant CARD_C = 3;  // S3级别
+    uint256 public constant CARD_A = 1;
+    uint256 public constant CARD_B = 2;
+    uint256 public constant CARD_C = 3;
     
     uint256 public totalA;
     uint256 public totalB;
     uint256 public totalC;
     
-    // 卡牌价格 (BEP20 代币)
-    uint256 public constant PRICE_A = 500 ether;   // 500 BEP20
-    uint256 public constant PRICE_B = 1500 ether;  // 1500 BEP20
-    uint256 public constant PRICE_C = 5000 ether;  // 5000 BEP20
+    uint256 public constant PRICE_A = 500 ether;
+    uint256 public constant PRICE_B = 1500 ether;
+    uint256 public constant PRICE_C = 5000 ether;
     
-    // 卡牌铸造上限
     uint256 public constant MAX_A = 1000;
     uint256 public constant MAX_B = 500;
     uint256 public constant MAX_C = 100;
     
-    // 分红权重
-    uint256 public constant WEIGHT_A = 4;  // 4%
-    uint256 public constant WEIGHT_B = 5;  // 5%
-    uint256 public constant WEIGHT_C = 6;   // 6%
+    uint256 public constant WEIGHT_A = 4;
+    uint256 public constant WEIGHT_B = 5;
+    uint256 public constant WEIGHT_C = 6;
+    
+    // 达标所需线数
+    uint256 public constant LINE_A = 5;   // A卡牌需要5条线
+    uint256 public constant LINE_B = 10;   // B卡牌需要10条线
+    uint256 public constant LINE_C = 20;  // C卡牌需要20条线
     
     mapping(uint256 => uint256) public cardType;
     mapping(address => EnumerableSet.UintSet) private _holderTokens;
@@ -154,6 +152,12 @@ contract DQCard is ERC721Enumerable, Ownable {
         if (_type == CARD_B) return WEIGHT_B;
         return WEIGHT_C;
     }
+    
+    function getRequiredLines(uint256 _type) public pure returns (uint256) {
+        if (_type == CARD_A) return LINE_A;
+        if (_type == CARD_B) return LINE_B;
+        return LINE_C;
+    }
 }
 
 // ============ 主合约 ============
@@ -164,21 +168,16 @@ contract DQProject is Ownable, ReentrancyGuard {
     DQToken public dqToken;
     DQCard public dqCard;
     
-    // ============ 合约地址 ============
     address public constant BEP20_TOKEN = 0x570A5D26f7765Ecb712C0924E4De545B89fD43dF;
     address public constant BLACKHOLE = address(0x000000000000000000000000000000000000dEaD);
-    address public foundationWallet;  // 基金会钱包
+    address public foundationWallet;
     
-    // ============ 价格与配置 ============
-    uint256 public dqPrice = 1 ether;  // 1 DQ = 1 BEP20
+    uint256 public dqPrice = 1 ether;
+    uint256 public dailyReleaseRate = 13;
+    uint256 public burnRate = 80;
+    uint256 public constant MIN_BURN_RATE = 30;
+    uint256 public constant BURN_DECREMENT = 5;
     
-    // 爆块配置
-    uint256 public dailyReleaseRate = 13;  // 每天1.3%
-    uint256 public burnRate = 80;          // 初始销毁率80%
-    uint256 public constant MIN_BURN_RATE = 30;  // 最低销毁率30%
-    uint256 public constant BURN_DECREMENT = 5;  // 每天递减0.5%
-    
-    // 入金上限配置
     uint256 public constant INVEST_MIN = 1 ether;
     uint256 public INVEST_MAX_START = 10 ether;
     uint256 public INVEST_MAX_STEP = 10 ether;
@@ -187,12 +186,10 @@ contract DQProject is Ownable, ReentrancyGuard {
     uint256 public startTime;
     uint256 public lastBlockTime;
     
-    // LP移除手续费
-    uint256 public constant LP_FEE_60DAYS = 20;    // 60天内20%
-    uint256 public constant LP_FEE_180DAYS = 10;   // 61-180天10%
-    uint256 public constant LP_FEE_AFTER = 0;       // 181天后0%
+    uint256 public constant LP_FEE_60DAYS = 20;
+    uint256 public constant LP_FEE_180DAYS = 10;
+    uint256 public constant LP_FEE_AFTER = 0;
     
-    // ============ 全局配置 ============
     uint256[7] public levelRates = [0, 5, 10, 15, 20, 25, 30];
     uint256[8] public dThresholds = [30, 120, 360, 1000, 4000, 10000, 15000, 30000];
 
@@ -200,21 +197,16 @@ contract DQProject is Ownable, ReentrancyGuard {
     struct User {
         address referrer;
         uint256 directCount;
-        uint8 level;           // S1-S6
-        uint8 dLevel;          // D1-D8
-        uint256 totalInvest;    // 总投资额
-        uint256 teamInvest;     // 团队业绩
-        uint256 energy;         // 能量值 (入金额的6倍)
-        uint256 directSales;     // 直推业绩
-        bool hasNode;           // 是否已购买节点
+        uint8 level;
+        uint8 dLevel;
+        uint256 totalInvest;
+        uint256 teamInvest;
+        uint256 energy;
+        uint256 directSales;
+        bool hasNode;
+        bool hasDeposited;          // 是否已首次入金
+        uint256 activeLineCount;     // 达标线数
         EnumerableSet.AddressSet children;
-    }
-    
-    // LP质押记录
-    struct LPStake {
-        uint256 amount;         // 质押数量
-        uint256 startTime;      // 质押开始时间
-        uint256 rewardDebt;     // 待领取分红
     }
 
     mapping(address => User) internal _users;
@@ -229,43 +221,51 @@ contract DQProject is Ownable, ReentrancyGuard {
     // 单币质押
     mapping(address => mapping(uint => uint256)) public singleStakes;
     uint256[] public stakePeriods = [30, 90, 180, 360];
-    uint256[] public stakeRates = [5, 10, 15, 20];  // 分6%手续费的5%/10%/15%/20%
+    uint256[] public stakeRates = [5, 10, 15, 20];
     mapping(uint => uint256) public stakeFeeAccPerShare;
     mapping(uint => uint256) public totalSingleStaked;
 
-    // ============ 合伙人相关 ============
+    // 合伙人
     address[] public partnerList;
     mapping(address => bool) public isPartner;
     uint256 public partnerCount;
     uint256 public partnerAccPerShare;
     mapping(address => uint256) public partnerDebt;
 
-    // ============ 资金池 ============
-    uint256 public dynamicPool;      // 动态奖金池 (50%入金)
-    uint256 public insurancePool;   // 保险池 (7%)
-    uint256 public operationPool;   // 运营池 (8%)
-    uint256 public feePool;         // 手续费池 (6%卖出手续费)
+    // 资金池
+    uint256 public dynamicPool;
+    uint256 public insurancePool;
+    uint256 public operationPool;
+    uint256 public feePool;
     
-    // ============ NFT分红累积 ============
+    // NFT分红
     uint256[3] public nftAccPerShare;
     mapping(address => uint256[3]) public nftRewardDebt;
     
-    // ============ 团队奖励累积 ============
+    // 团队奖励
     uint256[8] public dTotalUsers;
     uint256[8] public dAccPerShare;
     mapping(address => uint256) public dRewardDebt;
     
-    // ============ 爆块累积 ============
+    // 爆块
     uint256 public blockAccPerShare;
     mapping(address => uint256) public blockRewardDebt;
+    
+    // 达标线数累积
+    mapping(address => uint256) public lineCountAcc;
+
+    // ============ 结构体 ============
+    struct LPStake {
+        uint256 amount;
+        uint256 startTime;
+        uint256 rewardDebt;
+    }
 
     // ============ 事件 ============
     event Register(address indexed user, address indexed referrer);
     event BuyNode(address indexed user, uint256 cardType, uint256 amount);
-    event Deposit(address indexed user, uint256 amount, uint256 dqAmount);
+    event Deposit(address indexed user, uint256 amount, uint256 dqAmount, bool isFirst);
     event Withdraw(address indexed user, uint256 amount);
-    event StakeLP(address indexed user, uint256 amount);
-    event UnstakeLP(address indexed user, uint256 amount, uint256 fee);
     event StakeSingle(address indexed user, uint256 amount, uint256 period);
     event UnstakeSingle(address indexed user, uint256 amount, uint256 period);
     event BlockMining(uint256 release, uint256 burn, uint256 timestamp);
@@ -276,6 +276,7 @@ contract DQProject is Ownable, ReentrancyGuard {
     event ClaimPartner(address indexed user, uint256 amount);
     event LevelUp(address indexed user, uint8 newLevel);
     event DLevelUp(address indexed user, uint8 newDLevel);
+    event LineQualified(address indexed user, uint256 lineCount);
     event PriceUpdated(uint256 newPrice);
     event SetFoundationWallet(address indexed wallet);
 
@@ -286,42 +287,50 @@ contract DQProject is Ownable, ReentrancyGuard {
         startTime = block.timestamp;
         lastBlockTime = block.timestamp;
         _users[owner()].referrer = address(0);
-        _users[owner()].hasNode = true;  // 基金会默认有节点权限
+        _users[owner()].hasNode = true;
+        _users[owner()].activeLineCount = type(uint256).max; // 基金会无限线
         allUsers.push(owner());
     }
 
     /**
      * @notice 检查用户是否可以入金
-     * @dev 需要满足：
-     *      1. 用户已购买节点 NFT
-     *      2. 推荐人已购买节点 NFT（入金账号在节点下面）
+     * @dev 首次入金需要是节点，后续入金只需要在节点下面有关系链
      */
     modifier onlyCanDeposit() {
-        require(_users[msg.sender].hasNode, "must buy node first");
         address referrer = _users[msg.sender].referrer;
-        if (referrer != address(0)) {
-            require(_users[referrer].hasNode, "referrer must have node");
+        require(referrer != address(0), "not registered");
+        
+        // 检查推荐链上是否有节点
+        require(_hasNodeInUpline(msg.sender), "no node in upline");
+        
+        // 如果是首次入金，需要自己是节点
+        if (!_users[msg.sender].hasDeposited) {
+            require(_users[msg.sender].hasNode, "first deposit requires node");
         }
         _;
     }
     
-    modifier onlyRegistered() {
-        require(_users[msg.sender].referrer != address(0) || msg.sender == owner(), "not registered");
-        _;
+    /**
+     * @notice 检查用户的上级链上是否有节点
+     */
+    function _hasNodeInUpline(address _user) internal view returns (bool) {
+        address current = _users[_user].referrer;
+        uint256 depth = 0;
+        while (current != address(0) && depth < 100) {
+            if (_users[current].hasNode) {
+                return true;
+            }
+            current = _users[current].referrer;
+            depth++;
+        }
+        return false;
     }
 
     // ============ 注册 ============
-    /**
-     * @notice 注册成为会员
-     * @dev 推荐人必须是已购买节点的会员
-     */
     function register(address _referrer) external {
         require(_referrer != address(0) && _referrer != msg.sender, "invalid referrer");
         require(_users[msg.sender].referrer == address(0), "already registered");
-        
-        // 推荐人必须已注册或为 owner
-        require(_users[_referrer].referrer != address(0) || _referrer == owner(), "referrer not registered");
-        // 推荐人必须有节点
+        // 推荐人必须是节点
         require(_users[_referrer].hasNode, "referrer must have node first");
 
         _users[msg.sender].referrer = _referrer;
@@ -332,15 +341,13 @@ contract DQProject is Ownable, ReentrancyGuard {
         emit Register(msg.sender, _referrer);
     }
 
-    // ============ 获取当前最大可投金额 ============
     function getCurrentMaxInvest() public view returns (uint256) {
         uint256 elapsed = block.timestamp - startTime;
         uint256 phase = elapsed / PHASE_DURATION;
         
-        // 前期控进
-        if (phase < 2) return INVEST_MIN; // 1-10天 1 SOL
-        if (phase < 4) return 15 ether;     // 11-20天 1-5 SOL
-        if (phase < 6) return 20 ether;     // 21-30天 1-5 SOL
+        if (phase < 2) return INVEST_MIN;
+        if (phase < 4) return 15 ether;
+        if (phase < 6) return 20 ether;
         
         uint256 max = INVEST_MAX_START + (phase - 4) * INVEST_MAX_STEP;
         if (max > INVEST_MAX_FINAL) max = INVEST_MAX_FINAL;
@@ -350,9 +357,7 @@ contract DQProject is Ownable, ReentrancyGuard {
     // ============ 购买节点 NFT ============
     /**
      * @notice 购买节点 NFT 卡牌
-     * @dev A=500, B=1500, C=5000 BEP20
-     *      购买后自动获得对应级别和入金权限
-     *      推荐人必须先有节点（如果推荐人存在）
+     * @dev 购买后成为节点会员，有资格获得节点奖励
      */
     function buyNode(uint256 _type) external nonReentrant {
         require(_type >= 1 && _type <= 3, "invalid type");
@@ -360,20 +365,15 @@ contract DQProject is Ownable, ReentrancyGuard {
         uint256 price = dqCard.getCardPrice(_type);
         require(IBEP20(BEP20_TOKEN).balanceOf(msg.sender) >= price, "insufficient balance");
         
-        // 从用户接收 BEP20
         IBEP20(BEP20_TOKEN).transferFrom(msg.sender, address(this), price);
         
-        // 铸造 NFT
         dqCard.mintByOwner(msg.sender, _type);
         
-        // 标记用户已购买节点
         _users[msg.sender].hasNode = true;
         
-        // 资金分配：全部进入 LP 质押池
         lpPool += price;
         totalLPShares += price;
         
-        // 自动升级用户级别
         User storage user = _users[msg.sender];
         if (_type == 1 && user.level < 1) {
             user.level = 1;
@@ -395,30 +395,52 @@ contract DQProject is Ownable, ReentrancyGuard {
             emit Register(msg.sender, owner());
         }
         
+        // 更新达标线数
+        _updateActiveLines(msg.sender);
+        
         emit BuyNode(msg.sender, _type, price);
     }
 
-    // ============ 入金 (SOL 进) ============
+    // ============ 更新达标线数 ============
+    /**
+     * @notice 更新用户的达标线数
+     * @dev 只有直接子节点中有入金用户的线才算达标
+     */
+    function _updateActiveLines(address _user) internal {
+        uint256 qualifiedLines = 0;
+        address[] memory children = _users[_user].children.values();
+        
+        for (uint i = 0; i < children.length; i++) {
+            if (_users[children[i]].totalInvest > 0) {
+                qualifiedLines++;
+            }
+        }
+        
+        if (qualifiedLines != _users[_user].activeLineCount) {
+            _users[_user].activeLineCount = qualifiedLines;
+            emit LineQualified(_user, qualifiedLines);
+        }
+    }
+
+    // ============ 入金 ============
     /**
      * @notice 入金：用户存入 BEP20，换取 DQ
      * @dev 
-     * 1. 50% 进入动态分币池
-     * 2. 50% 进入 LP 质押池
-     * 3. 铸造 DQ 给用户
-     * 4. 前置条件：用户必须已购买节点，推荐人必须已购买节点
+     * - 首次入金：用户必须是节点
+     * - 后续入金：只要在节点下面有关系链即可
+     * - 50% 动态池，50% LP池
      */
     function deposit(uint256 _amount) external nonReentrant onlyCanDeposit {
         require(_amount >= INVEST_MIN, "below minimum");
         require(_amount <= getCurrentMaxInvest(), "exceed max");
         require(IBEP20(BEP20_TOKEN).balanceOf(msg.sender) >= _amount, "insufficient balance");
         
-        // 接收 BEP20
+        bool isFirst = !_users[msg.sender].hasDeposited;
+        
         IBEP20(BEP20_TOKEN).transferFrom(msg.sender, address(this), _amount);
         
-        // 计算 DQ 数量
         uint256 dqAmount = _amount * 1 ether / dqPrice;
         
-        // 50% 动态池，50% LP池
         uint256 dynamicShare = _amount * 50 / 100;
         uint256 lpShare = _amount * 50 / 100;
         
@@ -426,45 +448,81 @@ contract DQProject is Ownable, ReentrancyGuard {
         lpPool += lpShare;
         totalLPShares += lpShare;
         
-        // 更新用户数据
         User storage user = _users[msg.sender];
         user.totalInvest += _amount;
-        user.energy += _amount * 6;  // 能量值6倍
+        user.energy += _amount * 6;
         user.directSales += _amount;
+        user.hasDeposited = true;
         
         // 更新团队业绩
         _updateTeamInvest(msg.sender, _amount);
         
-        // 分发动态奖金 (从动态池)
+        // 分发动态奖金
         _distributeDynamic(msg.sender, dynamicShare);
+        
+        // 更新所有上级的达标线数
+        _notifyUplineOfDeposit(msg.sender);
         
         // 检查级别晋升
         _checkLevelUp(msg.sender);
         _checkDLevel(msg.sender);
         _checkAndAddPartner(msg.sender);
         
-        // 铸造 DQ 给用户
         dqToken.mint(msg.sender, dqAmount);
         
-        emit Deposit(msg.sender, _amount, dqAmount);
+        emit Deposit(msg.sender, _amount, dqAmount, isFirst);
+    }
+
+    /**
+     * @notice 通知上级链上有新入金，更新达标线数
+     */
+    function _notifyUplineOfDeposit(address _user) internal {
+        address current = _users[_user].referrer;
+        uint256 depth = 0;
+        while (current != address(0) && depth < 100) {
+            if (_users[current].hasNode) {
+                _updateActiveLines(current);
+            }
+            current = _users[current].referrer;
+            depth++;
+        }
+    }
+
+    // ============ 检查节点是否达标 ============
+    /**
+     * @notice 检查用户的节点是否达标
+     * @dev A卡牌需要5条线，B卡牌需要10条线，C卡牌需要20条线
+     */
+    function checkNodeQualified(address _user) public view returns (bool qualified, uint256 currentLines, uint256 requiredLines) {
+        uint256 balance = dqCard.balanceOf(_user);
+        if (balance == 0) {
+            return (false, 0, 0);
+        }
+        
+        uint256 highestType = 0;
+        for (uint i = 0; i < balance; i++) {
+            uint256 tokenId = dqCard.tokenOfOwnerByIndex(_user, i);
+            uint256 ctype = dqCard.cardType(tokenId);
+            if (ctype > highestType) {
+                highestType = ctype;
+            }
+        }
+        
+        uint256 required = dqCard.getRequiredLines(highestType);
+        uint256 current = _users[_user].activeLineCount;
+        
+        return (current >= required, current, required);
     }
 
     // ============ 分发动态奖金 ============
     function _distributeDynamic(address _user, uint256 _amount) internal {
-        // 直推：30%
         uint256 directShare = _amount * 30 / 100;
-        // 见点：15%
         uint256 nodeShare = _amount * 15 / 100;
-        // 管理奖：30%
         uint256 mgmtShare = _amount * 30 / 100;
-        // DAO补贴：10%
         uint256 daoShare = _amount * 10 / 100;
-        // 保险池：7%
         uint256 insuranceShare = _amount * 7 / 100;
-        // 运营池：8%
         uint256 operationShare = _amount * 8 / 100;
         
-        // 直推奖励
         address referrer = _users[_user].referrer;
         if (referrer != address(0)) {
             if (_users[referrer].energy >= directShare) {
@@ -473,13 +531,8 @@ contract DQProject is Ownable, ReentrancyGuard {
             _users[referrer].directSales += directShare;
         }
         
-        // 见点奖 (15层)
         _distributeNode(_user, nodeShare);
-        
-        // 管理奖级差
         _distributeManagement(_user, mgmtShare);
-        
-        // DAO补贴
         _distributeDAO(_user, daoShare);
         
         insurancePool += insuranceShare;
@@ -492,10 +545,12 @@ contract DQProject is Ownable, ReentrancyGuard {
         uint256 layer = 1;
         
         while (current != address(0) && layer <= 15) {
+            // 检查节点是否达标
+            (bool qualified, , ) = checkNodeQualified(current);
             uint256 maxLayer = _users[current].directCount * 3;
             if (maxLayer > 15) maxLayer = 15;
             
-            if (layer <= maxLayer) {
+            if (layer <= maxLayer && qualified) {
                 if (_users[current].energy >= perLayer) {
                     _users[current].energy -= perLayer;
                 }
@@ -634,14 +689,7 @@ contract DQProject is Ownable, ReentrancyGuard {
         partnerCount++;
     }
 
-    // ============ DQ 卖出 (SOL 出) ============
-    /**
-     * @notice 卖出 DQ，换回 BEP20
-     * @dev 1. 扣除 6% 手续费
-     *      2. 50% 手续费分给质押者
-     *      3. 50% 手续费进入运营池
-     *      4. DQ 卖出即销毁
-     */
+    // ============ DQ 卖出 ============
     function withdrawDQ(uint256 _dqAmount, uint256 _minOut) external nonReentrant {
         require(_dqAmount > 0, "amount must > 0");
         require(dqToken.balanceOf(msg.sender) >= _dqAmount, "insufficient DQ");
@@ -653,41 +701,32 @@ contract DQProject is Ownable, ReentrancyGuard {
         require(userOut >= _minOut, "slippage too high");
         require(IERC20(BEP20_TOKEN).balanceOf(address(this)) >= userOut, "insufficient token");
         
-        // 燃烧 DQ
         dqToken.burn(_dqAmount);
         
-        // 手续费分配：50% 质押者，50% 运营
         uint256 stakeFee = fee * 50 / 100;
         uint256 operationFee = fee * 50 / 100;
         
-        // 分给质押者
         _distributeWithdrawFee(stakeFee);
         operationPool += operationFee;
         
-        // 转 BEP20 给用户
         IBEP20(BEP20_TOKEN).transfer(msg.sender, userOut);
         
         emit Withdraw(msg.sender, userOut);
     }
     
     function _distributeWithdrawFee(uint256 _feeAmount) internal {
-        // 按 LP 份额分配
         if (totalLPShares > 0) {
             lpAccPerShare += _feeAmount * 1e12 / totalLPShares;
         }
     }
 
     // ============ LP 质押分币 ============
-    /**
-     * @notice 领取 LP 质押分红
-     */
     function claimLP() external nonReentrant {
         uint256 pending = lpStakes[msg.sender].amount * lpAccPerShare / 1e12 - lpStakes[msg.sender].rewardDebt;
         require(pending > 0, "no pending");
         
         lpStakes[msg.sender].rewardDebt = lpStakes[msg.sender].amount * lpAccPerShare / 1e12;
         
-        // 以 DQ 形式发放
         uint256 dqAmount = pending * 1 ether / dqPrice;
         dqToken.mint(msg.sender, dqAmount);
         
@@ -697,54 +736,43 @@ contract DQProject is Ownable, ReentrancyGuard {
     // ============ 爆块机制 ============
     /**
      * @notice 每日爆块
-     * @dev 
-     * 1. 释放 1.3% 的 DQ
-     * 2. 80% 销毁至黑洞，每天递减 0.5%，最低 30%
-     * 3. 剩余 20% 分配：60% LP + 15% NFT + 5%基金会 + 6%合伙人 + 14%团队
+     * @dev 节点NFT分红需要达标才能领取
      */
     function blockMining() external nonReentrant {
         require(block.timestamp >= lastBlockTime + 1 days, "too early");
         
         uint256 totalSupply = dqToken.totalSupply();
-        uint256 release = totalSupply * dailyReleaseRate / 1000;  // 1.3%
-        uint256 burn = release * burnRate / 100;  // 80% 销毁
+        uint256 release = totalSupply * dailyReleaseRate / 1000;
+        uint256 burn = release * burnRate / 100;
         
-        // 销毁到黑洞
         dqToken.burnToBlackhole(burn);
         
-        // 递减销毁率
         if (burnRate > MIN_BURN_RATE) {
             burnRate -= BURN_DECREMENT;
             if (burnRate < MIN_BURN_RATE) burnRate = MIN_BURN_RATE;
         }
         
-        uint256 remaining = release - burn;  // 20%
+        uint256 remaining = release - burn;
         
-        // 分配
         uint256 lpShare = remaining * 60 / 100;
         uint256 nftShare = remaining * 15 / 100;
         uint256 foundationShare = remaining * 5 / 100;
         uint256 partnerShare = remaining * 6 / 100;
         uint256 teamShare = remaining * 14 / 100;
         
-        // LP 分红累积
         if (totalLPShares > 0) {
             blockAccPerShare += lpShare * 1e12 / totalLPShares;
         }
         
-        // NFT 分红累积
         _updateNftAcc(nftShare);
         
-        // 基金会
         uint256 foundationDQ = foundationShare * 1 ether / dqPrice;
         dqToken.mint(foundationWallet, foundationDQ);
         
-        // 合伙人
         if (partnerCount > 0) {
             partnerAccPerShare += partnerShare * 1e12 / partnerCount;
         }
         
-        // 团队 D1-D8
         _updateTeamAcc(teamShare);
         
         lastBlockTime = block.timestamp;
@@ -754,11 +782,15 @@ contract DQProject is Ownable, ReentrancyGuard {
     function _updateNftAcc(uint256 _nftShare) internal {
         uint256[3] memory totals = [dqCard.totalA(), dqCard.totalB(), dqCard.totalC()];
         uint256[3] memory weights = [dqCard.WEIGHT_A(), dqCard.WEIGHT_B(), dqCard.WEIGHT_C()];
+        uint256[3] memory lines = [dqCard.LINE_A(), dqCard.LINE_B(), dqCard.LINE_C()];
         uint256 totalWeight = 15;
         
         for (uint i = 0; i < 3; i++) {
             if (totals[i] > 0) {
                 uint256 shareForType = _nftShare * weights[i] / totalWeight;
+                // 计算达标的卡牌数量
+                uint256 qualifiedCount = 0;
+                // 简化处理：所有卡牌都参与分红，由领取时检查
                 nftAccPerShare[i] += shareForType * 1e12 / totals[i];
             }
         }
@@ -774,9 +806,16 @@ contract DQProject is Ownable, ReentrancyGuard {
     }
     
     // ============ 领取 NFT 分红 ============
+    /**
+     * @notice 领取 NFT 分红
+     * @dev 只有达标节点的NFT才能领取分红
+     */
     function claimNft() external nonReentrant {
         uint256 totalPending = 0;
         uint256 balance = dqCard.balanceOf(msg.sender);
+        
+        (bool qualified, , ) = checkNodeQualified(msg.sender);
+        require(qualified, "node not qualified");
         
         for (uint i = 0; i < balance; i++) {
             uint256 tokenId = dqCard.tokenOfOwnerByIndex(msg.sender, i);
@@ -825,10 +864,6 @@ contract DQProject is Ownable, ReentrancyGuard {
     }
 
     // ============ 单币质押 ============
-    /**
-     * @notice 单币质押 DQ
-     * @param _periodIndex: 0=30天, 1=90天, 2=180天, 3=360天
-     */
     function stakeSingle(uint256 _amount, uint _periodIndex) external nonReentrant {
         require(_periodIndex < stakePeriods.length, "invalid period");
         require(_amount > 0, "amount must > 0");
@@ -836,7 +871,6 @@ contract DQProject is Ownable, ReentrancyGuard {
         
         uint256 period = stakePeriods[_periodIndex];
         
-        // 转移 DQ
         dqToken.transferFrom(msg.sender, address(this), _amount);
         
         singleStakes[msg.sender][period] += _amount;
@@ -845,22 +879,17 @@ contract DQProject is Ownable, ReentrancyGuard {
         emit StakeSingle(msg.sender, _amount, period);
     }
     
-    /**
-     * @notice 解除单币质押
-     */
     function unstakeSingle(uint256 _periodIndex) external nonReentrant {
         require(_periodIndex < stakePeriods.length, "invalid period");
         uint256 period = stakePeriods[_periodIndex];
         uint256 amount = singleStakes[msg.sender][period];
         require(amount > 0, "no stake");
         
-        // 领取收益
         _claimSingleStake(msg.sender, period);
         
         singleStakes[msg.sender][period] = 0;
         totalSingleStaked[period] -= amount;
         
-        // 退还 DQ
         dqToken.transfer(msg.sender, amount);
         
         emit UnstakeSingle(msg.sender, amount, period);
@@ -871,19 +900,6 @@ contract DQProject is Ownable, ReentrancyGuard {
         if (pending > 0) {
             uint256 dqAmount = pending * 1 ether / dqPrice;
             dqToken.mint(_user, dqAmount);
-        }
-    }
-    
-    // ============ 保险池回购销毁 ============
-    /**
-     * @notice 使用保险池回购 DQ 并销毁
-     */
-    function buybackAndBurn() external onlyOwner {
-        uint256 insuranceBal = insurancePool;
-        if (insuranceBal > 0 && IERC20(BEP20_TOKEN).balanceOf(address(this)) >= insuranceBal) {
-            // 从市场购买 DQ 并销毁
-            // 具体实现需要看是否有交易对
-            insurancePool = 0;
         }
     }
 
@@ -919,7 +935,9 @@ contract DQProject is Ownable, ReentrancyGuard {
         uint256 teamInvest,
         uint256 energy,
         uint256 directSales,
-        bool hasNode
+        bool hasNode,
+        bool hasDeposited,
+        uint256 activeLineCount
     ) {
         User storage u = _users[_user];
         return (
@@ -931,7 +949,9 @@ contract DQProject is Ownable, ReentrancyGuard {
             u.teamInvest,
             u.energy,
             u.directSales,
-            u.hasNode
+            u.hasNode,
+            u.hasDeposited,
+            u.activeLineCount
         );
     }
     
@@ -955,8 +975,14 @@ contract DQProject is Ownable, ReentrancyGuard {
         return singleStakes[_user][stakePeriods[_periodIndex]];
     }
     
+    /**
+     * @notice 检查用户是否可以入金
+     */
     function canDeposit(address _user) external view returns (bool) {
-        return _users[_user].hasNode && _users[_users[_user].referrer].hasNode;
+        if (_users[_user].referrer == address(0)) return false;
+        if (!_hasNodeInUpline(_user)) return false;
+        if (!_users[_user].hasDeposited && !_users[_user].hasNode) return false;
+        return true;
     }
     
     receive() external payable {}

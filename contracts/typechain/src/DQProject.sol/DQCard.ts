@@ -29,6 +29,9 @@ export interface DQCardInterface extends Interface {
       | "CARD_A"
       | "CARD_B"
       | "CARD_C"
+      | "LINE_A"
+      | "LINE_B"
+      | "LINE_C"
       | "MAX_A"
       | "MAX_B"
       | "MAX_C"
@@ -44,6 +47,7 @@ export interface DQCardInterface extends Interface {
       | "getApproved"
       | "getCardPrice"
       | "getCardWeight"
+      | "getRequiredLines"
       | "isApprovedForAll"
       | "mintByOwner"
       | "name"
@@ -77,6 +81,9 @@ export interface DQCardInterface extends Interface {
   encodeFunctionData(functionFragment: "CARD_A", values?: undefined): string;
   encodeFunctionData(functionFragment: "CARD_B", values?: undefined): string;
   encodeFunctionData(functionFragment: "CARD_C", values?: undefined): string;
+  encodeFunctionData(functionFragment: "LINE_A", values?: undefined): string;
+  encodeFunctionData(functionFragment: "LINE_B", values?: undefined): string;
+  encodeFunctionData(functionFragment: "LINE_C", values?: undefined): string;
   encodeFunctionData(functionFragment: "MAX_A", values?: undefined): string;
   encodeFunctionData(functionFragment: "MAX_B", values?: undefined): string;
   encodeFunctionData(functionFragment: "MAX_C", values?: undefined): string;
@@ -108,6 +115,10 @@ export interface DQCardInterface extends Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "getCardWeight",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getRequiredLines",
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
@@ -176,6 +187,9 @@ export interface DQCardInterface extends Interface {
   decodeFunctionResult(functionFragment: "CARD_A", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "CARD_B", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "CARD_C", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "LINE_A", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "LINE_B", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "LINE_C", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "MAX_A", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "MAX_B", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "MAX_C", data: BytesLike): Result;
@@ -198,6 +212,10 @@ export interface DQCardInterface extends Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "getCardWeight",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getRequiredLines",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -378,6 +396,12 @@ export interface DQCard extends BaseContract {
 
   CARD_C: TypedContractMethod<[], [bigint], "view">;
 
+  LINE_A: TypedContractMethod<[], [bigint], "view">;
+
+  LINE_B: TypedContractMethod<[], [bigint], "view">;
+
+  LINE_C: TypedContractMethod<[], [bigint], "view">;
+
   MAX_A: TypedContractMethod<[], [bigint], "view">;
 
   MAX_B: TypedContractMethod<[], [bigint], "view">;
@@ -411,6 +435,12 @@ export interface DQCard extends BaseContract {
   getCardPrice: TypedContractMethod<[_type: BigNumberish], [bigint], "view">;
 
   getCardWeight: TypedContractMethod<[_type: BigNumberish], [bigint], "view">;
+
+  getRequiredLines: TypedContractMethod<
+    [_type: BigNumberish],
+    [bigint],
+    "view"
+  >;
 
   isApprovedForAll: TypedContractMethod<
     [owner: AddressLike, operator: AddressLike],
@@ -507,6 +537,15 @@ export interface DQCard extends BaseContract {
     nameOrSignature: "CARD_C"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
+    nameOrSignature: "LINE_A"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "LINE_B"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "LINE_C"
+  ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
     nameOrSignature: "MAX_A"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
@@ -554,6 +593,9 @@ export interface DQCard extends BaseContract {
   ): TypedContractMethod<[_type: BigNumberish], [bigint], "view">;
   getFunction(
     nameOrSignature: "getCardWeight"
+  ): TypedContractMethod<[_type: BigNumberish], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "getRequiredLines"
   ): TypedContractMethod<[_type: BigNumberish], [bigint], "view">;
   getFunction(
     nameOrSignature: "isApprovedForAll"

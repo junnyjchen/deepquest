@@ -46,8 +46,8 @@ export interface DQProjectInterface extends Interface {
       | "blockRewardDebt"
       | "burnRate"
       | "buyNode"
-      | "buybackAndBurn"
       | "canDeposit"
+      | "checkNodeQualified"
       | "claimDTeam"
       | "claimLP"
       | "claimNft"
@@ -75,6 +75,7 @@ export interface DQProjectInterface extends Interface {
       | "isPartner"
       | "lastBlockTime"
       | "levelRates"
+      | "lineCountAcc"
       | "lpAccPerShare"
       | "lpPool"
       | "lpStakes"
@@ -115,13 +116,12 @@ export interface DQProjectInterface extends Interface {
       | "DLevelUp"
       | "Deposit"
       | "LevelUp"
+      | "LineQualified"
       | "OwnershipTransferred"
       | "PriceUpdated"
       | "Register"
       | "SetFoundationWallet"
-      | "StakeLP"
       | "StakeSingle"
-      | "UnstakeLP"
       | "UnstakeSingle"
       | "Withdraw"
   ): EventFragment;
@@ -201,11 +201,11 @@ export interface DQProjectInterface extends Interface {
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
-    functionFragment: "buybackAndBurn",
-    values?: undefined
+    functionFragment: "canDeposit",
+    values: [AddressLike]
   ): string;
   encodeFunctionData(
-    functionFragment: "canDeposit",
+    functionFragment: "checkNodeQualified",
     values: [AddressLike]
   ): string;
   encodeFunctionData(
@@ -294,6 +294,10 @@ export interface DQProjectInterface extends Interface {
   encodeFunctionData(
     functionFragment: "levelRates",
     values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "lineCountAcc",
+    values: [AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "lpAccPerShare",
@@ -456,11 +460,11 @@ export interface DQProjectInterface extends Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "burnRate", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "buyNode", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "canDeposit", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "buybackAndBurn",
+    functionFragment: "checkNodeQualified",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "canDeposit", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "claimDTeam", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "claimLP", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "claimNft", data: BytesLike): Result;
@@ -530,6 +534,10 @@ export interface DQProjectInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "levelRates", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "lineCountAcc",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "lpAccPerShare",
     data: BytesLike
@@ -730,13 +738,20 @@ export namespace DepositEvent {
   export type InputTuple = [
     user: AddressLike,
     amount: BigNumberish,
-    dqAmount: BigNumberish
+    dqAmount: BigNumberish,
+    isFirst: boolean
   ];
-  export type OutputTuple = [user: string, amount: bigint, dqAmount: bigint];
+  export type OutputTuple = [
+    user: string,
+    amount: bigint,
+    dqAmount: bigint,
+    isFirst: boolean
+  ];
   export interface OutputObject {
     user: string;
     amount: bigint;
     dqAmount: bigint;
+    isFirst: boolean;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -750,6 +765,19 @@ export namespace LevelUpEvent {
   export interface OutputObject {
     user: string;
     newLevel: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace LineQualifiedEvent {
+  export type InputTuple = [user: AddressLike, lineCount: BigNumberish];
+  export type OutputTuple = [user: string, lineCount: bigint];
+  export interface OutputObject {
+    user: string;
+    lineCount: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -807,19 +835,6 @@ export namespace SetFoundationWalletEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace StakeLPEvent {
-  export type InputTuple = [user: AddressLike, amount: BigNumberish];
-  export type OutputTuple = [user: string, amount: bigint];
-  export interface OutputObject {
-    user: string;
-    amount: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
 export namespace StakeSingleEvent {
   export type InputTuple = [
     user: AddressLike,
@@ -831,24 +846,6 @@ export namespace StakeSingleEvent {
     user: string;
     amount: bigint;
     period: bigint;
-  }
-  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
-  export type Filter = TypedDeferredTopicFilter<Event>;
-  export type Log = TypedEventLog<Event>;
-  export type LogDescription = TypedLogDescription<Event>;
-}
-
-export namespace UnstakeLPEvent {
-  export type InputTuple = [
-    user: AddressLike,
-    amount: BigNumberish,
-    fee: BigNumberish
-  ];
-  export type OutputTuple = [user: string, amount: bigint, fee: bigint];
-  export interface OutputObject {
-    user: string;
-    amount: bigint;
-    fee: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -974,9 +971,19 @@ export interface DQProject extends BaseContract {
 
   buyNode: TypedContractMethod<[_type: BigNumberish], [void], "nonpayable">;
 
-  buybackAndBurn: TypedContractMethod<[], [void], "nonpayable">;
-
   canDeposit: TypedContractMethod<[_user: AddressLike], [boolean], "view">;
+
+  checkNodeQualified: TypedContractMethod<
+    [_user: AddressLike],
+    [
+      [boolean, bigint, bigint] & {
+        qualified: boolean;
+        currentLines: bigint;
+        requiredLines: bigint;
+      }
+    ],
+    "view"
+  >;
 
   claimDTeam: TypedContractMethod<[], [void], "nonpayable">;
 
@@ -1042,7 +1049,9 @@ export interface DQProject extends BaseContract {
         bigint,
         bigint,
         bigint,
-        boolean
+        boolean,
+        boolean,
+        bigint
       ] & {
         referrer: string;
         directCount: bigint;
@@ -1053,6 +1062,8 @@ export interface DQProject extends BaseContract {
         energy: bigint;
         directSales: bigint;
         hasNode: boolean;
+        hasDeposited: boolean;
+        activeLineCount: bigint;
       }
     ],
     "view"
@@ -1065,6 +1076,8 @@ export interface DQProject extends BaseContract {
   lastBlockTime: TypedContractMethod<[], [bigint], "view">;
 
   levelRates: TypedContractMethod<[arg0: BigNumberish], [bigint], "view">;
+
+  lineCountAcc: TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
 
   lpAccPerShare: TypedContractMethod<[], [bigint], "view">;
 
@@ -1233,11 +1246,21 @@ export interface DQProject extends BaseContract {
     nameOrSignature: "buyNode"
   ): TypedContractMethod<[_type: BigNumberish], [void], "nonpayable">;
   getFunction(
-    nameOrSignature: "buybackAndBurn"
-  ): TypedContractMethod<[], [void], "nonpayable">;
-  getFunction(
     nameOrSignature: "canDeposit"
   ): TypedContractMethod<[_user: AddressLike], [boolean], "view">;
+  getFunction(
+    nameOrSignature: "checkNodeQualified"
+  ): TypedContractMethod<
+    [_user: AddressLike],
+    [
+      [boolean, bigint, bigint] & {
+        qualified: boolean;
+        currentLines: bigint;
+        requiredLines: bigint;
+      }
+    ],
+    "view"
+  >;
   getFunction(
     nameOrSignature: "claimDTeam"
   ): TypedContractMethod<[], [void], "nonpayable">;
@@ -1326,7 +1349,9 @@ export interface DQProject extends BaseContract {
         bigint,
         bigint,
         bigint,
-        boolean
+        boolean,
+        boolean,
+        bigint
       ] & {
         referrer: string;
         directCount: bigint;
@@ -1337,6 +1362,8 @@ export interface DQProject extends BaseContract {
         energy: bigint;
         directSales: bigint;
         hasNode: boolean;
+        hasDeposited: boolean;
+        activeLineCount: bigint;
       }
     ],
     "view"
@@ -1353,6 +1380,9 @@ export interface DQProject extends BaseContract {
   getFunction(
     nameOrSignature: "levelRates"
   ): TypedContractMethod<[arg0: BigNumberish], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "lineCountAcc"
+  ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
   getFunction(
     nameOrSignature: "lpAccPerShare"
   ): TypedContractMethod<[], [bigint], "view">;
@@ -1529,6 +1559,13 @@ export interface DQProject extends BaseContract {
     LevelUpEvent.OutputObject
   >;
   getEvent(
+    key: "LineQualified"
+  ): TypedContractEvent<
+    LineQualifiedEvent.InputTuple,
+    LineQualifiedEvent.OutputTuple,
+    LineQualifiedEvent.OutputObject
+  >;
+  getEvent(
     key: "OwnershipTransferred"
   ): TypedContractEvent<
     OwnershipTransferredEvent.InputTuple,
@@ -1557,25 +1594,11 @@ export interface DQProject extends BaseContract {
     SetFoundationWalletEvent.OutputObject
   >;
   getEvent(
-    key: "StakeLP"
-  ): TypedContractEvent<
-    StakeLPEvent.InputTuple,
-    StakeLPEvent.OutputTuple,
-    StakeLPEvent.OutputObject
-  >;
-  getEvent(
     key: "StakeSingle"
   ): TypedContractEvent<
     StakeSingleEvent.InputTuple,
     StakeSingleEvent.OutputTuple,
     StakeSingleEvent.OutputObject
-  >;
-  getEvent(
-    key: "UnstakeLP"
-  ): TypedContractEvent<
-    UnstakeLPEvent.InputTuple,
-    UnstakeLPEvent.OutputTuple,
-    UnstakeLPEvent.OutputObject
   >;
   getEvent(
     key: "UnstakeSingle"
@@ -1681,7 +1704,7 @@ export interface DQProject extends BaseContract {
       DLevelUpEvent.OutputObject
     >;
 
-    "Deposit(address,uint256,uint256)": TypedContractEvent<
+    "Deposit(address,uint256,uint256,bool)": TypedContractEvent<
       DepositEvent.InputTuple,
       DepositEvent.OutputTuple,
       DepositEvent.OutputObject
@@ -1701,6 +1724,17 @@ export interface DQProject extends BaseContract {
       LevelUpEvent.InputTuple,
       LevelUpEvent.OutputTuple,
       LevelUpEvent.OutputObject
+    >;
+
+    "LineQualified(address,uint256)": TypedContractEvent<
+      LineQualifiedEvent.InputTuple,
+      LineQualifiedEvent.OutputTuple,
+      LineQualifiedEvent.OutputObject
+    >;
+    LineQualified: TypedContractEvent<
+      LineQualifiedEvent.InputTuple,
+      LineQualifiedEvent.OutputTuple,
+      LineQualifiedEvent.OutputObject
     >;
 
     "OwnershipTransferred(address,address)": TypedContractEvent<
@@ -1747,17 +1781,6 @@ export interface DQProject extends BaseContract {
       SetFoundationWalletEvent.OutputObject
     >;
 
-    "StakeLP(address,uint256)": TypedContractEvent<
-      StakeLPEvent.InputTuple,
-      StakeLPEvent.OutputTuple,
-      StakeLPEvent.OutputObject
-    >;
-    StakeLP: TypedContractEvent<
-      StakeLPEvent.InputTuple,
-      StakeLPEvent.OutputTuple,
-      StakeLPEvent.OutputObject
-    >;
-
     "StakeSingle(address,uint256,uint256)": TypedContractEvent<
       StakeSingleEvent.InputTuple,
       StakeSingleEvent.OutputTuple,
@@ -1767,17 +1790,6 @@ export interface DQProject extends BaseContract {
       StakeSingleEvent.InputTuple,
       StakeSingleEvent.OutputTuple,
       StakeSingleEvent.OutputObject
-    >;
-
-    "UnstakeLP(address,uint256,uint256)": TypedContractEvent<
-      UnstakeLPEvent.InputTuple,
-      UnstakeLPEvent.OutputTuple,
-      UnstakeLPEvent.OutputObject
-    >;
-    UnstakeLP: TypedContractEvent<
-      UnstakeLPEvent.InputTuple,
-      UnstakeLPEvent.OutputTuple,
-      UnstakeLPEvent.OutputObject
     >;
 
     "UnstakeSingle(address,uint256,uint256)": TypedContractEvent<

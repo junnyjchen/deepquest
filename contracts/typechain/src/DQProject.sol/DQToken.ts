@@ -31,7 +31,6 @@ export interface DQTokenInterface extends Interface {
       | "approve"
       | "balanceOf"
       | "burn"
-      | "burnFromContract"
       | "burnToBlackhole"
       | "decimals"
       | "decreaseAllowance"
@@ -60,10 +59,6 @@ export interface DQTokenInterface extends Interface {
     values: [AddressLike]
   ): string;
   encodeFunctionData(functionFragment: "burn", values: [BigNumberish]): string;
-  encodeFunctionData(
-    functionFragment: "burnFromContract",
-    values: [BigNumberish]
-  ): string;
   encodeFunctionData(
     functionFragment: "burnToBlackhole",
     values: [BigNumberish]
@@ -101,10 +96,6 @@ export interface DQTokenInterface extends Interface {
   decodeFunctionResult(functionFragment: "approve", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "burn", data: BytesLike): Result;
-  decodeFunctionResult(
-    functionFragment: "burnFromContract",
-    data: BytesLike
-  ): Result;
   decodeFunctionResult(
     functionFragment: "burnToBlackhole",
     data: BytesLike
@@ -229,12 +220,6 @@ export interface DQToken extends BaseContract {
 
   burn: TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
 
-  burnFromContract: TypedContractMethod<
-    [amount: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
-
   burnToBlackhole: TypedContractMethod<
     [amount: BigNumberish],
     [void],
@@ -305,9 +290,6 @@ export interface DQToken extends BaseContract {
   ): TypedContractMethod<[account: AddressLike], [bigint], "view">;
   getFunction(
     nameOrSignature: "burn"
-  ): TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
-  getFunction(
-    nameOrSignature: "burnFromContract"
   ): TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "burnToBlackhole"
