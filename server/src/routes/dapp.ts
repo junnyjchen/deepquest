@@ -733,4 +733,1019 @@ router.get('/card-stats/:wallet_address', async (req, res) => {
   }
 });
 
+// ============ 节点达标信息 API ============
+
+// 获取节点达标信息
+router.get('/node-info/:wallet_address', async (req, res) => {
+  try {
+    const { wallet_address } = req.params;
+
+    // 获取用户信息
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('wallet_address', wallet_address.toLowerCase())
+      .single();
+
+    if (userError || !user) {
+      return res.status(404).json({
+        code: 404,
+        message: '用户不存在'
+      });
+    }
+
+    // 获取用户的NFT卡牌
+    const { data: cards } = await supabase
+      .from('nft_cards')
+      .select('*')
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('status', 'active');
+
+    // 获取累计卡牌收益
+    const { data: cardRewards } = await supabase
+      .from('card_rewards')
+      .select('amount, status')
+      .eq('user_address', wallet_address.toLowerCase());
+
+    const claimedRewards = cardRewards?.filter(r => r.status === 'claimed')
+      .reduce((sum: number, r: any) => sum + parseFloat(r.amount || '0'), 0) || 0;
+    const pendingRewards = cardRewards?.filter(r => r.status === 'pending')
+      .reduce((sum: number, r: any) => sum + parseFloat(r.amount || '0'), 0) || 0;
+
+    // 卡牌达标配置
+    const cardLinesConfig: Record<number, { name: string; required: number; weight: number }> = {
+      1: { name: 'S1', required: 5, weight: 4 },  // A级卡：5条线
+      2: { name: 'S2', required: 10, weight: 5 }, // B级卡：10条线
+      3: { name: 'S3', required: 20, weight: 6 }, // C级卡：20条线
+    };
+
+    // 计算每个卡牌的达标情况
+    const cardInfos = (cards || []).map((card: any) => {
+      const config = cardLinesConfig[card.card_type_num || 1] || cardLinesConfig[1];
+      const qualified = (user.qualified_lines || 0) >= config.required;
+      return {
+        cardType: card.card_type_num || 1,
+        cardName: config.name + ' 节点卡',
+        qualifiedLines: user.qualified_lines || 0,
+        requiredLines: config.required,
+        isQualified: qualified,
+        rewardWeight: config.weight,
+        cardCount: 1,
+      };
+    });
+
+    // 计算最高卡牌类型
+    const highestType = cardInfos.length > 0 
+      ? Math.max(...cardInfos.map(c => c.cardType))
+      : 0;
+
+    // 判断是否达标（取最高卡牌的要求）
+    const requiredLines = highestType > 0 && cardLinesConfig[highestType] 
+      ? cardLinesConfig[highestType].required 
+      : 0;
+    const isQualified = (user.qualified_lines || 0) >= requiredLines;
+
+    res.json({
+      code: 0,
+      data: {
+        cardCount: cards?.length || 0,
+        highestType,
+        qualifiedLines: user.qualified_lines || 0,
+        requiredLines,
+        isQualified,
+        cards: cardInfos,
+        pendingNft: pendingRewards.toFixed(2),
+        totalNftReward: claimedRewards.toFixed(2),
+      }
+    });
+  } catch (error) {
+    console.error('获取节点信息失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 获取用户完整信息
+router.get('/user-info/:wallet_address', async (req, res) => {
+  try {
+    const { wallet_address } = req.params;
+
+    // 获取用户基本信息
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('wallet_address', wallet_address.toLowerCase())
+      .single();
+
+    if (userError || !user) {
+      return res.status(404).json({
+        code: 404,
+        message: '用户不存在'
+      });
+    }
+
+    // 获取各项待领取奖励
+    const [lpRewards, nftRewards, teamRewards, directRewards] = await Promise.all([
+      supabase.from('rewards').select('amount').eq('user_address', wallet_address.toLowerCase())
+        .eq('reward_type', 'lp').eq('status', 'pending'),
+      supabase.from('rewards').select('amount').eq('user_address', wallet_address.toLowerCase())
+        .eq('reward_type', 'nft').eq('status', 'pending'),
+      supabase.from('rewards').select('amount').eq('user_address', wallet_address.toLowerCase())
+        .eq('reward_type', 'team').eq('status', 'pending'),
+      supabase.from('rewards').select('amount').eq('user_address', wallet_address.toLowerCase())
+        .eq('reward_type', 'direct').eq('status', 'pending'),
+    ]);
+
+    const pendingLp = lpRewards.data?.reduce((sum: number, r: any) => sum + parseFloat(r.amount || '0'), 0) || 0;
+    const pendingNft = nftRewards.data?.reduce((sum: number, r: any) => sum + parseFloat(r.amount || '0'), 0) || 0;
+    const pendingTeam = teamRewards.data?.reduce((sum: number, r: any) => sum + parseFloat(r.amount || '0'), 0) || 0;
+    const pendingDirect = directRewards.data?.reduce((sum: number, r: any) => sum + parseFloat(r.amount || '0'), 0) || 0;
+
+    res.json({
+      code: 0,
+      data: {
+        wallet_address: user.wallet_address,
+        referrer_address: user.referrer_address,
+        is_registered: true,
+        is_node: !!user.level && user.level > 0,
+        level: user.level || 0,
+        total_invest: user.total_invest || '0',
+        team_invest: user.team_invest || '0',
+        direct_count: user.direct_count || 0,
+        energy: user.energy || '0',
+        qualified_lines: user.qualified_lines || 0,
+        is_node_qualified: user.is_node_qualified || false,
+        is_partner: user.is_partner || false,
+        pendingLp: pendingLp.toFixed(2),
+        pendingNft: pendingNft.toFixed(2),
+        pendingTeam: pendingTeam.toFixed(2),
+        pendingDirect: pendingDirect.toFixed(2),
+        totalPending: (pendingLp + pendingNft + pendingTeam + pendingDirect).toFixed(2),
+      }
+    });
+  } catch (error) {
+    console.error('获取用户信息失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 获取入金限制信息
+router.get('/invest-limit/:wallet_address', async (req, res) => {
+  try {
+    const { wallet_address } = req.params;
+
+    // 获取配置
+    const { data: configs } = await supabase
+      .from('configs')
+      .select('config_key, config_value')
+      .in('config_key', ['invest_min', 'invest_max_initial', 'invest_max_final', 'phase_duration_days']);
+
+    const configMap: Record<string, string> = {};
+    (configs || []).forEach((c: any) => {
+      configMap[c.config_key] = c.config_value;
+    });
+
+    // 获取用户已投资金额
+    const { data: deposits } = await supabase
+      .from('deposits')
+      .select('amount')
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('status', 'completed');
+
+    const totalInvested = deposits?.reduce((sum: number, d: any) => sum + parseFloat(d.amount || '0'), 0) || 0;
+
+    // 获取当前最大投资额（根据时间计算）
+    const minInvest = parseFloat(configMap['invest_min'] || '1');
+    const maxInitial = parseFloat(configMap['invest_max_initial'] || '10');
+    const maxFinal = parseFloat(configMap['invest_max_final'] || '200');
+    const phaseDays = parseInt(configMap['phase_duration_days'] || '15');
+
+    // 计算当前阶段
+    const startDate = new Date('2025-01-01'); // 项目启动日期
+    const now = new Date();
+    const daysSinceStart = Math.floor((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    const currentPhase = Math.floor(daysSinceStart / phaseDays);
+    const currentMax = Math.min(maxInitial + (currentPhase * 10), maxFinal);
+
+    res.json({
+      code: 0,
+      data: {
+        min_invest: minInvest.toString(),
+        max_invest: currentMax.toString(),
+        total_invested: totalInvested.toFixed(2),
+        remaining_invest: Math.max(0, currentMax - totalInvested).toFixed(2),
+        can_invest: totalInvested < currentMax,
+      }
+    });
+  } catch (error) {
+    console.error('获取入金限制失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 检查注册状态
+router.get('/check-registered/:wallet_address', async (req, res) => {
+  try {
+    const { wallet_address } = req.params;
+
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('wallet_address, level, referrer_address')
+      .eq('wallet_address', wallet_address.toLowerCase())
+      .single();
+
+    if (error || !user) {
+      return res.json({
+        code: 0,
+        data: {
+          is_registered: false,
+          is_node: false,
+          has_referrer: false,
+        }
+      });
+    }
+
+    res.json({
+      code: 0,
+      data: {
+        is_registered: true,
+        is_node: user.level > 0,
+        level: user.level,
+        has_referrer: !!user.referrer_address,
+        referrer_address: user.referrer_address,
+      }
+    });
+  } catch (error) {
+    console.error('检查注册状态失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 注册（首次入金）
+router.post('/register', async (req, res) => {
+  try {
+    const { wallet_address, referrer_address, tx_hash } = req.body;
+
+    if (!wallet_address || !referrer_address || !tx_hash) {
+      return res.status(400).json({
+        code: 400,
+        message: '缺少必要参数'
+      });
+    }
+
+    // 验证推荐人是否为节点
+    const { data: referrer, error: referrerError } = await supabase
+      .from('users')
+      .select('wallet_address, level')
+      .eq('wallet_address', referrer_address.toLowerCase())
+      .single();
+
+    if (referrerError || !referrer) {
+      return res.status(400).json({
+        code: 400,
+        message: '推荐人不存在'
+      });
+    }
+
+    if (!referrer.level || referrer.level === 0) {
+      return res.status(400).json({
+        code: 400,
+        message: '推荐人必须是节点用户'
+      });
+    }
+
+    // 检查用户是否已注册
+    const { data: existing, error: existingError } = await supabase
+      .from('users')
+      .select('wallet_address')
+      .eq('wallet_address', wallet_address.toLowerCase())
+      .single();
+
+    if (existing) {
+      return res.status(400).json({
+        code: 400,
+        message: '用户已注册'
+      });
+    }
+
+    // 创建用户
+    const { data: newUser, error: insertError } = await supabase
+      .from('users')
+      .insert({
+        wallet_address: wallet_address.toLowerCase(),
+        referrer_address: referrer_address.toLowerCase(),
+        direct_count: 0,
+        level: 0,
+        total_invest: '0',
+        team_invest: '0',
+        energy: '0',
+        lp_shares: '0',
+        qualified_lines: 0,
+        is_node_qualified: false,
+        is_partner: false,
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('注册失败:', insertError);
+      return res.status(500).json({
+        code: 500,
+        message: '注册失败'
+      });
+    }
+
+    // 增加推荐人的直推数量
+    await supabase.rpc('increment_direct_count', {
+      user_address: referrer_address.toLowerCase()
+    });
+
+    res.json({
+      code: 0,
+      message: '注册成功',
+      data: {
+        wallet_address: newUser.wallet_address,
+        referrer_address: newUser.referrer_address,
+      }
+    });
+  } catch (error) {
+    console.error('注册失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 入金
+router.post('/deposit', async (req, res) => {
+  try {
+    const { wallet_address, amount, tx_hash } = req.body;
+
+    if (!wallet_address || !amount || !tx_hash) {
+      return res.status(400).json({
+        code: 400,
+        message: '缺少必要参数'
+      });
+    }
+
+    // 检查用户是否存在
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('wallet_address', wallet_address.toLowerCase())
+      .single();
+
+    if (userError || !user) {
+      return res.status(404).json({
+        code: 404,
+        message: '用户不存在，请先注册'
+      });
+    }
+
+    // 首次入金检查（首次入金必须是节点）
+    const { data: existingDeposits } = await supabase
+      .from('deposits')
+      .select('id')
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('status', 'completed');
+
+    if ((existingDeposits?.length || 0) === 0 && (!user.level || user.level === 0)) {
+      return res.status(400).json({
+        code: 400,
+        message: '首次入金必须是节点用户，请先购买节点'
+      });
+    }
+
+    // 创建入金记录
+    const { data: deposit, error: depositError } = await supabase
+      .from('deposits')
+      .insert({
+        user_address: wallet_address.toLowerCase(),
+        amount: amount,
+        tx_hash: tx_hash,
+        status: 'completed',
+        deposited_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (depositError) {
+      console.error('入金失败:', depositError);
+      return res.status(500).json({
+        code: 500,
+        message: '入金失败'
+      });
+    }
+
+    // 更新用户入金总额
+    const newTotalInvest = parseFloat(user.total_invest || '0') + parseFloat(amount);
+    await supabase
+      .from('users')
+      .update({ 
+        total_invest: newTotalInvest.toString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('wallet_address', wallet_address.toLowerCase());
+
+    res.json({
+      code: 0,
+      message: '入金成功',
+      data: {
+        deposit_id: deposit.id,
+        amount: amount,
+        total_invest: newTotalInvest.toFixed(2),
+      }
+    });
+  } catch (error) {
+    console.error('入金失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 获取待领取奖励
+router.get('/pending-rewards/:wallet_address', async (req, res) => {
+  try {
+    const { wallet_address } = req.params;
+
+    const { data: rewards } = await supabase
+      .from('rewards')
+      .select('reward_type, amount')
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('status', 'pending');
+
+    const rewardsByType: Record<string, number> = {};
+    (rewards || []).forEach((r: any) => {
+      const type = r.reward_type || 'other';
+      rewardsByType[type] = (rewardsByType[type] || 0) + parseFloat(r.amount || '0');
+    });
+
+    res.json({
+      code: 0,
+      data: {
+        lp: rewardsByType['lp']?.toFixed(2) || '0.00',
+        nft: rewardsByType['nft']?.toFixed(2) || '0.00',
+        team: rewardsByType['team']?.toFixed(2) || '0.00',
+        direct: rewardsByType['direct']?.toFixed(2) || '0.00',
+        management: rewardsByType['management']?.toFixed(2) || '0.00',
+        total: Object.values(rewardsByType).reduce((a, b) => a + b, 0).toFixed(2),
+      }
+    });
+  } catch (error) {
+    console.error('获取待领取奖励失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 领取LP分红
+router.post('/claim-lp', async (req, res) => {
+  try {
+    const { wallet_address } = req.body;
+
+    if (!wallet_address) {
+      return res.status(400).json({
+        code: 400,
+        message: '缺少钱包地址'
+      });
+    }
+
+    // 检查地址限制
+    const { data: restriction } = await supabase
+      .from('address_restrictions')
+      .select('*')
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('status', 'restricted')
+      .single();
+
+    if (restriction) {
+      return res.status(400).json({
+        code: 400,
+        message: '地址已被限制，无法领取奖励'
+      });
+    }
+
+    // 获取待领取LP奖励
+    const { data: pendingRewards } = await supabase
+      .from('rewards')
+      .select('id, amount')
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('reward_type', 'lp')
+      .eq('status', 'pending');
+
+    if (!pendingRewards || pendingRewards.length === 0) {
+      return res.status(400).json({
+        code: 400,
+        message: '没有可领取的LP奖励'
+      });
+    }
+
+    const totalAmount = pendingRewards.reduce((sum: number, r: any) => sum + parseFloat(r.amount || '0'), 0);
+
+    // 更新奖励状态
+    await supabase
+      .from('rewards')
+      .update({ 
+        status: 'claimed',
+        claimed_at: new Date().toISOString(),
+      })
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('reward_type', 'lp')
+      .eq('status', 'pending');
+
+    res.json({
+      code: 0,
+      message: '领取成功',
+      data: {
+        amount: totalAmount.toFixed(2),
+      }
+    });
+  } catch (error) {
+    console.error('领取LP奖励失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 领取NFT分红
+router.post('/claim-nft', async (req, res) => {
+  try {
+    const { wallet_address } = req.body;
+
+    if (!wallet_address) {
+      return res.status(400).json({
+        code: 400,
+        message: '缺少钱包地址'
+      });
+    }
+
+    // 检查节点达标状态
+    const { data: user } = await supabase
+      .from('users')
+      .select('is_node_qualified, qualified_lines, highest_card_type')
+      .eq('wallet_address', wallet_address.toLowerCase())
+      .single();
+
+    if (!user?.is_node_qualified) {
+      return res.status(400).json({
+        code: 400,
+        message: '节点未达标，无法领取NFT分红'
+      });
+    }
+
+    // 检查地址限制
+    const { data: restriction } = await supabase
+      .from('address_restrictions')
+      .select('*')
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('status', 'restricted')
+      .single();
+
+    if (restriction) {
+      return res.status(400).json({
+        code: 400,
+        message: '地址已被限制，无法领取奖励'
+      });
+    }
+
+    // 获取待领取NFT奖励
+    const { data: pendingRewards } = await supabase
+      .from('rewards')
+      .select('id, amount')
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('reward_type', 'nft')
+      .eq('status', 'pending');
+
+    if (!pendingRewards || pendingRewards.length === 0) {
+      return res.status(400).json({
+        code: 400,
+        message: '没有可领取的NFT分红'
+      });
+    }
+
+    const totalAmount = pendingRewards.reduce((sum: number, r: any) => sum + parseFloat(r.amount || '0'), 0);
+
+    // 更新奖励状态
+    await supabase
+      .from('rewards')
+      .update({ 
+        status: 'claimed',
+        claimed_at: new Date().toISOString(),
+      })
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('reward_type', 'nft')
+      .eq('status', 'pending');
+
+    res.json({
+      code: 0,
+      message: '领取成功',
+      data: {
+        amount: totalAmount.toFixed(2),
+      }
+    });
+  } catch (error) {
+    console.error('领取NFT分红失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 领取团队奖励
+router.post('/claim-dteam', async (req, res) => {
+  try {
+    const { wallet_address } = req.body;
+
+    if (!wallet_address) {
+      return res.status(400).json({
+        code: 400,
+        message: '缺少钱包地址'
+      });
+    }
+
+    // 检查能量值
+    const { data: user } = await supabase
+      .from('users')
+      .select('energy')
+      .eq('wallet_address', wallet_address.toLowerCase())
+      .single();
+
+    if (user && parseFloat(user.energy || '0') <= 0) {
+      return res.status(400).json({
+        code: 400,
+        message: '能量值不足，无法领取团队奖励'
+      });
+    }
+
+    // 检查地址限制
+    const { data: restriction } = await supabase
+      .from('address_restrictions')
+      .select('*')
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('status', 'restricted')
+      .single();
+
+    if (restriction) {
+      return res.status(400).json({
+        code: 400,
+        message: '地址已被限制，无法领取奖励'
+      });
+    }
+
+    // 获取待领取团队奖励
+    const { data: pendingRewards } = await supabase
+      .from('rewards')
+      .select('id, amount')
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('reward_type', 'team')
+      .eq('status', 'pending');
+
+    if (!pendingRewards || pendingRewards.length === 0) {
+      return res.status(400).json({
+        code: 400,
+        message: '没有可领取的团队奖励'
+      });
+    }
+
+    const totalAmount = pendingRewards.reduce((sum: number, r: any) => sum + parseFloat(r.amount || '0'), 0);
+
+    // 更新奖励状态
+    await supabase
+      .from('rewards')
+      .update({ 
+        status: 'claimed',
+        claimed_at: new Date().toISOString(),
+      })
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('reward_type', 'team')
+      .eq('status', 'pending');
+
+    // 扣除能量值
+    await supabase
+      .from('users')
+      .update({ 
+        energy: '0', // 清零，实际应按奖励金额扣除
+        updated_at: new Date().toISOString(),
+      })
+      .eq('wallet_address', wallet_address.toLowerCase());
+
+    res.json({
+      code: 0,
+      message: '领取成功',
+      data: {
+        amount: totalAmount.toFixed(2),
+      }
+    });
+  } catch (error) {
+    console.error('领取团队奖励失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 领取合伙人DQ奖励
+router.post('/claim-partner-dq', async (req, res) => {
+  try {
+    const { wallet_address } = req.body;
+
+    if (!wallet_address) {
+      return res.status(400).json({
+        code: 400,
+        message: '缺少钱包地址'
+      });
+    }
+
+    // 检查是否为合伙人
+    const { data: user } = await supabase
+      .from('users')
+      .select('is_partner')
+      .eq('wallet_address', wallet_address.toLowerCase())
+      .single();
+
+    if (!user?.is_partner) {
+      return res.status(400).json({
+        code: 400,
+        message: '您不是合伙人，无法领取DQ奖励'
+      });
+    }
+
+    // 检查地址限制
+    const { data: restriction } = await supabase
+      .from('address_restrictions')
+      .select('*')
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('status', 'restricted')
+      .single();
+
+    if (restriction) {
+      return res.status(400).json({
+        code: 400,
+        message: '地址已被限制，无法领取奖励'
+      });
+    }
+
+    // 获取待领取DQ奖励
+    const { data: pendingRewards } = await supabase
+      .from('rewards')
+      .select('id, amount')
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('reward_type', 'partner_dq')
+      .eq('status', 'pending');
+
+    if (!pendingRewards || pendingRewards.length === 0) {
+      return res.status(400).json({
+        code: 400,
+        message: '没有可领取的DQ奖励'
+      });
+    }
+
+    const totalAmount = pendingRewards.reduce((sum: number, r: any) => sum + parseFloat(r.amount || '0'), 0);
+
+    // 更新奖励状态
+    await supabase
+      .from('rewards')
+      .update({ 
+        status: 'claimed',
+        claimed_at: new Date().toISOString(),
+      })
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('reward_type', 'partner_dq')
+      .eq('status', 'pending');
+
+    res.json({
+      code: 0,
+      message: '领取成功',
+      data: {
+        amount: totalAmount.toFixed(2),
+      }
+    });
+  } catch (error) {
+    console.error('领取合伙人DQ奖励失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 领取合伙人SOL奖励
+router.post('/claim-partner-sol', async (req, res) => {
+  try {
+    const { wallet_address } = req.body;
+
+    if (!wallet_address) {
+      return res.status(400).json({
+        code: 400,
+        message: '缺少钱包地址'
+      });
+    }
+
+    // 检查是否为合伙人
+    const { data: user } = await supabase
+      .from('users')
+      .select('is_partner')
+      .eq('wallet_address', wallet_address.toLowerCase())
+      .single();
+
+    if (!user?.is_partner) {
+      return res.status(400).json({
+        code: 400,
+        message: '您不是合伙人，无法领取SOL奖励'
+      });
+    }
+
+    // 检查地址限制
+    const { data: restriction } = await supabase
+      .from('address_restrictions')
+      .select('*')
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('status', 'restricted')
+      .single();
+
+    if (restriction) {
+      return res.status(400).json({
+        code: 400,
+        message: '地址已被限制，无法领取奖励'
+      });
+    }
+
+    // 获取待领取SOL奖励
+    const { data: pendingRewards } = await supabase
+      .from('rewards')
+      .select('id, amount')
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('reward_type', 'partner_sol')
+      .eq('status', 'pending');
+
+    if (!pendingRewards || pendingRewards.length === 0) {
+      return res.status(400).json({
+        code: 400,
+        message: '没有可领取的SOL奖励'
+      });
+    }
+
+    const totalAmount = pendingRewards.reduce((sum: number, r: any) => sum + parseFloat(r.amount || '0'), 0);
+
+    // 更新奖励状态
+    await supabase
+      .from('rewards')
+      .update({ 
+        status: 'claimed',
+        claimed_at: new Date().toISOString(),
+      })
+      .eq('user_address', wallet_address.toLowerCase())
+      .eq('reward_type', 'partner_sol')
+      .eq('status', 'pending');
+
+    res.json({
+      code: 0,
+      message: '领取成功',
+      data: {
+        amount: totalAmount.toFixed(2),
+      }
+    });
+  } catch (error) {
+    console.error('领取合伙人SOL奖励失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 获取兑换报价
+router.get('/swap-quote', async (req, res) => {
+  try {
+    const { dq_amount } = req.query;
+
+    if (!dq_amount) {
+      return res.status(400).json({
+        code: 400,
+        message: '缺少DQ数量'
+      });
+    }
+
+    // 获取DQ价格配置
+    const { data: config } = await supabase
+      .from('configs')
+      .select('config_value')
+      .eq('config_key', 'dq_price')
+      .single();
+
+    const dqPrice = parseFloat(config?.config_value || '0.0001');
+    const dqAmount = parseFloat(dq_amount as string);
+    const usdtAmount = dqAmount * dqPrice;
+
+    // 计算手续费
+    const feeRate = 0.06; // 6%
+    const fee = usdtAmount * feeRate;
+    const netAmount = usdtAmount - fee;
+
+    res.json({
+      code: 0,
+      data: {
+        dq_amount: dqAmount.toFixed(2),
+        dq_price: dqPrice.toFixed(6),
+        usdt_amount: usdtAmount.toFixed(2),
+        fee: fee.toFixed(2),
+        fee_rate: '6%',
+        net_amount: netAmount.toFixed(2),
+      }
+    });
+  } catch (error) {
+    console.error('获取兑换报价失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 执行DQ兑换
+router.post('/swap-dq', async (req, res) => {
+  try {
+    const { wallet_address, dq_amount, tx_hash } = req.body;
+
+    if (!wallet_address || !dq_amount || !tx_hash) {
+      return res.status(400).json({
+        code: 400,
+        message: '缺少必要参数'
+      });
+    }
+
+    // 获取DQ价格配置
+    const { data: config } = await supabase
+      .from('configs')
+      .select('config_value')
+      .eq('config_key', 'dq_price')
+      .single();
+
+    const dqPrice = parseFloat(config?.config_value || '0.0001');
+    const dqAmount = parseFloat(dq_amount);
+    const usdtAmount = dqAmount * dqPrice;
+    const fee = usdtAmount * 0.06;
+    const netAmount = usdtAmount - fee;
+
+    // 创建兑换记录
+    const { data: swap, error: swapError } = await supabase
+      .from('dq_swaps')
+      .insert({
+        user_address: wallet_address.toLowerCase(),
+        dq_amount: dq_amount,
+        usdt_amount: netAmount.toString(),
+        fee: fee.toString(),
+        tx_hash: tx_hash,
+        status: 'completed',
+        swapped_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (swapError) {
+      console.error('兑换失败:', swapError);
+      return res.status(500).json({
+        code: 500,
+        message: '兑换失败'
+      });
+    }
+
+    res.json({
+      code: 0,
+      message: '兑换成功',
+      data: {
+        swap_id: swap.id,
+        dq_amount: dq_amount,
+        usdt_amount: netAmount.toFixed(2),
+      }
+    });
+  } catch (error) {
+    console.error('兑换失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
 export default router;

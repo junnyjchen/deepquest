@@ -15,6 +15,26 @@ export const admins = pgTable(
   }
 );
 
+// ============ 地址限制表 ============
+export const addressRestrictions = pgTable(
+  "address_restrictions",
+  {
+    id: serial().primaryKey(),
+    user_address: varchar("user_address", { length: 64 }).notNull().unique(),
+    reason: text("reason"),
+    restricted_at: timestamp("restricted_at", { withTimezone: true }).defaultNow().notNull(),
+    unrestricted_at: timestamp("unrestricted_at", { withTimezone: true }),
+    restricted_by: integer("restricted_by").references(() => admins.id),
+    status: varchar("status", { length: 20 }).notNull().default("restricted"), // restricted, unrestricted
+    restricted_debt: numeric("restricted_debt", { precision: 20, scale: 9 }).default("0").notNull(), // 限制前的待领取收益
+    created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("restrictions_address_idx").on(table.user_address),
+    index("restrictions_status_idx").on(table.status),
+  ]
+);
+
 // ============ 用户表 ============
 export const users = pgTable(
   "users",
@@ -31,10 +51,16 @@ export const users = pgTable(
     pending_rewards: numeric("pending_rewards", { precision: 20, scale: 9 }).default("0").notNull(),
     direct_sales: numeric("direct_sales", { precision: 20, scale: 9 }).default("0").notNull(),
     d_level: integer("d_level").default(0).notNull(), // D1-D8
+    // 节点达标信息
+    qualified_lines: integer("qualified_lines").default(0).notNull(), // 当前达标线数
+    is_node_qualified: boolean("is_node_qualified").default(false).notNull(), // 节点是否达标
+    highest_card_type: integer("highest_card_type").default(0).notNull(), // 最高卡牌类型
     is_partner: boolean("is_partner").default(false).notNull(),
     partner_order: integer("partner_order"), // 合伙人序号
     card_type: integer("card_type"), // 1=A, 2=B, 3=C
     nft_token_id: integer("nft_token_id"),
+    // 地址限制
+    is_restricted: boolean("is_restricted").default(false).notNull(),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updated_at: timestamp("updated_at", { withTimezone: true }),
   },
@@ -43,6 +69,7 @@ export const users = pgTable(
     index("users_referrer_idx").on(table.referrer_address),
     index("users_level_idx").on(table.level),
     index("users_partner_idx").on(table.is_partner),
+    index("users_node_qualified_idx").on(table.is_node_qualified),
     index("users_created_idx").on(table.created_at),
   ]
 );

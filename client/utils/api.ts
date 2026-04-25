@@ -299,6 +299,32 @@ export const configApi = {
   init: () => request<any>('/api/v1/config/init', { method: 'POST' }),
 };
 
+// ============ Restrictions API ============
+export const restrictionsApi = {
+  getList: (params?: {
+    page?: number;
+    pageSize?: number;
+    status?: string;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.pageSize) query.append('pageSize', String(params.pageSize));
+    if (params?.status) query.append('status', params.status);
+    return request<any>(`/api/v1/restrictions?${query.toString()}`);
+  },
+  getStats: () => request<any>('/api/v1/restrictions/stats'),
+  getByAddress: (address: string) => request<any>(`/api/v1/restrictions/${address}`),
+  add: (address: string, reason?: string) =>
+    request<any>('/api/v1/restrictions', {
+      method: 'POST',
+      body: JSON.stringify({ address, reason }),
+    }),
+  remove: (address: string) =>
+    request<any>(`/api/v1/restrictions/${address}`, {
+      method: 'DELETE',
+    }),
+};
+
 // ============ Logs API ============
 export const logsApi = {
   getList: (params?: {
@@ -369,20 +395,79 @@ export const dappApi = {
   // 获取平台统计数据
   getStats: () => request<any>('/api/v1/dapp/stats'),
   
-  // 质押操作
+  // ===== 注册与入金 =====
+  // 检查钱包注册状态
+  checkRegistered: (wallet_address: string) =>
+    request<any>(`/api/v1/dapp/check-registered/${wallet_address}`),
+  
+  // 用户注册（推荐人必须是节点）
+  register: (wallet_address: string, referrer_address: string, tx_hash: string) =>
+    request<any>('/api/v1/dapp/register', {
+      method: 'POST',
+      body: JSON.stringify({ wallet_address, referrer_address, tx_hash }),
+    }),
+  
+  // 入金
+  deposit: (wallet_address: string, amount: string, tx_hash: string) =>
+    request<any>('/api/v1/dapp/deposit', {
+      method: 'POST',
+      body: JSON.stringify({ wallet_address, amount, tx_hash }),
+    }),
+  
+  // 获取入金限制信息
+  getInvestLimit: (wallet_address: string) =>
+    request<any>(`/api/v1/dapp/invest-limit/${wallet_address}`),
+  
+  // ===== 质押操作 =====
   stake: (wallet_address: string, amount: string, tx_hash: string) =>
     request<any>('/api/v1/dapp/stake', {
       method: 'POST',
       body: JSON.stringify({ wallet_address, amount, tx_hash }),
     }),
   
-  // 领取奖励
+  // ===== 领取奖励 =====
   claimReward: (wallet_address: string, reward_type?: string) =>
     request<any>('/api/v1/dapp/claim-reward', {
       method: 'POST',
       body: JSON.stringify({ wallet_address, reward_type }),
     }),
   
+  // 领取LP分红
+  claimLP: (wallet_address: string) =>
+    request<any>('/api/v1/dapp/claim-lp', {
+      method: 'POST',
+      body: JSON.stringify({ wallet_address }),
+    }),
+  
+  // 领取NFT分红
+  claimNFT: (wallet_address: string) =>
+    request<any>('/api/v1/dapp/claim-nft', {
+      method: 'POST',
+      body: JSON.stringify({ wallet_address }),
+    }),
+  
+  // 领取团队奖励
+  claimDTeam: (wallet_address: string) =>
+    request<any>('/api/v1/dapp/claim-dteam', {
+      method: 'POST',
+      body: JSON.stringify({ wallet_address }),
+    }),
+  
+  // 领取合伙人DQ
+  claimPartnerDQ: (wallet_address: string) =>
+    request<any>('/api/v1/dapp/claim-partner-dq', {
+      method: 'POST',
+      body: JSON.stringify({ wallet_address }),
+    }),
+  
+  // 领取合伙人SOL
+  claimPartnerSOL: (wallet_address: string) =>
+    request<any>('/api/v1/dapp/claim-partner-sol', {
+      method: 'POST',
+      body: JSON.stringify({ wallet_address }),
+    }),
+  
+  // ===== 推广相关 =====
   // 获取推广信息
   getReferral: (wallet_address: string) =>
     request<any>(`/api/v1/dapp/referral/${wallet_address}`),
@@ -394,7 +479,7 @@ export const dappApi = {
       body: JSON.stringify({ wallet_address, referrer_address, tx_hash }),
     }),
   
-  // 验证推荐人地址
+  // 验证推荐人地址（必须是节点）
   validateReferrer: (referrer_address: string) =>
     request<any>(`/api/v1/dapp/validate-referrer/${referrer_address}`),
   
@@ -417,6 +502,10 @@ export const dappApi = {
   getMyCards: (wallet_address: string) =>
     request<any>(`/api/v1/dapp/my-cards/${wallet_address}`),
   
+  // 获取卡牌达标信息
+  getNodeInfo: (wallet_address: string) =>
+    request<any>(`/api/v1/dapp/node-info/${wallet_address}`),
+  
   // 获取卡牌收益记录
   getCardRewards: (wallet_address: string, page?: number, limit?: number) => {
     const query = new URLSearchParams();
@@ -428,6 +517,27 @@ export const dappApi = {
   // 获取卡牌统计
   getCardStats: (wallet_address: string) =>
     request<any>(`/api/v1/dapp/card-stats/${wallet_address}`),
+  
+  // ===== DQ代币交换 =====
+  // 获取兑换报价
+  getSwapQuote: (dq_amount: string) =>
+    request<any>(`/api/v1/dapp/swap-quote?dq_amount=${dq_amount}`),
+  
+  // 执行兑换
+  swapDQ: (wallet_address: string, dq_amount: string, tx_hash: string) =>
+    request<any>('/api/v1/dapp/swap-dq', {
+      method: 'POST',
+      body: JSON.stringify({ wallet_address, dq_amount, tx_hash }),
+    }),
+  
+  // ===== 用户信息 =====
+  // 获取用户完整信息
+  getUserInfo: (wallet_address: string) =>
+    request<any>(`/api/v1/dapp/user-info/${wallet_address}`),
+  
+  // 获取待领取奖励
+  getPendingRewards: (wallet_address: string) =>
+    request<any>(`/api/v1/dapp/pending-rewards/${wallet_address}`),
 };
 
 // ============ DAPP User API (用户端) ============

@@ -4,6 +4,7 @@ import { adminLogin, getAdmins, createAdmin } from './routes/admin';
 import { getUsers, getUserByAddress, getUserDeposits, getUserRewards, getUserWithdrawals, getUserTeam, getUserStats, syncUserFromChain, batchSyncUsers } from './routes/users';
 import { getDeposits, getRewards, getWithdrawals, getBlockRewards, getDepositStats } from './routes/transactions';
 import { getPartners, getPartnerByAddress, updatePartnerStatus, getPartnerStats } from './routes/partners';
+import restrictionsRouter from './routes/restrictions';
 import { getCards, mintCards, getCardStats } from './routes/cards';
 import { getPools, getPoolByName, updatePoolBalance, initPools, getPoolStats } from './routes/pools';
 import { getDLevelStats, getUserDLevel, getDLevelSummary } from './routes/dlevel';
@@ -580,6 +581,9 @@ app.post('/api/v1/logs', async (req, res) => {
 
 // ============ Node Applications ============
 app.use('/api/v1/node-applications', nodeApplicationsRouter);
+
+// ============ Address Restrictions ============
+app.use('/api/v1/restrictions', restrictionsRouter);
 
 // ============ DAPP 前端 API ============
 // DAPP平台数据
