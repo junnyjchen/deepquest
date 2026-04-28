@@ -1,5 +1,17 @@
-// API Base URL
-const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://localhost:9091';
+// API Base URL - 使用动态获取确保环境变量正确加载
+const getApiBase = () => {
+  // 优先使用环境变量
+  const envUrl = process.env.EXPO_PUBLIC_BACKEND_BASE_URL;
+  if (envUrl) {
+    console.log('[API] Using env URL:', envUrl);
+    return envUrl;
+  }
+  // 开发环境默认值
+  console.log('[API] Using default localhost URL');
+  return 'http://localhost:9091';
+};
+
+const API_BASE = getApiBase();
 
 // 请求超时时间（毫秒）
 const REQUEST_TIMEOUT = 30000;
@@ -18,6 +30,7 @@ async function request<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
+  console.log('[API] Request URL:', url);
   
   // 创建超时 Promise
   const timeoutPromise = new Promise<never>((_, reject) => {
@@ -36,9 +49,11 @@ async function request<T>(
       ...options.headers,
     },
   }).then(async (response) => {
+    console.log('[API] Response status:', response.status);
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `请求失败: ${response.status}`);
+      const errorText = await response.text();
+      console.log('[API] Error response:', errorText);
+      throw new Error(`请求失败: ${response.status}`);
     }
     return response.json();
   });

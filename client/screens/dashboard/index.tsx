@@ -28,10 +28,15 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [debugUrl, setDebugUrl] = useState<string>('');
 
   const fetchData = useCallback(async () => {
     try {
       setError(null);
+      console.log('[Dashboard] API_BASE:', process.env.EXPO_PUBLIC_BACKEND_BASE_URL);
+      const apiUrl = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://localhost:9091';
+      setDebugUrl(`${apiUrl}/api/v1/dashboard/stats`);
+      
       const [statsData, trendData] = await Promise.all([
         dashboardApi.getStats(),
         dashboardApi.getTrend(7),
@@ -39,7 +44,7 @@ export default function DashboardScreen() {
       setStats(statsData);
       setTrend(trendData);
     } catch (err: any) {
-      console.error('Failed to fetch dashboard data:', err);
+      console.error('[Dashboard] Failed to fetch dashboard data:', err);
       setError(err.message || '获取数据失败');
     } finally {
       setLoading(false);
@@ -76,6 +81,7 @@ export default function DashboardScreen() {
       <AdminLayout>
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>LOADING DATA...</Text>
+          <Text style={styles.debugText}>API: {debugUrl || 'Initializing...'}</Text>
         </View>
       </AdminLayout>
     );
@@ -87,6 +93,7 @@ export default function DashboardScreen() {
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>ERROR</Text>
           <Text style={styles.errorText}>{error}</Text>
+          <Text style={styles.debugText}>API: {debugUrl}</Text>
           <TouchableOpacity style={styles.retryButton} onPress={fetchData}>
             <Text style={styles.retryButtonText}>重试</Text>
           </TouchableOpacity>
@@ -272,6 +279,13 @@ const styles = StyleSheet.create({
     color: '#00F0FF',
     fontSize: 14,
     letterSpacing: 2,
+  },
+  debugText: {
+    color: '#555570',
+    fontSize: 10,
+    marginTop: 8,
+    textAlign: 'center',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   errorText: {
     color: '#FF003C',

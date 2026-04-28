@@ -4,3 +4,9 @@
 
 expo-env.d.ts
 # @end expo-cli
+
+# Environment files - 重要：不要忽略 .env 文件
+# .env 文件包含敏感信息和 API 配置
+!.env
+.env.local
+.env.production
