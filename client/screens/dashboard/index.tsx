@@ -27,17 +27,20 @@ export default function DashboardScreen() {
   const [trend, setTrend] = useState<TrendData[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
+      setError(null);
       const [statsData, trendData] = await Promise.all([
         dashboardApi.getStats(),
         dashboardApi.getTrend(7),
       ]);
       setStats(statsData);
       setTrend(trendData);
-    } catch (error) {
-      console.error('Failed to fetch dashboard data:', error);
+    } catch (err: any) {
+      console.error('Failed to fetch dashboard data:', err);
+      setError(err.message || '获取数据失败');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -73,6 +76,20 @@ export default function DashboardScreen() {
       <AdminLayout>
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>LOADING DATA...</Text>
+        </View>
+      </AdminLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <AdminLayout>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>ERROR</Text>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={fetchData}>
+            <Text style={styles.retryButtonText}>重试</Text>
+          </TouchableOpacity>
         </View>
       </AdminLayout>
     );
@@ -255,6 +272,23 @@ const styles = StyleSheet.create({
     color: '#00F0FF',
     fontSize: 14,
     letterSpacing: 2,
+  },
+  errorText: {
+    color: '#FF003C',
+    fontSize: 12,
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: '#00F0FF',
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#0A0A0F',
+    fontWeight: '600',
   },
   header: {
     marginBottom: 24,

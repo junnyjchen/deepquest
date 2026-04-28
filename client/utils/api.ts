@@ -1,6 +1,17 @@
 // API Base URL
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://localhost:9091';
 
+// 请求超时时间（毫秒）
+const REQUEST_TIMEOUT = 30000;
+
+// 超时错误类
+class TimeoutError extends Error {
+  constructor() {
+    super('请求超时');
+    this.name = 'TimeoutError';
+  }
+}
+
 // 通用请求方法
 async function request<T>(
   endpoint: string,
@@ -8,24 +19,32 @@ async function request<T>(
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
   
+  // 创建超时 Promise
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new TimeoutError()), REQUEST_TIMEOUT);
+  });
+
   const defaultHeaders: HeadersInit = {
     'Content-Type': 'application/json',
   };
 
-  const response = await fetch(url, {
+  // 创建实际请求 Promise
+  const fetchPromise = fetch(url, {
     ...options,
     headers: {
       ...defaultHeaders,
       ...options.headers,
     },
+  }).then(async (response) => {
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `请求失败: ${response.status}`);
+    }
+    return response.json();
   });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `请求失败: ${response.status}`);
-  }
-
-  return response.json();
+  // 竞态处理：请求或超时先完成则返回
+  return Promise.race([fetchPromise, timeoutPromise]);
 }
 
 // ============ Dashboard API ============
