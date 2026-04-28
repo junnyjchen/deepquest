@@ -105,6 +105,7 @@ function getSupabaseClient(token?: string): SupabaseClient {
         headers: { Authorization: `Bearer ${token}` },
       },
       db: {
+        schema: 'public',
         timeout: 60000,
       },
       auth: {
@@ -116,6 +117,7 @@ function getSupabaseClient(token?: string): SupabaseClient {
 
   return createClient(url, key, {
     db: {
+      schema: 'public',
       timeout: 60000,
     },
     auth: {
