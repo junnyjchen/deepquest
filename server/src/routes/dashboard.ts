@@ -1,9 +1,19 @@
 import { getSupabaseClient } from '../storage/database/supabase-client';
 
-const supabase = getSupabaseClient();
+// 懒加载 Supabase 客户端，避免模块加载时环境变量未设置
+let db: ReturnType<typeof getSupabaseClient> | null = null;
+
+function getDb() {
+  if (!db) {
+    db = getSupabaseClient();
+  }
+  return db;
+}
 
 // 获取仪表盘概览数据
 export async function getDashboardStats() {
+  const supabase = getDb();
+  
   // 用户统计
   const { count: totalUsers, error: usersError } = await supabase
     .from('users')
@@ -150,6 +160,7 @@ export async function getDashboardStats() {
 
 // 获取近期入金趋势（每日）
 export async function getDepositTrend(days: number = 7) {
+  const supabase = getDb();
   const result: Array<{ date: string; amount: number; count: number }> = [];
   
   for (let i = days - 1; i >= 0; i--) {
