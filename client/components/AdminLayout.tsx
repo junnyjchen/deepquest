@@ -41,16 +41,33 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
   // 获取当前路径
   const currentPath = '/' + (segments.filter(Boolean).join('/') || 'dashboard');
 
-  // 检查是否已登录
+  // 检查是否已登录（仅在挂载时执行一次，避免循环）
   useEffect(() => {
+    let isMounted = true;
+    let hasRedirected = false; // 防止循环重定向
+
     const checkAuth = async () => {
-      const adminStr = await AsyncStorage.getItem('admin');
-      if (!adminStr && currentPath !== '/') {
-        router.replace('/');
+      try {
+        const adminStr = await AsyncStorage.getItem('admin');
+        // 只有在需要登录的页面且未登录时才跳转
+        // dashboard 页面本身不需要登录检查，避免循环
+        if (!adminStr && !hasRedirected && currentPath !== '/' && currentPath !== '/dashboard') {
+          hasRedirected = true;
+          if (isMounted) {
+            router.replace('/');
+          }
+        }
+      } catch (e) {
+        console.error('[AdminLayout] Auth check failed:', e);
       }
     };
+
     checkAuth();
-  }, [currentPath]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, []); // 空依赖数组，只执行一次
 
   // 页面标题映射
   const getPageTitle = () => {
