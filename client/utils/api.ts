@@ -1,65 +1,39 @@
-// API Base URL - 使用动态获取确保环境变量正确加载
-const getApiBase = () => {
-  // 优先使用环境变量
-  const envUrl = process.env.EXPO_PUBLIC_BACKEND_BASE_URL;
-  if (envUrl) {
-    console.log('[API] Using env URL:', envUrl);
-    return envUrl;
-  }
-  // 开发环境默认值
-  console.log('[API] Using default localhost URL');
-  return 'http://localhost:9091';
-};
+// API Base URL
+const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://localhost:9091';
 
-const API_BASE = getApiBase();
-
-// 请求超时时间（毫秒）
-const REQUEST_TIMEOUT = 30000;
-
-// 超时错误类
-class TimeoutError extends Error {
-  constructor() {
-    super('请求超时');
-    this.name = 'TimeoutError';
-  }
-}
-
-// 通用请求方法
+// 通用请求方法 - 使用 AbortController 处理超时
 async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
-  console.log('[API] Request URL:', url);
-  
-  // 创建超时 Promise
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new TimeoutError()), REQUEST_TIMEOUT);
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒超时
 
-  const defaultHeaders: HeadersInit = {
-    'Content-Type': 'application/json',
-  };
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
 
-  // 创建实际请求 Promise
-  const fetchPromise = fetch(url, {
-    ...options,
-    headers: {
-      ...defaultHeaders,
-      ...options.headers,
-    },
-  }).then(async (response) => {
-    console.log('[API] Response status:', response.status);
+    clearTimeout(timeoutId);
+
     if (!response.ok) {
-      const errorText = await response.text();
-      console.log('[API] Error response:', errorText);
       throw new Error(`请求失败: ${response.status}`);
     }
-    return response.json();
-  });
 
-  // 竞态处理：请求或超时先完成则返回
-  return Promise.race([fetchPromise, timeoutPromise]);
+    return response.json();
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('请求超时，请检查网络连接');
+    }
+    throw error;
+  }
 }
 
 // ============ Dashboard API ============
