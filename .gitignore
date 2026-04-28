@@ -8,6 +8,8 @@ expo/expo-env.d.ts
 expo-env.d.ts
 .DS_Store
 logs/
+!client/screens/logs/
+!server/logs/
 *.tsbuildinfo
 node-compile-cache/
 .env
