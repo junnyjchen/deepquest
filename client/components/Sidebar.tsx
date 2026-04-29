@@ -71,7 +71,7 @@ export default function Sidebar({ currentPath = '/dashboard', onNavigate }: Side
   const handleLogout = async () => {
     try {
       await AsyncStorage.removeItem('admin');
-      router.replace('/');
+      router.replace('/login');
     } catch (error) {
       console.error('Logout error:', error);
     }

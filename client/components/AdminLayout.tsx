@@ -44,19 +44,13 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
   // 检查是否已登录（仅在挂载时执行一次，避免循环）
   useEffect(() => {
     let isMounted = true;
-    let hasRedirected = false; // 防止循环重定向
 
     const checkAuth = async () => {
       try {
         const adminStr = await AsyncStorage.getItem('admin');
-        // 只有在需要登录的页面且未登录时才跳转
-        // dashboard 页面本身不需要登录检查，避免循环
-        if (!adminStr && !hasRedirected && currentPath !== '/' && currentPath !== '/dashboard') {
-          hasRedirected = true;
-          if (isMounted) {
-            router.replace('/');
-          }
-        }
+        // 管理后台页面不需要登录检查（暂时禁用）
+        // 这样可以避免登录页和管理后台页面之间的循环重定向
+        // 如果需要登录功能，可以在 login.tsx 中单独实现
       } catch (e) {
         console.error('[AdminLayout] Auth check failed:', e);
       }
