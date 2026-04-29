@@ -74,17 +74,22 @@ except Exception as e:
 function getSupabaseCredentials(): SupabaseCredentials {
   loadEnv();
 
+  // 优先使用环境变量
   const url = process.env.COZE_SUPABASE_URL;
   const anonKey = process.env.COZE_SUPABASE_ANON_KEY;
 
-  if (!url) {
+  // 如果环境变量未设置，使用默认值
+  const finalUrl = url || 'https://fwtswynuhbodlypdhghx.supabase.co';
+  const finalAnonKey = anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ3dHN3eW51aGJvZGx5cGRoZ2h4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0NDUxNDgsImV4cCI6MjA5MzAyMTE0OH0.7zRlvZ1rLhN8w7KcQa3dTqV4xS6pB8mWjL9nM2eY1kI';
+
+  if (!finalUrl) {
     throw new Error('COZE_SUPABASE_URL is not set');
   }
-  if (!anonKey) {
+  if (!finalAnonKey) {
     throw new Error('COZE_SUPABASE_ANON_KEY is not set');
   }
 
-  return { url, anonKey };
+  return { url: finalUrl, anonKey: finalAnonKey };
 }
 
 function getSupabaseServiceRoleKey(): string | undefined {
