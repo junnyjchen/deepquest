@@ -4,8 +4,8 @@ import AdminLayout from '@/components/AdminLayout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { dashboardApi } from '@/utils/api';
 
-// API Base URL（用于调试）
-const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://localhost:9091';
+// API Base URL（使用配置的环境变量）
+const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || '/api/v1';
 
 interface DashboardStats {
   users: { total: number };
