@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from "express";
 import cors from "cors";
+import { ensureDatabaseReady } from './storage/database/supabase-client';
 import { adminLogin, getAdmins, createAdmin } from './routes/admin';
 import { getUsers, getUserByAddress, getUserDeposits, getUserRewards, getUserWithdrawals, getUserTeam, getUserStats, syncUserFromChain, batchSyncUsers } from './routes/users';
 import { getDeposits, getRewards, getWithdrawals, getBlockRewards, getDepositStats } from './routes/transactions';
@@ -596,6 +597,10 @@ app.use('/api/v1/dapp/user', dappUserRouter);
 // DAPP团队数据
 app.use('/api/v1/dapp/team', dappTeamRouter);
 
-app.listen(port, () => {
+app.listen(port, async () => {
   console.log(`DQ Admin Server listening at http://localhost:${port}/`);
+  
+  // Check database on startup
+  console.log('[Server] Checking database connection...');
+  await ensureDatabaseReady();
 });
