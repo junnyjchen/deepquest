@@ -8,7 +8,11 @@ async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const url = `${API_BASE}${endpoint}`;
+  // 如果 endpoint 已经包含完整路径（以 /api/v1 开头），直接使用
+  // 否则拼接 API_BASE
+  const url = endpoint.startsWith('/api/v1') 
+    ? endpoint 
+    : `${API_BASE}${endpoint}`;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒超时
 
