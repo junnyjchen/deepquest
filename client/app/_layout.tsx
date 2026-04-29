@@ -22,7 +22,6 @@ export default function RootLayout() {
           headerShown: false
         }}
       >
-        <Stack.Screen name="index" options={{ title: "" }} />
         <Stack.Screen name="login" options={{ title: "Login" }} />
         <Stack.Screen name="dashboard" options={{ title: "Dashboard" }} />
         <Stack.Screen name="users" options={{ title: "Users" }} />

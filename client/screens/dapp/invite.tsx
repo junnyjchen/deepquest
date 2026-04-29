@@ -69,7 +69,7 @@ export default function InviteBinding() {
           [
             {
               text: '确定',
-              onPress: () => router.replace('/'),
+              onPress: () => router.back(),
             },
           ]
         );
@@ -151,7 +151,7 @@ export default function InviteBinding() {
           [
             {
               text: '返回首页',
-              onPress: () => router.replace('/'),
+              onPress: () => router.back(),
             },
           ]
         );
@@ -167,7 +167,7 @@ export default function InviteBinding() {
   };
 
   const handleGoHome = () => {
-    router.replace('/');
+    router.back();
   };
 
   if (loading) {
