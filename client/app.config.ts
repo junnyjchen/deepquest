@@ -73,7 +73,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       "typedRoutes": true
     },
     "extra": {
-      "EXPO_PUBLIC_BACKEND_BASE_URL": process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://localhost:9091'
+      // 测试环境使用相对路径，让 nginx 代理到后端
+      "EXPO_PUBLIC_BACKEND_BASE_URL": process.env.EXPO_PUBLIC_BACKEND_BASE_URL || '/api/v1'
     }
   }
 }

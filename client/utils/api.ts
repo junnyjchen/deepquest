@@ -1,5 +1,7 @@
-// API Base URL
-const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://localhost:9091';
+// API Base URL - 使用相对路径让 nginx 代理
+// 在测试环境使用 /api/v1/ 相对路径，由 nginx 代理到后端
+// 在需要外部访问时，设置为完整 URL 如 https://api.example.com
+const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || '/api/v1';
 
 // 通用请求方法 - 使用 AbortController 处理超时
 async function request<T>(
