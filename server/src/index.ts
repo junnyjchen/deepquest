@@ -598,9 +598,34 @@ app.use('/api/v1/dapp/user', dappUserRouter);
 app.use('/api/v1/dapp/team', dappTeamRouter);
 
 app.listen(port, async () => {
-  console.log(`DQ Admin Server listening at http://localhost:${port}/`);
+  console.log(`
+╔═══════════════════════════════════════════════════════════╗
+║            DQ Admin Server v1.0.0                        ║
+║            Database Auto-Initialization                 ║
+╚═══════════════════════════════════════════════════════════╝
+  `);
   
-  // Check database on startup
-  console.log('[Server] Checking database connection...');
+  console.log(`[Server] Listening at http://localhost:${port}/`);
+  console.log('[Server] Checking database connection and tables...\n');
+  
+  // 使用增强版数据库检查和初始化
+  const { initializeDatabaseEnhanced, ensureDatabaseReady } = await import('./storage/database/supabase-client');
   await ensureDatabaseReady();
+  
+  // 尝试使用 Management API 自动创建表（如果有 token）
+  if (process.env.SUPABASE_PERSONAL_ACCESS_TOKEN) {
+    console.log('\n[Server] Attempting auto-creation via Management API...');
+    const success = await initializeDatabaseEnhanced();
+    if (success) {
+      console.log('\n✅ Database tables created successfully!');
+    }
+  }
+  
+  console.log(`
+╔═══════════════════════════════════════════════════════════╗
+║  If tables are missing and auto-creation failed:        ║
+║  1. Go to Supabase SQL Editor                          ║
+║  2. Run the SQL from: docs/init_database.sql           ║
+╚═══════════════════════════════════════════════════════════╝
+  `);
 });
