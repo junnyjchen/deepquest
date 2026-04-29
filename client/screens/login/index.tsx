@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, KeyboardAvoidingView, Platform, TouchableOpacity, Alert } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { LinearGradient } from 'expo-linear-gradient';
-import { adminApi } from '@/utils/api';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function LoginScreen() {
   const router = useSafeRouter();
+  const { login } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,8 +20,7 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      const admin = await adminApi.login(username, password);
-      await AsyncStorage.setItem('admin', JSON.stringify(admin));
+      await login(username, password);
       router.replace('/dashboard');
     } catch (error: any) {
       Alert.alert('登录失败', error.message || '请检查用户名和密码');

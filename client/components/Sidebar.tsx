@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
+import { useAuth } from '@/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // 暗黑科技风配色
 const COLORS = {
@@ -59,6 +59,7 @@ interface SidebarProps {
 
 export default function Sidebar({ currentPath = '/dashboard', onNavigate }: SidebarProps) {
   const router = useSafeRouter();
+  const { logout } = useAuth();
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
   const isActive = (path: string) => {
@@ -70,7 +71,7 @@ export default function Sidebar({ currentPath = '/dashboard', onNavigate }: Side
 
   const handleLogout = async () => {
     try {
-      await AsyncStorage.removeItem('admin');
+      await logout();
       router.replace('/login');
     } catch (error) {
       console.error('Logout error:', error);

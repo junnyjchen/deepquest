@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ViewStyle, TextSt
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useSegments } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAdminAuth } from '@/hooks/useAdminAuth';
 import Sidebar from './Sidebar';
 
 // 暗黑科技风配色
@@ -28,6 +28,9 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
+  // 使用管理员认证守卫
+  const { isLoading } = useAdminAuth();
+
   useEffect(() => {
     const checkMobile = () => {
       const width = Dimensions.get('window').width;
@@ -40,28 +43,6 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
 
   // 获取当前路径
   const currentPath = '/' + (segments.filter(Boolean).join('/') || 'dashboard');
-
-  // 检查是否已登录（仅在挂载时执行一次，避免循环）
-  useEffect(() => {
-    let isMounted = true;
-
-    const checkAuth = async () => {
-      try {
-        const adminStr = await AsyncStorage.getItem('admin');
-        // 管理后台页面不需要登录检查（暂时禁用）
-        // 这样可以避免登录页和管理后台页面之间的循环重定向
-        // 如果需要登录功能，可以在 login.tsx 中单独实现
-      } catch (e) {
-        console.error('[AdminLayout] Auth check failed:', e);
-      }
-    };
-
-    checkAuth();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []); // 空依赖数组，只执行一次
 
   // 页面标题映射
   const getPageTitle = () => {
