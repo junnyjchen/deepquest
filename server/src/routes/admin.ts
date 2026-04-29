@@ -60,3 +60,46 @@ export async function getAdmins() {
   if (error) throw new Error(`获取管理员列表失败: ${error.message}`);
   return data;
 }
+
+// 初始化默认管理员（如果不存在）
+export async function initDefaultAdmin() {
+  // 检查是否已存在管理员
+  const { data: existingAdmins, error: checkError } = await supabase
+    .from('admins')
+    .select('id')
+    .limit(1);
+  
+  if (checkError) {
+    console.error('[Admin] 检查管理员失败:', checkError.message);
+    return null;
+  }
+  
+  // 如果已存在管理员，不创建默认账户
+  if (existingAdmins && existingAdmins.length > 0) {
+    console.log('[Admin] 管理员已存在，跳过初始化');
+    return null;
+  }
+  
+  // 创建默认管理员
+  const defaultUsername = process.env.ADMIN_USERNAME || 'admin';
+  const defaultPassword = process.env.ADMIN_PASSWORD || 'admin123';
+  
+  const { data, error } = await supabase
+    .from('admins')
+    .insert({
+      username: defaultUsername,
+      password_hash: defaultPassword,
+      role: 'super_admin',
+      is_active: true,
+    })
+    .select()
+    .single();
+  
+  if (error) {
+    console.error('[Admin] 初始化默认管理员失败:', error.message);
+    return null;
+  }
+  
+  console.log(`[Admin] 默认管理员已创建: ${defaultUsername} / ${defaultPassword}`);
+  return data;
+}

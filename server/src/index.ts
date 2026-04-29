@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from "express";
 import cors from "cors";
 import { ensureDatabaseReady } from './storage/database/supabase-client';
-import { adminLogin, getAdmins, createAdmin } from './routes/admin';
+import { adminLogin, getAdmins, createAdmin, initDefaultAdmin } from './routes/admin';
 import { getUsers, getUserByAddress, getUserDeposits, getUserRewards, getUserWithdrawals, getUserTeam, getUserStats, syncUserFromChain, batchSyncUsers } from './routes/users';
 import { getDeposits, getRewards, getWithdrawals, getBlockRewards, getDepositStats } from './routes/transactions';
 import { getPartners, getPartnerByAddress, updatePartnerStatus, getPartnerStats } from './routes/partners';
@@ -637,6 +637,10 @@ app.listen(port, async () => {
       console.log('\n✅ Database tables created successfully!');
     }
   }
+  
+  // 初始化默认管理员
+  console.log('\n[Server] Initializing default admin...');
+  await initDefaultAdmin();
   
   console.log(`
 ╔═══════════════════════════════════════════════════════════╗
