@@ -15,7 +15,6 @@ export default function DappLayout() {
           contentStyle: { backgroundColor: '#0A0A12' },
         }}
       >
-        <Stack.Screen name="index" options={{ title: 'DAPP' }} />
         <Stack.Screen name="invite" options={{ title: 'Invite Friends', presentation: 'modal' }} />
         <Stack.Screen name="nodes" options={{ title: 'Node Center' }} />
         <Stack.Screen name="profile" options={{ title: 'My Profile' }} />
