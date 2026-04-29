@@ -4,6 +4,9 @@ import AdminLayout from '@/components/AdminLayout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { dashboardApi } from '@/utils/api';
 
+// API Base URL（用于调试）
+const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || 'http://localhost:9091';
+
 interface DashboardStats {
   users: { total: number };
   deposits: { total: number; today: number; week: number };
@@ -31,6 +34,8 @@ export default function DashboardScreen() {
 
   const fetchData = useCallback(async () => {
     try {
+      console.log('[Dashboard] API_BASE:', API_BASE);
+      console.log('[Dashboard] Full URL:', `${API_BASE}/api/v1/dashboard/stats`);
       setError(null);
       const [statsData, trendData] = await Promise.all([
         dashboardApi.getStats(),
@@ -40,6 +45,8 @@ export default function DashboardScreen() {
       setTrend(trendData);
     } catch (err: any) {
       console.error('[Dashboard] Failed to fetch dashboard data:', err);
+      console.error('[Dashboard] Error name:', err.name);
+      console.error('[Dashboard] Error message:', err.message);
       setError(err.message || '获取数据失败');
     } finally {
       setLoading(false);

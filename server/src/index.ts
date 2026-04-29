@@ -21,8 +21,24 @@ import dappTeamRouter from './routes/dapp-team';
 const app = express();
 const port = process.env.PORT || 9091;
 
-// Middleware
-app.use(cors());
+// Middleware - CORS 配置（允许所有来源）
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept'],
+  credentials: true,
+}));
+
+// API 请求日志中间件
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`[API] ${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
+  });
+  next();
+});
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -34,11 +50,12 @@ app.get('/api/v1/health', (req, res) => {
 
 // ============ Dashboard ============
 app.get('/api/v1/dashboard/stats', async (req, res) => {
+  console.log('[Dashboard] Request from:', req.headers.origin, 'IP:', req.ip);
   try {
     const stats = await getDashboardStats();
     res.json(stats);
   } catch (error: any) {
-    console.error('Dashboard stats error:', error);
+    console.error('[Dashboard] Stats error:', error);
     res.status(500).json({ error: error.message });
   }
 });
