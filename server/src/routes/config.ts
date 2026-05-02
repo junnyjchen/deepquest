@@ -46,65 +46,152 @@ export async function updateConfig(key: string, value: any, description?: string
 // 初始化默认配置
 export async function initDefaultConfigs() {
   const configs = [
+    // 合约地址
     {
-      config_key: 'invest_min',
-      config_value: { value: '1', unit: 'SOL' },
-      description: '最小投资金额',
+      config_key: 'contract_address',
+      config_value: '0x1F45f166Dc74C0FAb7a1A5C3Eb1Ff2b0DA68c906',
+      description: '主合约地址',
     },
     {
+      config_key: 'dqtoken_address',
+      config_value: '', // 部署后从合约获取
+      description: 'DQ代币地址',
+    },
+    {
+      config_key: 'dqcard_address',
+      config_value: '', // 部署后从合约获取
+      description: 'NFT卡牌地址',
+    },
+    // 可调整参数
+    {
       config_key: 'invest_max_start',
-      config_value: { value: '10', unit: 'SOL' },
-      description: '初始最大投资金额',
+      config_value: { value: '10', unit: 'SOL', editable: true },
+      description: '初始最大投资金额（可调整）',
     },
     {
       config_key: 'invest_max_step',
-      config_value: { value: '10', unit: 'SOL' },
-      description: '每阶段最大投资增加量',
+      config_value: { value: '10', unit: 'SOL', editable: true },
+      description: '每阶段最大投资增加量（可调整）',
     },
     {
       config_key: 'invest_max_final',
-      config_value: { value: '200', unit: 'SOL' },
-      description: '最终最大投资金额',
+      config_value: { value: '200', unit: 'SOL', editable: true },
+      description: '最终最大投资金额（可调整）',
     },
     {
       config_key: 'phase_duration',
-      config_value: { value: '15', unit: 'days' },
-      description: '每阶段持续天数',
+      config_value: { value: '15', unit: 'days', editable: true },
+      description: '每阶段持续天数（可调整）',
     },
+    // 固定参数 - 仅展示
+    {
+      config_key: 'invest_min',
+      config_value: { value: '1', unit: 'SOL', editable: false },
+      description: '最小投资金额（固定）',
+    },
+    // 等级门槛（固定：小区业绩 SOL）
     {
       config_key: 'level_thresholds',
-      config_value: { thresholds: [100, 200, 600, 2000, 6000, 20000], labels: ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'] },
-      description: '等级晋级门槛（小区业绩）',
+      config_value: { 
+        editable: false,
+        thresholds: [100, 200, 600, 2000, 6000, 20000], 
+        labels: ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'],
+        rewards: [5, 10, 15, 20, 25, 30]
+      },
+      description: '等级晋级门槛（固定：小区业绩 SOL）',
     },
+    // D级门槛（固定：有效地址数）
     {
       config_key: 'd_level_thresholds',
-      config_value: { thresholds: [30, 120, 360, 1000, 4000, 10000, 15000, 30000], labels: ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8'] },
-      description: 'D级门槛（有效地址数）',
+      config_value: { 
+        editable: false,
+        thresholds: [30, 120, 360, 1000, 4000, 10000, 15000, 30000], 
+        labels: ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8']
+      },
+      description: 'D级门槛（固定：有效地址数）',
     },
+    // NFT卡牌配置（固定价格和总量，可调整剩余数量）
     {
       config_key: 'card_config',
       config_value: {
-        'A': { price: '500', total: 3000, remaining: 3000, reward_rate: 4 },
-        'B': { price: '1500', total: 1000, remaining: 1000, reward_rate: 5 },
-        'C': { price: '5000', total: 300, remaining: 300, reward_rate: 6 },
+        editable: false,
+        cards: {
+          'A': { price: '500', unit: 'USDT', total: 1000, remaining: 1000, reward_weight: 4 },
+          'B': { price: '1500', unit: 'USDT', total: 500, remaining: 500, reward_weight: 5 },
+          'C': { price: '5000', unit: 'USDT', total: 100, remaining: 100, reward_weight: 6 },
+        },
+        requirements: { 'A': 5, 'B': 10, 'C': 20 } // 领取所需有效线数
       },
-      description: 'NFT卡牌配置',
+      description: 'NFT卡牌配置（价格和总量固定）',
     },
+    // 合伙人要求
     {
       config_key: 'partner_requirements',
       config_value: {
-        'first_20': { personal_invest: 5000, direct_sales: 30000 },
-        'next_30': { personal_invest: 5000, direct_sales: 50000 },
+        editable: true,
+        total_limit: 50,
+        first_phase: { personal_invest: 5000, direct_sales: 30000 },
+        second_phase: { personal_invest: 5000, direct_sales: 50000 },
       },
       description: '合伙人资格要求',
     },
+    // 质押配置（固定）
     {
       config_key: 'stake_config',
       config_value: {
+        editable: false,
         periods: [30, 90, 180, 360],
         rates: [5, 10, 15, 20],
+        unit: 'days / %'
       },
-      description: '质押配置',
+      description: '质押配置（固定）',
+    },
+    // 奖励分配比例（固定）
+    {
+      config_key: 'reward_distribution',
+      config_value: {
+        editable: false,
+        deposit_split: {
+          dynamic: 50,  // 动态奖励 50%
+          lp: 50       // LP挖矿 50%
+        },
+        dynamic_split: {
+          direct: 30,   // 直推奖励
+          node: 15,     // 节点奖励
+          management: 30, // 管理奖励
+          dao: 10,      // DAO奖励
+          insurance: 7, // 保险池
+          operation: 8  // 运营池
+        }
+      },
+      description: '奖励分配比例（固定）',
+    },
+    // 提现手续费（固定）
+    {
+      config_key: 'withdraw_fee',
+      config_value: {
+        editable: false,
+        rate: 10,      // 10%
+        split: {
+          nft: 40,      // 40% 给NFT持有者
+          partner: 30,  // 30% 给合伙人
+          foundation: 30 // 30% 给基金会
+        }
+      },
+      description: '提现手续费（固定）',
+    },
+    // LP赎回手续费
+    {
+      config_key: 'lp_remove_fee',
+      config_value: {
+        editable: false,
+        rules: [
+          { days: '<60', rate: 20 },
+          { days: '60-180', rate: 10 },
+          { days: '>180', rate: 0 }
+        ]
+      },
+      description: 'LP赎回手续费规则（固定）',
     },
   ];
   

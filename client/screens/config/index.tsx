@@ -13,6 +13,29 @@ interface Config {
   updated_by: string;
 }
 
+interface LevelThreshold {
+  thresholds: number[];
+  labels: string[];
+  rewards: number[];
+  editable?: boolean;
+}
+
+interface CardConfig {
+  cards: {
+    [key: string]: {
+      price: string;
+      unit: string;
+      total: number;
+      remaining: number;
+      reward_weight: number;
+    };
+  };
+  requirements: {
+    [key: string]: number;
+  };
+  editable?: boolean;
+}
+
 export default function ConfigScreen() {
   const [configs, setConfigs] = useState<Config[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,14 +43,8 @@ export default function ConfigScreen() {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingConfig, setEditingConfig] = useState<Config | null>(null);
-  const [editPeriods, setEditPeriods] = useState('');
-  const [editRates, setEditRates] = useState('');
-  const [editCardConfig, setEditCardConfig] = useState({
-    A: { price: '', total: '', remaining: '', reward_rate: '', name: '', level: '', fee_rate: '' },
-    B: { price: '', total: '', remaining: '', reward_rate: '', name: '', level: '', fee_rate: '' },
-    C: { price: '', total: '', remaining: '', reward_rate: '', name: '', level: '', fee_rate: '' },
-  });
-  const [cardEditModalVisible, setCardEditModalVisible] = useState(false);
+  const [editValue, setEditValue] = useState('');
+  const [editUnit, setEditUnit] = useState('');
 
   const fetchConfigs = useCallback(async () => {
     try {
@@ -50,47 +67,64 @@ export default function ConfigScreen() {
     fetchConfigs();
   };
 
-  const formatValue = (value: any): string => {
-    if (typeof value === 'object') {
-      return JSON.stringify(value, null, 2);
-    }
-    return String(value);
+  const getConfig = (key: string): Config | undefined => {
+    return configs.find(c => c.config_key === key);
   };
 
   const getConfigCategory = (key: string): { label: string; color: string } => {
+    if (key.includes('address') || key.includes('contract')) {
+      return { label: 'Contract', color: '#00F0FF' };
+    }
     if (key.includes('invest') || key.includes('phase')) {
       return { label: 'Investment', color: '#00FF88' };
     }
-    if (key.includes('level') || key.includes('d_level')) {
-      return { label: 'Levels', color: '#00F0FF' };
+    if (key.includes('level_thresholds')) {
+      return { label: 'S-Level', color: '#FFD700' };
+    }
+    if (key.includes('d_level')) {
+      return { label: 'D-Level', color: '#00F0FF' };
     }
     if (key.includes('card')) {
-      return { label: 'NFT Cards', color: '#FFD700' };
+      return { label: 'NFT Cards', color: '#FF6B35' };
     }
     if (key.includes('partner')) {
       return { label: 'Partners', color: '#BF00FF' };
     }
     if (key.includes('stake')) {
-      return { label: 'Staking', color: '#FF6B00' };
+      return { label: 'Staking', color: '#FF9500' };
     }
-    return { label: 'Other', color: '#555570' };
+    if (key.includes('reward')) {
+      return { label: 'Rewards', color: '#34C759' };
+    }
+    if (key.includes('withdraw') || key.includes('lp_remove')) {
+      return { label: 'Fee', color: '#FF3B30' };
+    }
+    return { label: 'Other', color: '#8E8E93' };
+  };
+
+  const isEditable = (config: Config): boolean => {
+    const value = config.config_value;
+    if (typeof value === 'object' && value !== null && 'editable' in value) {
+      return value.editable === true;
+    }
+    return false;
   };
 
   const handleInit = async () => {
     Alert.alert(
-      'Initialize Configs',
-      'This will initialize default configuration values. Continue?',
+      '初始化配置',
+      '这将初始化默认配置值。继续吗？',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: '取消', style: 'cancel' },
         {
-          text: 'Initialize',
+          text: '初始化',
           onPress: async () => {
             try {
               await configApi.init();
               fetchConfigs();
-              Alert.alert('Success', 'Configuration initialized');
+              Alert.alert('成功', '配置已初始化');
             } catch (error: any) {
-              Alert.alert('Error', error.message);
+              Alert.alert('错误', error.message);
             }
           },
         },
@@ -98,114 +132,421 @@ export default function ConfigScreen() {
     );
   };
 
-  const handleEditStakeConfig = (config: Config) => {
+  const handleEdit = (config: Config) => {
     const value = config.config_value;
+    if (typeof value === 'object' && value !== null) {
+      setEditValue(value.value || '');
+      setEditUnit(value.unit || '');
+    } else {
+      setEditValue(String(value));
+      setEditUnit('');
+    }
     setEditingConfig(config);
-    setEditPeriods((value.periods || []).join(', '));
-    setEditRates((value.rates || []).join(', '));
     setEditModalVisible(true);
   };
 
-  const handleSaveStakeConfig = async () => {
+  const handleSave = async () => {
     if (!editingConfig) return;
-    
+
     try {
-      const periods = editPeriods.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
-      const rates = editRates.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
-      
-      if (periods.length === 0 || rates.length === 0) {
-        Alert.alert('Error', 'Invalid periods or rates format');
-        return;
+      const value = editingConfig.config_value;
+      let newValue: any;
+
+      if (typeof value === 'object' && value !== null && 'value' in value) {
+        // 带单位的配置
+        newValue = { ...value, value: editValue, unit: editUnit };
+      } else {
+        newValue = editValue;
       }
-      
-      if (periods.length !== rates.length) {
-        Alert.alert('Error', 'Periods and rates must have the same count');
-        return;
-      }
-      
-      await configApi.update(editingConfig.config_key, {
-        periods,
-        rates
-      }, editingConfig.description);
-      
+
+      await configApi.update(editingConfig.config_key, newValue, editingConfig.description);
       setEditModalVisible(false);
       fetchConfigs();
-      Alert.alert('Success', 'Stake config updated');
+      Alert.alert('成功', '配置已更新');
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      Alert.alert('错误', error.message);
     }
   };
 
-  const handleEditCardConfig = (config: Config) => {
-    const value = config.config_value || {};
-    setEditCardConfig({
-      A: {
-        price: String(value.A?.price || ''),
-        total: String(value.A?.total || ''),
-        remaining: String(value.A?.remaining || ''),
-        reward_rate: String(value.A?.reward_rate || ''),
-        name: value.A?.name || '',
-        level: value.A?.level || '',
-        fee_rate: String(value.A?.fee_rate || ''),
-      },
-      B: {
-        price: String(value.B?.price || ''),
-        total: String(value.B?.total || ''),
-        remaining: String(value.B?.remaining || ''),
-        reward_rate: String(value.B?.reward_rate || ''),
-        name: value.B?.name || '',
-        level: value.B?.level || '',
-        fee_rate: String(value.B?.fee_rate || ''),
-      },
-      C: {
-        price: String(value.C?.price || ''),
-        total: String(value.C?.total || ''),
-        remaining: String(value.C?.remaining || ''),
-        reward_rate: String(value.C?.reward_rate || ''),
-        name: value.C?.name || '',
-        level: value.C?.level || '',
-        fee_rate: String(value.C?.fee_rate || ''),
-      },
-    });
-    setEditingConfig(config);
-    setCardEditModalVisible(true);
+  const renderContractAddresses = () => {
+    const contractConfig = getConfig('contract_address');
+    const dqtokenConfig = getConfig('dqtoken_address');
+    const dqcardConfig = getConfig('dqcard_address');
+
+    if (!contractConfig && !dqtokenConfig && !dqcardConfig) return null;
+
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>合约地址</Text>
+        <View style={styles.addressList}>
+          {contractConfig && (
+            <View style={styles.addressItem}>
+              <Text style={styles.addressLabel}>主合约:</Text>
+              <Text style={styles.addressValue} numberOfLines={1}>
+                {contractConfig.config_value}
+              </Text>
+            </View>
+          )}
+          {dqtokenConfig && (
+            <View style={styles.addressItem}>
+              <Text style={styles.addressLabel}>DQ代币:</Text>
+              <Text style={styles.addressValue} numberOfLines={1}>
+                {dqtokenConfig.config_value || '待设置'}
+              </Text>
+            </View>
+          )}
+          {dqcardConfig && (
+            <View style={styles.addressItem}>
+              <Text style={styles.addressLabel}>NFT卡牌:</Text>
+              <Text style={styles.addressValue} numberOfLines={1}>
+                {dqcardConfig.config_value || '待设置'}
+              </Text>
+            </View>
+          )}
+        </View>
+      </View>
+    );
   };
 
-  const handleSaveCardConfig = async () => {
-    if (!editingConfig) return;
-    
-    try {
-      const newConfig: any = {};
-      for (const type of ['A', 'B', 'C']) {
-        const cardData = editCardConfig[type as keyof typeof editCardConfig];
-        if (cardData.price) {
-          newConfig[type] = {
-            price: cardData.price,
-            total: parseInt(cardData.total) || 0,
-            remaining: parseInt(cardData.remaining) || 0,
-            reward_rate: parseFloat(cardData.reward_rate) || 0,
-            name: cardData.name,
-            level: cardData.level,
-            fee_rate: parseFloat(cardData.fee_rate) || 0,
-          };
-        }
-      }
-      
-      await configApi.update(editingConfig.config_key, newConfig, editingConfig.description);
-      
-      setCardEditModalVisible(false);
-      fetchConfigs();
-      Alert.alert('Success', 'Card config updated');
-    } catch (error: any) {
-      Alert.alert('Error', error.message);
-    }
+  const renderInvestmentConfig = () => {
+    const investMin = getConfig('invest_min');
+    const investMaxStart = getConfig('invest_max_start');
+    const investMaxStep = getConfig('invest_max_step');
+    const investMaxFinal = getConfig('invest_max_final');
+    const phaseDuration = getConfig('phase_duration');
+
+    if (!investMin && !investMaxStart && !investMaxStep && !investMaxFinal && !phaseDuration) return null;
+
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>投资参数</Text>
+        <View style={styles.paramGrid}>
+          {investMin && (
+            <View style={styles.paramCard}>
+              <Text style={styles.paramLabel}>最小投资</Text>
+              <Text style={styles.paramValue}>
+                {investMin.config_value?.value} {investMin.config_value?.unit}
+              </Text>
+              <Text style={styles.paramBadgeFixed}>固定</Text>
+            </View>
+          )}
+          {investMaxStart && (
+            <TouchableOpacity 
+              style={[styles.paramCard, isEditable(investMaxStart) && styles.paramCardEditable]}
+              onPress={() => isEditable(investMaxStart) && handleEdit(investMaxStart)}
+              disabled={!isEditable(investMaxStart)}
+            >
+              <Text style={styles.paramLabel}>初始最大</Text>
+              <Text style={styles.paramValue}>
+                {investMaxStart.config_value?.value} {investMaxStart.config_value?.unit}
+              </Text>
+              {isEditable(investMaxStart) ? (
+                <Text style={styles.paramBadgeEdit}>可调</Text>
+              ) : (
+                <Text style={styles.paramBadgeFixed}>固定</Text>
+              )}
+            </TouchableOpacity>
+          )}
+          {investMaxStep && (
+            <TouchableOpacity 
+              style={[styles.paramCard, isEditable(investMaxStep) && styles.paramCardEditable]}
+              onPress={() => isEditable(investMaxStep) && handleEdit(investMaxStep)}
+              disabled={!isEditable(investMaxStep)}
+            >
+              <Text style={styles.paramLabel}>阶段增量</Text>
+              <Text style={styles.paramValue}>
+                {investMaxStep.config_value?.value} {investMaxStep.config_value?.unit}
+              </Text>
+              {isEditable(investMaxStep) ? (
+                <Text style={styles.paramBadgeEdit}>可调</Text>
+              ) : (
+                <Text style={styles.paramBadgeFixed}>固定</Text>
+              )}
+            </TouchableOpacity>
+          )}
+          {investMaxFinal && (
+            <TouchableOpacity 
+              style={[styles.paramCard, isEditable(investMaxFinal) && styles.paramCardEditable]}
+              onPress={() => isEditable(investMaxFinal) && handleEdit(investMaxFinal)}
+              disabled={!isEditable(investMaxFinal)}
+            >
+              <Text style={styles.paramLabel}>最终最大</Text>
+              <Text style={styles.paramValue}>
+                {investMaxFinal.config_value?.value} {investMaxFinal.config_value?.unit}
+              </Text>
+              {isEditable(investMaxFinal) ? (
+                <Text style={styles.paramBadgeEdit}>可调</Text>
+              ) : (
+                <Text style={styles.paramBadgeFixed}>固定</Text>
+              )}
+            </TouchableOpacity>
+          )}
+          {phaseDuration && (
+            <TouchableOpacity 
+              style={[styles.paramCard, isEditable(phaseDuration) && styles.paramCardEditable]}
+              onPress={() => isEditable(phaseDuration) && handleEdit(phaseDuration)}
+              disabled={!isEditable(phaseDuration)}
+            >
+              <Text style={styles.paramLabel}>阶段天数</Text>
+              <Text style={styles.paramValue}>
+                {phaseDuration.config_value?.value} {phaseDuration.config_value?.unit}
+              </Text>
+              {isEditable(phaseDuration) ? (
+                <Text style={styles.paramBadgeEdit}>可调</Text>
+              ) : (
+                <Text style={styles.paramBadgeFixed}>固定</Text>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  const renderLevelThresholds = () => {
+    const levelConfig = getConfig('level_thresholds');
+    if (!levelConfig) return null;
+
+    const value = levelConfig.config_value as LevelThreshold;
+
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>等级门槛 (S1-S6)</Text>
+        <Text style={styles.sectionSubtitle}>小区业绩晋级 · 固定参数</Text>
+        <View style={styles.levelGrid}>
+          {value.labels.map((label, index) => (
+            <View key={label} style={styles.levelCard}>
+              <Text style={styles.levelLabel}>{label}</Text>
+              <Text style={styles.levelValue}>{value.thresholds[index]} SOL</Text>
+              <Text style={styles.levelReward}>{value.rewards[index]}%</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
+  const renderDLevelThresholds = () => {
+    const dLevelConfig = getConfig('d_level_thresholds');
+    if (!dLevelConfig) return null;
+
+    const value = dLevelConfig.config_value as { thresholds: number[]; labels: string[] };
+
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>D级门槛 (D1-D8)</Text>
+        <Text style={styles.sectionSubtitle}>有效地址数晋级 · 固定参数</Text>
+        <View style={styles.levelGrid}>
+          {value.labels.map((label, index) => (
+            <View key={label} style={styles.dLevelCard}>
+              <Text style={styles.levelLabel}>{label}</Text>
+              <Text style={styles.levelValue}>{value.thresholds[index]}</Text>
+              <Text style={styles.levelUnit}>地址</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
+  const renderCardConfig = () => {
+    const cardConfig = getConfig('card_config');
+    if (!cardConfig) return null;
+
+    const value = cardConfig.config_value as CardConfig;
+
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>NFT卡牌配置</Text>
+        <Text style={styles.sectionSubtitle}>价格和总量固定 · 从合约读取</Text>
+        <View style={styles.cardGrid}>
+          {Object.entries(value.cards).map(([type, card]: [string, any]) => (
+            <View 
+              key={type} 
+              style={[
+                styles.nftCard,
+                type === 'A' && styles.nftCardA,
+                type === 'B' && styles.nftCardB,
+                type === 'C' && styles.nftCardC,
+              ]}
+            >
+              <Text style={[
+                styles.nftCardTitle,
+                type === 'A' && styles.nftCardTitleA,
+                type === 'B' && styles.nftCardTitleB,
+                type === 'C' && styles.nftCardTitleC,
+              ]}>
+                卡牌{type}
+              </Text>
+              <View style={styles.nftInfo}>
+                <View style={styles.nftRow}>
+                  <Text style={styles.nftLabel}>价格:</Text>
+                  <Text style={styles.nftValue}>{card.price} {card.unit}</Text>
+                </View>
+                <View style={styles.nftRow}>
+                  <Text style={styles.nftLabel}>总量:</Text>
+                  <Text style={styles.nftValue}>{card.total}</Text>
+                </View>
+                <View style={styles.nftRow}>
+                  <Text style={styles.nftLabel}>权重:</Text>
+                  <Text style={styles.nftValue}>{card.reward_weight}</Text>
+                </View>
+                <View style={styles.nftRow}>
+                  <Text style={styles.nftLabel}>所需线数:</Text>
+                  <Text style={styles.nftValue}>{value.requirements[type]}</Text>
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
+  const renderStakeConfig = () => {
+    const stakeConfig = getConfig('stake_config');
+    if (!stakeConfig) return null;
+
+    const value = stakeConfig.config_value as { periods: number[]; rates: number[] };
+
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>质押配置</Text>
+        <Text style={styles.sectionSubtitle}>质押周期和利率 · 固定参数</Text>
+        <View style={styles.stakeGrid}>
+          {value.periods.map((period, index) => (
+            <View key={period} style={styles.stakeCard}>
+              <Text style={styles.stakePeriod}>{period}</Text>
+              <Text style={styles.stakeUnit}>天</Text>
+              <Text style={styles.stakeRate}>{value.rates[index]}%</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
+  const renderPartnerConfig = () => {
+    const partnerConfig = getConfig('partner_requirements');
+    if (!partnerConfig) return null;
+
+    const value = partnerConfig.config_value;
+
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>合伙人要求</Text>
+        <View style={styles.partnerCard}>
+          <View style={styles.partnerHeader}>
+            <Text style={styles.partnerTitle}>总名额: {value.total_limit}</Text>
+          </View>
+          <View style={styles.partnerRow}>
+            <Text style={styles.partnerLabel}>前期20名:</Text>
+            <Text style={styles.partnerValue}>
+              投资{value.first_phase?.personal_invest} SOL + 直推{value.first_phase?.direct_sales} SOL
+            </Text>
+          </View>
+          <View style={styles.partnerRow}>
+            <Text style={styles.partnerLabel}>后期30名:</Text>
+            <Text style={styles.partnerValue}>
+              投资{value.second_phase?.personal_invest} SOL + 直推{value.second_phase?.direct_sales} SOL
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const renderRewardDistribution = () => {
+    const rewardConfig = getConfig('reward_distribution');
+    if (!rewardConfig) return null;
+
+    const value = rewardConfig.config_value;
+
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>奖励分配比例</Text>
+        <Text style={styles.sectionSubtitle}>固定参数 · 从合约读取</Text>
+        
+        <View style={styles.rewardCard}>
+          <Text style={styles.rewardTitle}>存款分配</Text>
+          <View style={styles.rewardRow}>
+            <View style={[styles.rewardBadge, { backgroundColor: '#00FF88' }]}>
+              <Text style={styles.rewardBadgeText}>{value.deposit_split?.dynamic}%</Text>
+            </View>
+            <Text style={styles.rewardLabel}>动态奖励</Text>
+          </View>
+          <View style={styles.rewardRow}>
+            <View style={[styles.rewardBadge, { backgroundColor: '#BF00FF' }]}>
+              <Text style={styles.rewardBadgeText}>{value.deposit_split?.lp}%</Text>
+            </View>
+            <Text style={styles.rewardLabel}>LP挖矿</Text>
+          </View>
+        </View>
+
+        <View style={styles.rewardCard}>
+          <Text style={styles.rewardTitle}>动态分配</Text>
+          <View style={styles.dynamicGrid}>
+            <View style={styles.dynamicItem}>
+              <Text style={styles.dynamicValue}>{value.dynamic_split?.direct}%</Text>
+              <Text style={styles.dynamicLabel}>直推</Text>
+            </View>
+            <View style={styles.dynamicItem}>
+              <Text style={styles.dynamicValue}>{value.dynamic_split?.node}%</Text>
+              <Text style={styles.dynamicLabel}>节点</Text>
+            </View>
+            <View style={styles.dynamicItem}>
+              <Text style={styles.dynamicValue}>{value.dynamic_split?.management}%</Text>
+              <Text style={styles.dynamicLabel}>管理</Text>
+            </View>
+            <View style={styles.dynamicItem}>
+              <Text style={styles.dynamicValue}>{value.dynamic_split?.dao}%</Text>
+              <Text style={styles.dynamicLabel}>DAO</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const renderFeeConfig = () => {
+    const withdrawConfig = getConfig('withdraw_fee');
+    const lpFeeConfig = getConfig('lp_remove_fee');
+
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>手续费规则</Text>
+        <Text style={styles.sectionSubtitle}>固定参数</Text>
+        
+        {withdrawConfig && (
+          <View style={styles.feeCard}>
+            <Text style={styles.feeTitle}>提现手续费: {withdrawConfig.config_value?.rate}%</Text>
+            <View style={styles.feeRow}>
+              <Text style={styles.feeLabel}>NFT持有者: {withdrawConfig.config_value?.split?.nft}%</Text>
+              <Text style={styles.feeLabel}>合伙人: {withdrawConfig.config_value?.split?.partner}%</Text>
+              <Text style={styles.feeLabel}>基金会: {withdrawConfig.config_value?.split?.foundation}%</Text>
+            </View>
+          </View>
+        )}
+
+        {lpFeeConfig && (
+          <View style={styles.feeCard}>
+            <Text style={styles.feeTitle}>LP赎回手续费</Text>
+            {(lpFeeConfig.config_value?.rules || []).map((rule: any, index: number) => (
+              <View key={index} style={styles.feeRow}>
+                <Text style={styles.feeLabel}>{rule.days}: {rule.rate}%</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    );
   };
 
   if (loading) {
     return (
       <AdminLayout>
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>LOADING CONFIG...</Text>
+          <Text style={styles.loadingText}>加载中...</Text>
         </View>
       </AdminLayout>
     );
@@ -222,8 +563,8 @@ export default function ConfigScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>CONTRACT CONFIG</Text>
-          <Text style={styles.headerSubtitle}>合约配置</Text>
+          <Text style={styles.headerTitle}>合约配置中心</Text>
+          <Text style={styles.headerSubtitle}>Contract Configuration</Text>
           <LinearGradient
             colors={['#00F0FF', '#BF00FF']}
             start={{ x: 0, y: 0 }}
@@ -232,295 +573,110 @@ export default function ConfigScreen() {
           />
         </View>
 
+        {/* Legend */}
+        <View style={styles.legendContainer}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: '#8E8E93' }]} />
+            <Text style={styles.legendText}>固定参数</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: '#FFD700' }]} />
+            <Text style={styles.legendText}>可调参数</Text>
+          </View>
+        </View>
+
         {/* Actions */}
         <TouchableOpacity style={styles.initButton} onPress={handleInit}>
-          <Text style={styles.initButtonText}>INITIALIZE DEFAULT CONFIG</Text>
+          <Text style={styles.initButtonText}>初始化默认配置</Text>
         </TouchableOpacity>
 
-        {/* Config List */}
-        <View style={styles.configList}>
-          {configs.map((config) => {
-            const category = getConfigCategory(config.config_key);
-            const isExpanded = expandedKey === config.config_key;
-            
-            return (
-              <TouchableOpacity
-                key={config.id}
-                style={styles.configCard}
-                onPress={() => setExpandedKey(isExpanded ? null : config.config_key)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.configHeader}>
-                  <View style={styles.configTitleRow}>
-                    <LinearGradient
-                      colors={[`${category.color}30`, 'transparent']}
-                      style={styles.categoryBadge}
-                    >
-                      <Text style={[styles.categoryText, { color: category.color }]}>
-                        {category.label}
-                      </Text>
-                    </LinearGradient>
-                    <Text style={styles.configKey}>{config.config_key}</Text>
-                  </View>
-                  <Text style={styles.expandIcon}>{isExpanded ? '▼' : '>'}</Text>
-                </View>
+        {/* Contract Addresses */}
+        {renderContractAddresses()}
 
-                {isExpanded && (
-                  <View style={styles.configBody}>
-                    <View style={styles.valueContainer}>
-                      <Text style={styles.valueLabel}>VALUE:</Text>
-                      {config.config_key === 'stake_config' ? (
-                        <View>
-                          <Text style={styles.valueText}>
-                            Periods: [{formatValue((config.config_value as any)?.periods)}]
-                          </Text>
-                          <Text style={styles.valueText}>
-                            Rates: [{formatValue((config.config_value as any)?.rates)}]
-                          </Text>
-                          <TouchableOpacity 
-                            style={styles.editButton}
-                            onPress={() => handleEditStakeConfig(config)}
-                          >
-                            <Text style={styles.editButtonText}>EDIT STAKE CONFIG</Text>
-                          </TouchableOpacity>
-                        </View>
-                      ) : config.config_key === 'card_config' ? (
-                        <View>
-                          {Object.entries((config.config_value as any) || {}).map(([type, card]: [string, any]) => (
-                            <View key={type} style={styles.cardConfigRow}>
-                              <Text style={[styles.cardTypeLabel, { 
-                                color: type === 'A' ? '#FFD23F' : type === 'B' ? '#00F0FF' : '#D020FF' 
-                              }]}>
-                                [{type}]
-                              </Text>
-                              <Text style={styles.cardConfigText}>
-                                {card.name} | {card.price}U | {card.reward_rate}% | {card.level} | 库存:{card.remaining}/{card.total}
-                              </Text>
-                            </View>
-                          ))}
-                          <TouchableOpacity 
-                            style={styles.editButton}
-                            onPress={() => handleEditCardConfig(config)}
-                          >
-                            <Text style={styles.editButtonText}>EDIT CARD CONFIG</Text>
-                          </TouchableOpacity>
-                        </View>
-                      ) : (
-                        <Text style={styles.valueText}>
-                          {formatValue(config.config_value)}
-                        </Text>
-                      )}
-                    </View>
-                    
-                    {config.description && (
-                      <View style={styles.descContainer}>
-                        <Text style={styles.descLabel}>DESCRIPTION:</Text>
-                        <Text style={styles.descText}>{config.description}</Text>
-                      </View>
-                    )}
-                    
-                    {config.updated_at && (
-                      <Text style={styles.updateText}>
-                        Updated: {new Date(config.updated_at).toLocaleString()}
-                      </Text>
-                    )}
-                    
-                    {config.updated_by && (
-                      <Text style={styles.updateText}>
-                        By: {config.updated_by}
-                      </Text>
-                    )}
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        {/* Investment Config */}
+        {renderInvestmentConfig()}
+
+        {/* Level Thresholds */}
+        {renderLevelThresholds()}
+        {renderDLevelThresholds()}
+
+        {/* Card Config */}
+        {renderCardConfig()}
+
+        {/* Stake Config */}
+        {renderStakeConfig()}
+
+        {/* Partner Config */}
+        {renderPartnerConfig()}
+
+        {/* Reward Distribution */}
+        {renderRewardDistribution()}
+
+        {/* Fee Config */}
+        {renderFeeConfig()}
 
         {configs.length === 0 && (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No configurations found</Text>
-            <Text style={styles.emptyHint}>Click &quot;Initialize Default Config&quot; to set up</Text>
+            <Text style={styles.emptyText}>暂无配置</Text>
+            <Text style={styles.emptyHint}>点击上方按钮初始化默认配置</Text>
           </View>
         )}
       </ScrollView>
 
-      {/* Edit Stake Config Modal */}
+      {/* Edit Modal */}
       <Modal
         visible={editModalVisible}
         transparent
         animationType="fade"
         onRequestClose={() => setEditModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1}
+          onPress={() => setEditModalVisible(false)}
+        >
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>EDIT STAKE CONFIG</Text>
+            <Text style={styles.modalTitle}>修改配置</Text>
             
-            <Text style={styles.inputLabel}>PERIODS (days, comma separated):</Text>
+            <Text style={styles.inputLabel}>值:</Text>
             <TextInput
               style={styles.input}
-              value={editPeriods}
-              onChangeText={setEditPeriods}
-              placeholder="30, 90, 180, 360"
+              value={editValue}
+              onChangeText={setEditValue}
+              keyboardType="numeric"
+              placeholder="输入数值"
               placeholderTextColor="#555570"
             />
             
-            <Text style={styles.inputLabel}>RATES (% per day, comma separated):</Text>
-            <TextInput
-              style={styles.input}
-              value={editRates}
-              onChangeText={setEditRates}
-              placeholder="5, 10, 15, 20"
-              placeholderTextColor="#555570"
-            />
+            {editUnit && (
+              <>
+                <Text style={styles.inputLabel}>单位:</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editUnit}
+                  onChangeText={setEditUnit}
+                  placeholder="单位"
+                  placeholderTextColor="#555570"
+                />
+              </>
+            )}
             
             <View style={styles.modalButtons}>
               <TouchableOpacity 
                 style={[styles.modalButton, styles.cancelBtn]}
                 onPress={() => setEditModalVisible(false)}
               >
-                <Text style={styles.cancelBtnText}>CANCEL</Text>
+                <Text style={styles.cancelBtnText}>取消</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.modalButton, styles.saveBtn]}
-                onPress={handleSaveStakeConfig}
+                onPress={handleSave}
               >
-                <Text style={styles.saveBtnText}>SAVE</Text>
+                <Text style={styles.saveBtnText}>保存</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
-      </Modal>
-
-      {/* Edit Card Config Modal */}
-      <Modal
-        visible={cardEditModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setCardEditModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <ScrollView style={styles.cardModalScroll}>
-            <View style={styles.cardModalContent}>
-              <Text style={styles.modalTitle}>EDIT CARD CONFIG</Text>
-              
-              {(['A', 'B', 'C'] as const).map((type) => {
-                const colors: Record<string, string> = { A: '#FFD23F', B: '#00F0FF', C: '#D020FF' };
-                const card = editCardConfig[type as keyof typeof editCardConfig];
-                
-                return (
-                  <View key={type} style={[styles.cardEditSection, { borderColor: colors[type] }]}>
-                    <Text style={[styles.cardEditTitle, { color: colors[type] }]}>Card Type {type}</Text>
-                    
-                    <Text style={styles.inputLabel}>Name:</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={card.name}
-                      onChangeText={(text) => setEditCardConfig(prev => ({
-                        ...prev,
-                        [type]: { ...prev[type as keyof typeof prev], name: text }
-                      }))}
-                      placeholder="S1节点卡"
-                      placeholderTextColor="#555570"
-                    />
-                    
-                    <Text style={styles.inputLabel}>Level:</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={card.level}
-                      onChangeText={(text) => setEditCardConfig(prev => ({
-                        ...prev,
-                        [type]: { ...prev[type as keyof typeof prev], level: text }
-                      }))}
-                      placeholder="S1"
-                      placeholderTextColor="#555570"
-                    />
-                    
-                    <Text style={styles.inputLabel}>Price (USDT):</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={card.price}
-                      onChangeText={(text) => setEditCardConfig(prev => ({
-                        ...prev,
-                        [type]: { ...prev[type as keyof typeof prev], price: text }
-                      }))}
-                      placeholder="500"
-                      placeholderTextColor="#555570"
-                      keyboardType="numeric"
-                    />
-                    
-                    <Text style={styles.inputLabel}>Total / Remaining:</Text>
-                    <View style={styles.rowInputs}>
-                      <TextInput
-                        style={[styles.input, styles.halfInput]}
-                        value={card.total}
-                        onChangeText={(text) => setEditCardConfig(prev => ({
-                          ...prev,
-                          [type]: { ...prev[type as keyof typeof prev], total: text }
-                        }))}
-                        placeholder="1000"
-                        placeholderTextColor="#555570"
-                        keyboardType="numeric"
-                      />
-                      <TextInput
-                        style={[styles.input, styles.halfInput]}
-                        value={card.remaining}
-                        onChangeText={(text) => setEditCardConfig(prev => ({
-                          ...prev,
-                          [type]: { ...prev[type as keyof typeof prev], remaining: text }
-                        }))}
-                        placeholder="1000"
-                        placeholderTextColor="#555570"
-                        keyboardType="numeric"
-                      />
-                    </View>
-                    
-                    <Text style={styles.inputLabel}>Reward Rate (%):</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={card.reward_rate}
-                      onChangeText={(text) => setEditCardConfig(prev => ({
-                        ...prev,
-                        [type]: { ...prev[type as keyof typeof prev], reward_rate: text }
-                      }))}
-                      placeholder="4"
-                      placeholderTextColor="#555570"
-                      keyboardType="numeric"
-                    />
-                    
-                    <Text style={styles.inputLabel}>Fee Rate (%):</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={card.fee_rate}
-                      onChangeText={(text) => setEditCardConfig(prev => ({
-                        ...prev,
-                        [type]: { ...prev[type as keyof typeof prev], fee_rate: text }
-                      }))}
-                      placeholder="10"
-                      placeholderTextColor="#555570"
-                      keyboardType="numeric"
-                    />
-                  </View>
-                );
-              })}
-              
-              <View style={styles.modalButtons}>
-                <TouchableOpacity 
-                  style={[styles.modalButton, styles.cancelBtn]}
-                  onPress={() => setCardEditModalVisible(false)}
-                >
-                  <Text style={styles.cancelBtnText}>CANCEL</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.modalButton, styles.saveBtn]}
-                  onPress={handleSaveCardConfig}
-                >
-                  <Text style={styles.saveBtnText}>SAVE</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </ScrollView>
-        </View>
+        </TouchableOpacity>
       </Modal>
     </AdminLayout>
   );
@@ -529,286 +685,458 @@ export default function ConfigScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0A0F',
+    backgroundColor: '#0A0A12',
   },
   contentContainer: {
     padding: 16,
-    paddingBottom: 100,
+    paddingBottom: 40,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0A0A0F',
+    backgroundColor: '#0A0A12',
   },
   loadingText: {
     color: '#00F0FF',
-    fontSize: 14,
-    letterSpacing: 2,
+    fontSize: 16,
   },
   header: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   headerTitle: {
-    fontSize: 11,
-    color: '#555570',
-    letterSpacing: 3,
-    fontWeight: '600',
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 4,
   },
   headerSubtitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#EAEAEA',
-    marginTop: 8,
+    fontSize: 14,
+    color: '#8E8E93',
+    marginBottom: 12,
   },
   headerLine: {
     height: 2,
-    width: 60,
-    marginTop: 16,
     borderRadius: 1,
   },
+  legendContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    gap: 20,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendText: {
+    color: '#8E8E93',
+    fontSize: 12,
+  },
   initButton: {
-    backgroundColor: '#12121A',
+    backgroundColor: '#1C1C2E',
     borderWidth: 1,
     borderColor: '#00F0FF',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     borderRadius: 8,
-    padding: 14,
-    marginBottom: 20,
+    marginBottom: 24,
     alignItems: 'center',
   },
   initButtonText: {
     color: '#00F0FF',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 2,
-  },
-  configList: {
-    gap: 12,
-  },
-  configCard: {
-    backgroundColor: '#12121A',
-    borderRadius: 8,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 240, 255, 0.12)',
-  },
-  configHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  configTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  categoryBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  categoryText: {
-    fontSize: 9,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  configKey: {
     fontSize: 14,
-    fontFamily: 'monospace',
-    color: '#EAEAEA',
-    flex: 1,
+    fontWeight: '600',
   },
-  expandIcon: {
-    fontSize: 10,
-    color: '#555570',
+  section: {
+    marginBottom: 24,
   },
-  configBody: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 240, 255, 0.1)',
-  },
-  valueContainer: {
-    marginBottom: 12,
-  },
-  valueLabel: {
-    fontSize: 10,
-    color: '#555570',
-    letterSpacing: 1,
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
     marginBottom: 4,
   },
-  valueText: {
+  sectionSubtitle: {
     fontSize: 12,
-    fontFamily: 'monospace',
+    color: '#8E8E93',
+    marginBottom: 12,
+  },
+  addressList: {
+    backgroundColor: '#1C1C2E',
+    borderRadius: 12,
+    padding: 16,
+    gap: 8,
+  },
+  addressItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  addressLabel: {
+    color: '#8E8E93',
+    fontSize: 12,
+    width: 60,
+  },
+  addressValue: {
     color: '#00F0FF',
-    backgroundColor: 'rgba(0, 240, 255, 0.05)',
-    padding: 12,
-    borderRadius: 4,
+    fontSize: 12,
+    flex: 1,
+    fontFamily: 'monospace',
   },
-  descContainer: {
-    marginBottom: 12,
+  paramGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
   },
-  descLabel: {
-    fontSize: 10,
-    color: '#555570',
-    letterSpacing: 1,
+  paramCard: {
+    backgroundColor: '#1C1C2E',
+    borderRadius: 12,
+    padding: 16,
+    width: '30%',
+    minWidth: 100,
+  },
+  paramCardEditable: {
+    borderWidth: 1,
+    borderColor: '#FFD700',
+  },
+  paramLabel: {
+    color: '#8E8E93',
+    fontSize: 11,
     marginBottom: 4,
   },
-  descText: {
-    fontSize: 12,
-    color: '#EAEAEA',
+  paramValue: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
-  updateText: {
+  paramBadgeFixed: {
+    backgroundColor: '#3A3A4A',
+    color: '#8E8E93',
     fontSize: 10,
-    color: '#555570',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 6,
+    textAlign: 'center',
+    overflow: 'hidden',
+  },
+  paramBadgeEdit: {
+    backgroundColor: '#FFD700',
+    color: '#000',
+    fontSize: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginTop: 6,
+    textAlign: 'center',
+    overflow: 'hidden',
+  },
+  levelGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  levelCard: {
+    backgroundColor: '#1C1C2E',
+    borderRadius: 10,
+    padding: 12,
+    width: '30%',
+    minWidth: 80,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FFD70030',
+  },
+  levelLabel: {
+    color: '#FFD700',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  levelValue: {
+    color: '#FFFFFF',
+    fontSize: 12,
     marginTop: 4,
   },
-  emptyContainer: {
-    padding: 40,
+  levelReward: {
+    color: '#34C759',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  levelUnit: {
+    color: '#8E8E93',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  dLevelCard: {
+    backgroundColor: '#1C1C2E',
+    borderRadius: 10,
+    padding: 12,
+    width: '22%',
+    minWidth: 70,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#00F0FF30',
+  },
+  cardGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  nftCard: {
+    flex: 1,
+    backgroundColor: '#1C1C2E',
+    borderRadius: 12,
+    padding: 16,
     alignItems: 'center',
   },
-  emptyText: {
-    color: '#555570',
+  nftCardA: {
+    borderWidth: 1,
+    borderColor: '#FFD70050',
+  },
+  nftCardB: {
+    borderWidth: 1,
+    borderColor: '#00F0FF50',
+  },
+  nftCardC: {
+    borderWidth: 1,
+    borderColor: '#D020FF50',
+  },
+  nftCardTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  nftCardTitleA: {
+    color: '#FFD700',
+  },
+  nftCardTitleB: {
+    color: '#00F0FF',
+  },
+  nftCardTitleC: {
+    color: '#D020FF',
+  },
+  nftInfo: {
+    width: '100%',
+  },
+  nftRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  nftLabel: {
+    color: '#8E8E93',
+    fontSize: 12,
+  },
+  nftValue: {
+    color: '#FFFFFF',
+    fontSize: 12,
+  },
+  stakeGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  stakeCard: {
+    flex: 1,
+    backgroundColor: '#1C1C2E',
+    borderRadius: 10,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FF950030',
+  },
+  stakePeriod: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  stakeUnit: {
+    color: '#8E8E93',
+    fontSize: 10,
+  },
+  stakeRate: {
+    color: '#34C759',
     fontSize: 14,
+    fontWeight: 'bold',
+    marginTop: 4,
+  },
+  partnerCard: {
+    backgroundColor: '#1C1C2E',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#BF00FF30',
+  },
+  partnerHeader: {
+    marginBottom: 12,
+  },
+  partnerTitle: {
+    color: '#BF00FF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  partnerRow: {
+    flexDirection: 'row',
     marginBottom: 8,
+    gap: 8,
+  },
+  partnerLabel: {
+    color: '#8E8E93',
+    fontSize: 12,
+  },
+  partnerValue: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    flex: 1,
+  },
+  rewardCard: {
+    backgroundColor: '#1C1C2E',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  rewardTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  rewardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 10,
+  },
+  rewardBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  rewardBadgeText: {
+    color: '#000',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  rewardLabel: {
+    color: '#8E8E93',
+    fontSize: 12,
+  },
+  dynamicGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  dynamicItem: {
+    alignItems: 'center',
+  },
+  dynamicValue: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  dynamicLabel: {
+    color: '#8E8E93',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  feeCard: {
+    backgroundColor: '#1C1C2E',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#FF3B3030',
+  },
+  feeTitle: {
+    color: '#FF3B30',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  feeRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 4,
+  },
+  feeLabel: {
+    color: '#8E8E93',
+    fontSize: 12,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    color: '#8E8E93',
+    fontSize: 16,
   },
   emptyHint: {
     color: '#555570',
     fontSize: 12,
-  },
-  editButton: {
-    backgroundColor: '#FF6B00',
-    borderRadius: 6,
-    padding: 10,
-    marginTop: 12,
-    alignItems: 'center',
-  },
-  editButtonText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1,
+    marginTop: 8,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    backgroundColor: 'rgba(0,0,0,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   modalContent: {
-    backgroundColor: '#12121A',
-    borderRadius: 12,
+    backgroundColor: '#1C1C2E',
+    borderRadius: 16,
     padding: 24,
     width: '100%',
     maxWidth: 400,
-    borderWidth: 1,
-    borderColor: '#00F0FF',
   },
   modalTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FF6B00',
-    letterSpacing: 2,
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
     marginBottom: 20,
     textAlign: 'center',
   },
   inputLabel: {
-    fontSize: 10,
-    color: '#555570',
-    letterSpacing: 1,
-    marginBottom: 6,
-    marginTop: 12,
+    color: '#8E8E93',
+    fontSize: 12,
+    marginBottom: 8,
   },
   input: {
-    backgroundColor: '#0A0A0F',
-    borderWidth: 1,
-    borderColor: '#00F0FF',
-    borderRadius: 6,
+    backgroundColor: '#0A0A12',
+    borderRadius: 8,
     padding: 12,
-    color: '#EAEAEA',
-    fontSize: 14,
-    fontFamily: 'monospace',
+    color: '#FFFFFF',
+    fontSize: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#333',
   },
   modalButtons: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 24,
   },
   modalButton: {
     flex: 1,
-    padding: 14,
-    borderRadius: 6,
+    paddingVertical: 14,
+    borderRadius: 8,
     alignItems: 'center',
   },
   cancelBtn: {
-    backgroundColor: '#1A1A25',
-    borderWidth: 1,
-    borderColor: '#555570',
-  },
-  cancelBtnText: {
-    color: '#555570',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
+    backgroundColor: '#333',
   },
   saveBtn: {
-    backgroundColor: '#FF6B00',
+    backgroundColor: '#00F0FF',
+  },
+  cancelBtnText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   saveBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  cardConfigRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-    gap: 8,
-  },
-  cardTypeLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    width: 30,
-  },
-  cardConfigText: {
-    fontSize: 11,
-    color: '#00F0FF',
-    fontFamily: 'monospace',
-    flex: 1,
-  },
-  cardModalScroll: {
-    flex: 1,
-    marginTop: 60,
-    marginBottom: 40,
-  },
-  cardModalContent: {
-    backgroundColor: '#12121A',
-    borderRadius: 12,
-    padding: 24,
-    marginHorizontal: 20,
-    borderWidth: 1,
-    borderColor: '#00F0FF',
-  },
-  cardEditSection: {
-    backgroundColor: '#0A0A0F',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-  },
-  cardEditTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
-  rowInputs: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  halfInput: {
-    flex: 1,
+    color: '#000',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
