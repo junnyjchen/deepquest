@@ -68,12 +68,19 @@ function parseMapValue(value: string): any {
   }
 }
 
-function parseConfigValue(value: string): any {
+function parseConfigValue(value: any): any {
   if (!value) return value;
-  if (value.startsWith('map[')) {
+  
+  // 如果已经是对象，直接返回
+  if (typeof value === 'object' && value !== null) {
+    return value;
+  }
+  
+  // 如果是字符串，尝试解析 map[...] 格式
+  if (typeof value === 'string' && value.startsWith('map[')) {
     return parseMapValue(value);
   }
-  if (/^\d+$/.test(value)) {
+  if (typeof value === 'string' && /^\d+$/.test(value)) {
     return parseInt(value);
   }
   return value;
