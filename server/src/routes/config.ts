@@ -9,7 +9,13 @@ export async function getContractConfigs() {
     .select('*')
     .order('config_key', { ascending: true });
   
-  if (error) throw new Error(`获取配置失败: ${error.message}`);
+  // 检测表不存在错误
+  if (error) {
+    if (error.message.includes('does not exist') || error.code === '42P01') {
+      throw new Error(`❌ 数据表 'contract_config' 不存在！\n\n请先在数据库中执行以下 SQL 创建表：\n\nCREATE TABLE IF NOT EXISTS contract_config (\n    id BIGSERIAL PRIMARY KEY,\n    config_key VARCHAR(100) UNIQUE NOT NULL,\n    config_value TEXT NOT NULL,\n    description VARCHAR(500),\n    updated_at TIMESTAMP DEFAULT NOW(),\n    updated_by VARCHAR(100)\n);\n\nCREATE INDEX IF NOT EXISTS idx_contract_config_key ON contract_config(config_key);`);
+    }
+    throw new Error(`获取配置失败: ${error.message}`);
+  }
   return data;
 }
 
@@ -45,6 +51,21 @@ export async function updateConfig(key: string, value: any, description?: string
 
 // 初始化默认配置
 export async function initDefaultConfigs() {
+  try {
+    // 先检查表是否存在
+    const { error: checkError } = await supabase
+      .from('contract_config')
+      .select('id')
+      .limit(1);
+    
+    if (checkError && (checkError.message.includes('does not exist') || checkError.code === '42P01')) {
+      console.error('❌ contract_config 表不存在，请先创建表！');
+      return { success: false, error: "数据表不存在" };
+    }
+  } catch (e) {
+    console.error('❌ contract_config 表不存在，请先创建表！');
+    return { success: false, error: "数据表不存在" };
+  }
   const configs = [
     // 合约地址
     {

@@ -65,7 +65,13 @@ export async function getOperationLogs(params: {
     .order('created_at', { ascending: false })
     .range(from, to);
   
-  if (error) throw new Error(`获取操作日志失败: ${error.message}`);
+  // 检测表不存在错误
+  if (error) {
+    if (error.message.includes('does not exist') || error.code === '42P01') {
+      throw new Error(`❌ 数据表 'operation_logs' 不存在！\n\n请先在数据库中执行以下 SQL 创建表：\n\nCREATE TABLE IF NOT EXISTS operation_logs (\n    id BIGSERIAL PRIMARY KEY,\n    admin_id INTEGER REFERENCES admins(id),\n    admin_address VARCHAR(255),\n    action VARCHAR(100) NOT NULL,\n    target VARCHAR(255),\n    details TEXT,\n    ip_address VARCHAR(50),\n    created_at TIMESTAMP DEFAULT NOW()\n);\n\nCREATE INDEX IF NOT EXISTS idx_operation_logs_created_at ON operation_logs(created_at DESC);\nCREATE INDEX IF NOT EXISTS idx_operation_logs_admin_id ON operation_logs(admin_id);`);
+    }
+    throw new Error(`获取操作日志失败: ${error.message}`);
+  }
   
   return {
     data,
