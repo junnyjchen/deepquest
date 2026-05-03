@@ -112,20 +112,26 @@ export default function ConfigScreen() {
   };
 
   const handleInit = async () => {
+    console.log('[Config] handleInit called');
+    
+    // 确认弹窗
     Alert.alert(
       '初始化配置',
       '这将初始化默认配置值。继续吗？',
       [
-        { text: '取消', style: 'cancel' },
+        { text: '取消', style: 'cancel', onPress: () => console.log('[Config] Init cancelled') },
         {
           text: '初始化',
           onPress: async () => {
+            console.log('[Config] Starting init...');
             try {
-              await configApi.init();
-              fetchConfigs();
+              const result = await configApi.init();
+              console.log('[Config] Init result:', result);
+              await fetchConfigs();
               Alert.alert('成功', '配置已初始化');
             } catch (error: any) {
-              Alert.alert('错误', error.message);
+              console.error('[Config] Init error:', error);
+              Alert.alert('错误', error?.message || error?.error || '初始化失败');
             }
           },
         },
