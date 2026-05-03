@@ -18,6 +18,7 @@ import dappRouter from './routes/dapp';
 import dappUserRouter from './routes/dapp-user';
 import dappTeamRouter from './routes/dapp-team';
 import stakesRouter from './routes/stakes';
+import nodesRouter from './routes/nodes';
 
 const app = express();
 const port = process.env.PORT || 9091;
@@ -578,6 +579,9 @@ app.use('/api/v1/dapp/team', dappTeamRouter);
 
 // ============ Stakes 质押记录 ============
 app.use('/api/v1/stakes', stakesRouter);
+
+// ============ Nodes 节点管理 ============
+app.use('/api/v1/nodes', nodesRouter);
 
 app.listen(port, async () => {
   console.log(`
