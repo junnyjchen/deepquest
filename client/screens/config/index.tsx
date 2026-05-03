@@ -111,32 +111,25 @@ export default function ConfigScreen() {
     return false;
   };
 
+  const [showInitConfirm, setShowInitConfirm] = useState(false);
+
   const handleInit = async () => {
     console.log('[Config] handleInit called');
-    
-    // 确认弹窗
-    Alert.alert(
-      '初始化配置',
-      '这将初始化默认配置值。继续吗？',
-      [
-        { text: '取消', style: 'cancel', onPress: () => console.log('[Config] Init cancelled') },
-        {
-          text: '初始化',
-          onPress: async () => {
-            console.log('[Config] Starting init...');
-            try {
-              const result = await configApi.init();
-              console.log('[Config] Init result:', result);
-              await fetchConfigs();
-              Alert.alert('成功', '配置已初始化');
-            } catch (error: any) {
-              console.error('[Config] Init error:', error);
-              Alert.alert('错误', error?.message || error?.error || '初始化失败');
-            }
-          },
-        },
-      ]
-    );
+    setShowInitConfirm(true);
+  };
+
+  const confirmInit = async () => {
+    console.log('[Config] Starting init...');
+    setShowInitConfirm(false);
+    try {
+      const result = await configApi.init();
+      console.log('[Config] Init result:', result);
+      await fetchConfigs();
+      Alert.alert('成功', '配置已初始化');
+    } catch (error: any) {
+      console.error('[Config] Init error:', error);
+      Alert.alert('错误', error?.message || error?.error || '初始化失败');
+    }
   };
 
   const handleEdit = (config: Config) => {
@@ -600,6 +593,30 @@ export default function ConfigScreen() {
             <Text style={styles.legendText}>可调参数</Text>
           </View>
         </View>
+
+        {/* Init Confirm Modal */}
+        {showInitConfirm && (
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>初始化配置</Text>
+              <Text style={styles.modalText}>这将初始化默认配置值。继续吗？</Text>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity 
+                  style={[styles.modalButton, styles.cancelButton]} 
+                  onPress={() => setShowInitConfirm(false)}
+                >
+                  <Text style={styles.cancelButtonText}>取消</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.modalButton, styles.confirmButton]} 
+                  onPress={confirmInit}
+                >
+                  <Text style={styles.confirmButtonText}>初始化</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Actions */}
         <TouchableOpacity style={styles.initButton} onPress={handleInit}>
@@ -1153,6 +1170,67 @@ const styles = StyleSheet.create({
   saveBtnText: {
     color: '#000',
     fontSize: 14,
+    fontWeight: '600',
+  },
+  // Modal styles
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  modalContent: {
+    backgroundColor: '#1C1C2E',
+    borderRadius: 16,
+    padding: 24,
+    width: '85%',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: '#00F0FF30',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalText: {
+    fontSize: 14,
+    color: '#CCCCCC',
+    marginBottom: 24,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#333',
+  },
+  confirmButton: {
+    backgroundColor: '#00F0FF',
+  },
+  cancelButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  confirmButtonText: {
+    color: '#000000',
+    fontSize: 16,
     fontWeight: '600',
   },
 });
