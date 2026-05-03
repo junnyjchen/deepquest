@@ -12,7 +12,41 @@ export async function getContractConfigs() {
   // 检测表不存在错误
   if (error) {
     if (error.message.includes('does not exist') || error.code === '42P01') {
-      throw new Error(`❌ 数据表 'contract_config' 不存在！\n\n请先在数据库中执行以下 SQL 创建表：\n\nCREATE TABLE IF NOT EXISTS contract_config (\n    id BIGSERIAL PRIMARY KEY,\n    config_key VARCHAR(100) UNIQUE NOT NULL,\n    config_value TEXT NOT NULL,\n    description VARCHAR(500),\n    updated_at TIMESTAMP DEFAULT NOW(),\n    updated_by VARCHAR(100)\n);\n\nCREATE INDEX IF NOT EXISTS idx_contract_config_key ON contract_config(config_key);`);
+      throw new Error(`❌ 数据表 'contract_config' 不存在！
+
+请先在数据库中执行以下 SQL 创建表：
+
+CREATE TABLE IF NOT EXISTS contract_config (
+    id BIGSERIAL PRIMARY KEY,
+    config_key VARCHAR(100) UNIQUE NOT NULL,
+    config_value TEXT NOT NULL,
+    description VARCHAR(500),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    updated_by VARCHAR(100)
+);
+
+CREATE INDEX IF NOT EXISTS idx_contract_config_key ON contract_config(config_key);
+
+-- 如果使用 Supabase anon key 访问，确保 RLS 策略允许读取：
+-- ALTER TABLE contract_config ENABLE ROW LEVEL SECURITY;
+-- CREATE POLICY "Allow anon read" ON contract_config FOR SELECT USING (true);`);
+    }
+    // 检查是否是 RLS 权限问题
+    if (error.code === '42501' || error.message.includes('permission denied')) {
+      throw new Error(`❌ 数据库权限不足！
+
+错误: ${error.message}
+
+请检查：
+1. Supabase ANON_KEY 是否正确配置
+2. 数据表的 RLS 策略是否允许访问
+3. 尝试在 Supabase SQL Editor 执行：
+
+-- 禁用 RLS（测试用）
+ALTER TABLE contract_config DISABLE ROW LEVEL SECURITY;
+
+-- 或创建公开访问策略
+CREATE POLICY "public_read" ON contract_config FOR SELECT USING (true);`);
     }
     throw new Error(`获取配置失败: ${error.message}`);
   }
