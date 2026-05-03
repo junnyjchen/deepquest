@@ -6,11 +6,12 @@ import { configApi } from '@/utils/api';
 
 interface Config {
   id: number;
-  config_key: string;
-  config_value: any;
+  key: string;
+  value: any;
+  rawValue?: string;
   description: string;
-  updated_at: string;
-  updated_by: string;
+  updatedAt: string;
+  updatedBy: string | null;
 }
 
 interface LevelThreshold {
@@ -68,7 +69,7 @@ export default function ConfigScreen() {
   };
 
   const getConfig = (key: string): Config | undefined => {
-    return configs.find(c => c.config_key === key);
+    return configs.find(c => c.key === key);
   };
 
   const getConfigCategory = (key: string): { label: string; color: string } => {
@@ -103,7 +104,7 @@ export default function ConfigScreen() {
   };
 
   const isEditable = (config: Config): boolean => {
-    const value = config.config_value;
+    const value = config.value;
     if (typeof value === 'object' && value !== null && 'editable' in value) {
       return value.editable === true;
     }
@@ -133,7 +134,7 @@ export default function ConfigScreen() {
   };
 
   const handleEdit = (config: Config) => {
-    const value = config.config_value;
+    const value = config.value;
     if (typeof value === 'object' && value !== null) {
       setEditValue(value.value || '');
       setEditUnit(value.unit || '');
@@ -149,7 +150,7 @@ export default function ConfigScreen() {
     if (!editingConfig) return;
 
     try {
-      const value = editingConfig.config_value;
+      const value = editingConfig.value;
       let newValue: any;
 
       if (typeof value === 'object' && value !== null && 'value' in value) {
@@ -159,7 +160,7 @@ export default function ConfigScreen() {
         newValue = editValue;
       }
 
-      await configApi.update(editingConfig.config_key, newValue, editingConfig.description);
+      await configApi.update(editingConfig.key, newValue, editingConfig.description);
       setEditModalVisible(false);
       fetchConfigs();
       Alert.alert('成功', '配置已更新');
@@ -175,6 +176,15 @@ export default function ConfigScreen() {
 
     if (!contractConfig && !dqtokenConfig && !dqcardConfig) return null;
 
+    const getAddress = (config: Config | undefined): string => {
+      if (!config) return '';
+      const value = config.value;
+      if (typeof value === 'object' && value !== null && 'address' in value) {
+        return value.address || '待设置';
+      }
+      return '待设置';
+    };
+
     return (
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>合约地址</Text>
@@ -183,7 +193,7 @@ export default function ConfigScreen() {
             <View style={styles.addressItem}>
               <Text style={styles.addressLabel}>主合约:</Text>
               <Text style={styles.addressValue} numberOfLines={1}>
-                {contractConfig.config_value}
+                {getAddress(contractConfig)}
               </Text>
             </View>
           )}
@@ -191,7 +201,7 @@ export default function ConfigScreen() {
             <View style={styles.addressItem}>
               <Text style={styles.addressLabel}>DQ代币:</Text>
               <Text style={styles.addressValue} numberOfLines={1}>
-                {dqtokenConfig.config_value || '待设置'}
+                {getAddress(dqtokenConfig)}
               </Text>
             </View>
           )}
@@ -199,7 +209,7 @@ export default function ConfigScreen() {
             <View style={styles.addressItem}>
               <Text style={styles.addressLabel}>NFT卡牌:</Text>
               <Text style={styles.addressValue} numberOfLines={1}>
-                {dqcardConfig.config_value || '待设置'}
+                {getAddress(dqcardConfig)}
               </Text>
             </View>
           )}
@@ -225,7 +235,7 @@ export default function ConfigScreen() {
             <View style={styles.paramCard}>
               <Text style={styles.paramLabel}>最小投资</Text>
               <Text style={styles.paramValue}>
-                {investMin.config_value?.value} {investMin.config_value?.unit}
+                {investMin.value?.value} {investMin.value?.unit}
               </Text>
               <Text style={styles.paramBadgeFixed}>固定</Text>
             </View>
@@ -238,7 +248,7 @@ export default function ConfigScreen() {
             >
               <Text style={styles.paramLabel}>初始最大</Text>
               <Text style={styles.paramValue}>
-                {investMaxStart.config_value?.value} {investMaxStart.config_value?.unit}
+                {investMaxStart.value?.value} {investMaxStart.value?.unit}
               </Text>
               {isEditable(investMaxStart) ? (
                 <Text style={styles.paramBadgeEdit}>可调</Text>
@@ -255,7 +265,7 @@ export default function ConfigScreen() {
             >
               <Text style={styles.paramLabel}>阶段增量</Text>
               <Text style={styles.paramValue}>
-                {investMaxStep.config_value?.value} {investMaxStep.config_value?.unit}
+                {investMaxStep.value?.value} {investMaxStep.value?.unit}
               </Text>
               {isEditable(investMaxStep) ? (
                 <Text style={styles.paramBadgeEdit}>可调</Text>
@@ -272,7 +282,7 @@ export default function ConfigScreen() {
             >
               <Text style={styles.paramLabel}>最终最大</Text>
               <Text style={styles.paramValue}>
-                {investMaxFinal.config_value?.value} {investMaxFinal.config_value?.unit}
+                {investMaxFinal.value?.value} {investMaxFinal.value?.unit}
               </Text>
               {isEditable(investMaxFinal) ? (
                 <Text style={styles.paramBadgeEdit}>可调</Text>
@@ -289,7 +299,7 @@ export default function ConfigScreen() {
             >
               <Text style={styles.paramLabel}>阶段天数</Text>
               <Text style={styles.paramValue}>
-                {phaseDuration.config_value?.value} {phaseDuration.config_value?.unit}
+                {phaseDuration.value?.value} {phaseDuration.value?.unit}
               </Text>
               {isEditable(phaseDuration) ? (
                 <Text style={styles.paramBadgeEdit}>可调</Text>
@@ -307,7 +317,7 @@ export default function ConfigScreen() {
     const levelConfig = getConfig('level_thresholds');
     if (!levelConfig) return null;
 
-    const value = levelConfig.config_value as LevelThreshold;
+    const value = levelConfig.value as LevelThreshold;
 
     return (
       <View style={styles.section}>
@@ -330,7 +340,7 @@ export default function ConfigScreen() {
     const dLevelConfig = getConfig('d_level_thresholds');
     if (!dLevelConfig) return null;
 
-    const value = dLevelConfig.config_value as { thresholds: number[]; labels: string[] };
+    const value = dLevelConfig.value as { thresholds: number[]; labels: string[] };
 
     return (
       <View style={styles.section}>
@@ -353,7 +363,7 @@ export default function ConfigScreen() {
     const cardConfig = getConfig('card_config');
     if (!cardConfig) return null;
 
-    const value = cardConfig.config_value as CardConfig;
+    const value = cardConfig.value as CardConfig;
 
     return (
       <View style={styles.section}>
@@ -407,7 +417,7 @@ export default function ConfigScreen() {
     const stakeConfig = getConfig('stake_config');
     if (!stakeConfig) return null;
 
-    const value = stakeConfig.config_value as { periods: number[]; rates: number[] };
+    const value = stakeConfig.value as { periods: number[]; rates: number[] };
 
     return (
       <View style={styles.section}>
@@ -430,7 +440,7 @@ export default function ConfigScreen() {
     const partnerConfig = getConfig('partner_requirements');
     if (!partnerConfig) return null;
 
-    const value = partnerConfig.config_value;
+    const value = partnerConfig.value;
 
     return (
       <View style={styles.section}>
@@ -460,7 +470,7 @@ export default function ConfigScreen() {
     const rewardConfig = getConfig('reward_distribution');
     if (!rewardConfig) return null;
 
-    const value = rewardConfig.config_value;
+    const value = rewardConfig.value;
 
     return (
       <View style={styles.section}>
@@ -519,11 +529,11 @@ export default function ConfigScreen() {
         
         {withdrawConfig && (
           <View style={styles.feeCard}>
-            <Text style={styles.feeTitle}>提现手续费: {withdrawConfig.config_value?.rate}%</Text>
+            <Text style={styles.feeTitle}>提现手续费: {withdrawConfig.value?.rate}%</Text>
             <View style={styles.feeRow}>
-              <Text style={styles.feeLabel}>NFT持有者: {withdrawConfig.config_value?.split?.nft}%</Text>
-              <Text style={styles.feeLabel}>合伙人: {withdrawConfig.config_value?.split?.partner}%</Text>
-              <Text style={styles.feeLabel}>基金会: {withdrawConfig.config_value?.split?.foundation}%</Text>
+              <Text style={styles.feeLabel}>NFT持有者: {withdrawConfig.value?.split?.nft}%</Text>
+              <Text style={styles.feeLabel}>合伙人: {withdrawConfig.value?.split?.partner}%</Text>
+              <Text style={styles.feeLabel}>基金会: {withdrawConfig.value?.split?.foundation}%</Text>
             </View>
           </View>
         )}
@@ -531,7 +541,7 @@ export default function ConfigScreen() {
         {lpFeeConfig && (
           <View style={styles.feeCard}>
             <Text style={styles.feeTitle}>LP赎回手续费</Text>
-            {(lpFeeConfig.config_value?.rules || []).map((rule: any, index: number) => (
+            {(lpFeeConfig.value?.rules || []).map((rule: any, index: number) => (
               <View key={index} style={styles.feeRow}>
                 <Text style={styles.feeLabel}>{rule.days}: {rule.rate}%</Text>
               </View>
