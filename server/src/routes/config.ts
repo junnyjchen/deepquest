@@ -76,13 +76,25 @@ function parseConfigValue(value: any): any {
     return value;
   }
   
-  // 如果是字符串，尝试解析 map[...] 格式
-  if (typeof value === 'string' && value.startsWith('map[')) {
-    return parseMapValue(value);
+  // 如果是字符串，尝试多种解析方式
+  if (typeof value === 'string') {
+    // 尝试 JSON 解析（处理 {"key": "value"} 格式）
+    try {
+      const parsed = JSON.parse(value);
+      return parsed;
+    } catch {}
+    
+    // 尝试解析 map[...] 格式
+    if (value.startsWith('map[')) {
+      return parseMapValue(value);
+    }
+    
+    // 尝试解析纯数字
+    if (/^\d+$/.test(value)) {
+      return parseInt(value);
+    }
   }
-  if (typeof value === 'string' && /^\d+$/.test(value)) {
-    return parseInt(value);
-  }
+  
   return value;
 }
 
