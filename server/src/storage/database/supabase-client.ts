@@ -464,6 +464,9 @@ export {
   ensureDatabaseReady 
 };
 
+// 创建默认的 supabase 实例供路由使用
+export const supabase = getSupabaseClient();
+
 // 使用 Supabase Management API 自动创建表
 async function autoCreateTablesWithManagementApi(): Promise<boolean> {
   const accessToken = process.env.SUPABASE_PERSONAL_ACCESS_TOKEN;

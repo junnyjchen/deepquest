@@ -1,262 +1,277 @@
-import { getSupabaseClient } from '../storage/database/supabase-client';
+import { Router } from 'express';
+import { supabase } from '../storage/database/supabase-client';
+import { logOperation } from './logs';
 
-const supabase = getSupabaseClient();
+const router = Router();
+
+// 简单的管理员验证中间件（后续可扩展）
+function verifyAdmin(req: any, res: any, next: any) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: '未授权，请先登录' });
+  }
+  // TODO: 验证 token
+  next();
+}
+
+// 类型定义
+interface ConfigItem {
+  id: number;
+  config_key: string;
+  config_value: string;
+  description?: string;
+  updated_at?: string;
+  updated_by?: string;
+}
+
+// 辅助函数：解析 map 格式的 config_value
+function parseMapValue(value: string): any {
+  if (!value) return null;
+  try {
+    const mapMatch = value.match(/^map\[(.*)\]$/);
+    if (mapMatch) {
+      const result: any = {};
+      const content = mapMatch[1];
+      const pairs = content.split(/,(?=(?:[^[\]]*\[[^\]]*\])*[^[\]]*$)/);
+      for (const pair of pairs) {
+        const colonIndex = pair.indexOf(':');
+        if (colonIndex > 0) {
+          const key = pair.substring(0, colonIndex).trim();
+          let val = pair.substring(colonIndex + 1).trim();
+          
+          if (val.startsWith('map[')) {
+            val = parseMapValue(val);
+          } else if (val.startsWith('[') && val.endsWith(']')) {
+            const arr = val.slice(1, -1).split(/\s+/).filter(v => v);
+            val = arr as any;
+          } else if (val.startsWith('{') && val.endsWith('}')) {
+            const inner = val.replace(/^{|}$/g, '');
+            const objPairs = inner.split(/\s+/);
+            const obj: any = {};
+            for (const objPair of objPairs) {
+              const objColonIndex = objPair.indexOf(':');
+              if (objColonIndex > 0) {
+                obj[objPair.substring(0, objColonIndex).trim()] = objPair.substring(objColonIndex + 1).trim();
+              }
+            }
+            val = obj;
+          }
+          
+          result[key] = val;
+        }
+      }
+      return result;
+    }
+    return value;
+  } catch {
+    return value;
+  }
+}
+
+function parseConfigValue(value: string): any {
+  if (!value) return value;
+  if (value.startsWith('map[')) {
+    return parseMapValue(value);
+  }
+  if (/^\d+$/.test(value)) {
+    return parseInt(value);
+  }
+  return value;
+}
 
 // 获取所有配置
-export async function getContractConfigs() {
-  const { data, error } = await supabase
-    .from('contract_config')
-    .select('*')
-    .order('config_key', { ascending: true });
-  
-  // 检测表不存在错误
-  if (error) {
-    if (error.message.includes('does not exist') || error.code === '42P01') {
-      throw new Error(`❌ 数据表 'contract_config' 不存在！
+router.get('/', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('contract_config')
+      .select('*')
+      .order('id');
 
-请先在数据库中执行以下 SQL 创建表：
+    if (error) {
+      if (error.code === '42P01') {
+        return res.status(500).json({
+          error: `❌ 数据表 'contract_config' 不存在！
 
-CREATE TABLE IF NOT EXISTS contract_config (
+请在 Supabase SQL Editor 执行以下 SQL 创建表：
+
+CREATE TABLE contract_config (
     id BIGSERIAL PRIMARY KEY,
     config_key VARCHAR(100) UNIQUE NOT NULL,
-    config_value TEXT NOT NULL,
-    description VARCHAR(500),
+    config_value TEXT,
+    description TEXT,
     updated_at TIMESTAMP DEFAULT NOW(),
     updated_by VARCHAR(100)
 );
 
-CREATE INDEX IF NOT EXISTS idx_contract_config_key ON contract_config(config_key);
+CREATE INDEX idx_contract_config_key ON contract_config(config_key);`
+        });
+      }
+      if (error.code === '42501' || error.message?.includes('permission denied')) {
+        return res.status(500).json({
+          error: `❌ 数据库权限不足！
 
--- 如果使用 Supabase anon key 访问，确保 RLS 策略允许读取：
--- ALTER TABLE contract_config ENABLE ROW LEVEL SECURITY;
--- CREATE POLICY "Allow anon read" ON contract_config FOR SELECT USING (true);`);
-    }
-    // 检查是否是 RLS 权限问题
-    if (error.code === '42501' || error.message.includes('permission denied')) {
-      throw new Error(`❌ 数据库权限不足！
-
-错误: ${error.message}
-
-请检查：
-1. Supabase ANON_KEY 是否正确配置
-2. 数据表的 RLS 策略是否允许访问
-3. 尝试在 Supabase SQL Editor 执行：
-
--- 禁用 RLS（测试用）
+请在 Supabase SQL Editor 执行：
 ALTER TABLE contract_config DISABLE ROW LEVEL SECURITY;
-
--- 或创建公开访问策略
-CREATE POLICY "public_read" ON contract_config FOR SELECT USING (true);`);
+或
+CREATE POLICY "public_read" ON contract_config FOR SELECT USING (true);`
+        });
+      }
+      return res.status(500).json({ error: `获取配置失败: ${error.message}` });
     }
-    throw new Error(`获取配置失败: ${error.message}`);
+
+    const formatted = data?.map((item: ConfigItem) => ({
+      id: item.id,
+      key: item.config_key,
+      value: parseConfigValue(item.config_value),
+      rawValue: item.config_value,
+      description: item.description,
+      updatedAt: item.updated_at,
+      updatedBy: item.updated_by
+    })) || [];
+
+    res.json(formatted);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
-  return data;
-}
+});
 
 // 获取单个配置
-export async function getConfig(key: string) {
-  const { data, error } = await supabase
-    .from('contract_config')
-    .select('*')
-    .eq('config_key', key)
-    .maybeSingle();
-  
-  if (error) throw new Error(`获取配置失败: ${error.message}`);
-  return data?.config_value;
-}
+router.get('/:key', async (req, res) => {
+  try {
+    const { key } = req.params;
+    const { data, error } = await supabase
+      .from('contract_config')
+      .select('*')
+      .eq('config_key', key)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: `配置 '${key}' 不存在` });
+      }
+      return res.status(500).json({ error: error.message });
+    }
+
+    const item = data as ConfigItem;
+    res.json({
+      id: item.id,
+      key: item.config_key,
+      value: parseConfigValue(item.config_value),
+      rawValue: item.config_value,
+      description: item.description,
+      updatedAt: item.updated_at,
+      updatedBy: item.updated_by
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // 更新配置
-export async function updateConfig(key: string, value: any, description?: string, updatedBy?: string) {
-  const { data, error } = await supabase
-    .from('contract_config')
-    .upsert({
-      config_key: key,
-      config_value: value,
-      description,
-      updated_at: new Date().toISOString(),
-      updated_by: updatedBy,
-    }, { onConflict: 'config_key' })
-    .select()
-    .single();
-  
-  if (error) throw new Error(`更新配置失败: ${error.message}`);
-  return data;
-}
-
-// 初始化默认配置
-export async function initDefaultConfigs() {
+router.put('/:key', verifyAdmin, async (req, res) => {
   try {
-    // 先检查表是否存在
-    const { error: checkError } = await supabase
-      .from('contract_config')
-      .select('id')
-      .limit(1);
-    
-    if (checkError && (checkError.message.includes('does not exist') || checkError.code === '42P01')) {
-      console.error('❌ contract_config 表不存在，请先创建表！');
-      return { success: false, error: "数据表不存在" };
+    const { key } = req.params;
+    const { value, description } = req.body;
+
+    if (value === undefined) {
+      return res.status(400).json({ error: '缺少 value 参数' });
     }
-  } catch (e) {
-    console.error('❌ contract_config 表不存在，请先创建表！');
-    return { success: false, error: "数据表不存在" };
-  }
-  const configs = [
-    // 合约地址
-    {
-      config_key: 'contract_address',
-      config_value: '0x1F45f166Dc74C0FAb7a1A5C3Eb1Ff2b0DA68c906',
-      description: '主合约地址',
-    },
-    {
-      config_key: 'dqtoken_address',
-      config_value: '', // 部署后从合约获取
-      description: 'DQ代币地址',
-    },
-    {
-      config_key: 'dqcard_address',
-      config_value: '', // 部署后从合约获取
-      description: 'NFT卡牌地址',
-    },
-    // 可调整参数
-    {
-      config_key: 'invest_max_start',
-      config_value: { value: '10', unit: 'SOL', editable: true },
-      description: '初始最大投资金额（可调整）',
-    },
-    {
-      config_key: 'invest_max_step',
-      config_value: { value: '10', unit: 'SOL', editable: true },
-      description: '每阶段最大投资增加量（可调整）',
-    },
-    {
-      config_key: 'invest_max_final',
-      config_value: { value: '200', unit: 'SOL', editable: true },
-      description: '最终最大投资金额（可调整）',
-    },
-    {
-      config_key: 'phase_duration',
-      config_value: { value: '15', unit: 'days', editable: true },
-      description: '每阶段持续天数（可调整）',
-    },
-    // 固定参数 - 仅展示
-    {
-      config_key: 'invest_min',
-      config_value: { value: '1', unit: 'SOL', editable: false },
-      description: '最小投资金额（固定）',
-    },
-    // 等级门槛（固定：小区业绩 SOL）
-    {
-      config_key: 'level_thresholds',
-      config_value: { 
-        editable: false,
-        thresholds: [100, 200, 600, 2000, 6000, 20000], 
-        labels: ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'],
-        rewards: [5, 10, 15, 20, 25, 30]
-      },
-      description: '等级晋级门槛（固定：小区业绩 SOL）',
-    },
-    // D级门槛（固定：有效地址数）
-    {
-      config_key: 'd_level_thresholds',
-      config_value: { 
-        editable: false,
-        thresholds: [30, 120, 360, 1000, 4000, 10000, 15000, 30000], 
-        labels: ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8']
-      },
-      description: 'D级门槛（固定：有效地址数）',
-    },
-    // NFT卡牌配置（固定价格和总量，可调整剩余数量）
-    {
-      config_key: 'card_config',
-      config_value: {
-        editable: false,
-        cards: {
-          'A': { price: '500', unit: 'USDT', total: 1000, remaining: 1000, reward_weight: 4 },
-          'B': { price: '1500', unit: 'USDT', total: 500, remaining: 500, reward_weight: 5 },
-          'C': { price: '5000', unit: 'USDT', total: 100, remaining: 100, reward_weight: 6 },
-        },
-        requirements: { 'A': 5, 'B': 10, 'C': 20 } // 领取所需有效线数
-      },
-      description: 'NFT卡牌配置（价格和总量固定）',
-    },
-    // 合伙人要求
-    {
-      config_key: 'partner_requirements',
-      config_value: {
-        editable: true,
-        total_limit: 50,
-        first_phase: { personal_invest: 5000, direct_sales: 30000 },
-        second_phase: { personal_invest: 5000, direct_sales: 50000 },
-      },
-      description: '合伙人资格要求',
-    },
-    // 质押配置（固定）
-    {
-      config_key: 'stake_config',
-      config_value: {
-        editable: false,
-        periods: [30, 90, 180, 360],
-        rates: [5, 10, 15, 20],
-        unit: 'days / %'
-      },
-      description: '质押配置（固定）',
-    },
-    // 奖励分配比例（固定）
-    {
-      config_key: 'reward_distribution',
-      config_value: {
-        editable: false,
-        deposit_split: {
-          dynamic: 50,  // 动态奖励 50%
-          lp: 50       // LP挖矿 50%
-        },
-        dynamic_split: {
-          direct: 30,   // 直推奖励
-          node: 15,     // 节点奖励
-          management: 30, // 管理奖励
-          dao: 10,      // DAO奖励
-          insurance: 7, // 保险池
-          operation: 8  // 运营池
-        }
-      },
-      description: '奖励分配比例（固定）',
-    },
-    // 提现手续费（固定）
-    {
-      config_key: 'withdraw_fee',
-      config_value: {
-        editable: false,
-        rate: 10,      // 10%
-        split: {
-          nft: 40,      // 40% 给NFT持有者
-          partner: 30,  // 30% 给合伙人
-          foundation: 30 // 30% 给基金会
-        }
-      },
-      description: '提现手续费（固定）',
-    },
-    // LP赎回手续费
-    {
-      config_key: 'lp_remove_fee',
-      config_value: {
-        editable: false,
-        rules: [
-          { days: '<60', rate: 20 },
-          { days: '60-180', rate: 10 },
-          { days: '>180', rate: 0 }
-        ]
-      },
-      description: 'LP赎回手续费规则（固定）',
-    },
-  ];
-  
-  for (const config of configs) {
+
+    // 检查配置是否可编辑
+    const { data: existing } = await supabase
+      .from('contract_config')
+      .select('config_value')
+      .eq('config_key', key)
+      .single();
+
+    if (existing) {
+      const parsed = parseConfigValue(existing.config_value);
+      if (parsed && typeof parsed === 'object' && parsed.editable === false) {
+        return res.status(403).json({ error: `配置 '${key}' 为固定参数，不可修改` });
+      }
+    }
+
+    // 格式化 value 为 map 格式存储
+    let formattedValue = value;
+    if (typeof value === 'object') {
+      const pairs = Object.entries(value)
+        .map(([k, v]) => `${k}:${typeof v === 'string' ? v : JSON.stringify(v)}`)
+        .join(' ');
+      formattedValue = `map[${pairs}]`;
+    }
+
     const { error } = await supabase
       .from('contract_config')
-      .upsert(config, { onConflict: 'config_key' });
-    
-    if (error) throw new Error(`初始化配置 ${config.config_key} 失败: ${error.message}`);
+      .update({
+        config_value: formattedValue,
+        description: description || undefined,
+        updated_at: new Date().toISOString()
+      })
+      .eq('config_key', key);
+
+    if (error) {
+      return res.status(500).json({ error: `更新失败: ${error.message}` });
+    }
+
+    await logOperation({
+      adminId: (req as any).admin?.id,
+      action: 'UPDATE_CONFIG',
+      target: key,
+      details: { value },
+      ipAddress: req.ip
+    });
+
+    res.json({ success: true, message: '配置已更新' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
-  
-  return { success: true };
-}
+});
+
+// 批量更新配置
+router.post('/batch-update', verifyAdmin, async (req, res) => {
+  try {
+    const { configs } = req.body;
+
+    if (!Array.isArray(configs)) {
+      return res.status(400).json({ error: 'configs 必须是数组' });
+    }
+
+    const results = [];
+    for (const config of configs) {
+      const { key, value, description } = config;
+      
+      let formattedValue = value;
+      if (typeof value === 'object') {
+        const pairs = Object.entries(value)
+          .map(([k, v]) => `${k}:${typeof v === 'string' ? v : JSON.stringify(v)}`)
+          .join(' ');
+        formattedValue = `map[${pairs}]`;
+      }
+
+      const { error } = await supabase
+        .from('contract_config')
+        .update({
+          config_value: formattedValue,
+          description: description || undefined,
+          updated_at: new Date().toISOString()
+        })
+        .eq('config_key', key);
+
+      results.push({ key, success: !error, error: error?.message });
+    }
+
+    await logOperation({
+      adminId: (req as any).admin?.id,
+      action: 'BATCH_UPDATE_CONFIG',
+      target: 'multiple',
+      details: { configs },
+      ipAddress: req.ip
+    });
+
+    res.json({ success: true, results });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export default router;

@@ -10,7 +10,7 @@ import restrictionsRouter from './routes/restrictions';
 import { getCards, mintCards, getCardStats } from './routes/cards';
 import { getPools, getPoolByName, updatePoolBalance, initPools, getPoolStats } from './routes/pools';
 import { getDLevelStats, getUserDLevel, getDLevelSummary } from './routes/dlevel';
-import { getContractConfigs, getConfig, updateConfig, initDefaultConfigs } from './routes/config';
+import configRouter from './routes/config';
 import { logOperation, getOperationLogs } from './routes/logs';
 import { getDashboardStats, getDepositTrend } from './routes/dashboard';
 import nodeApplicationsRouter from './routes/node-applications';
@@ -529,46 +529,7 @@ app.get('/api/v1/dlevel/user/:address', async (req, res) => {
 });
 
 // ============ Config ============
-app.get('/api/v1/config', async (req, res) => {
-  try {
-    const configs = await getContractConfigs();
-    res.json(configs);
-  } catch (error: any) {
-    console.error('Get configs error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/v1/config/:key', async (req, res) => {
-  try {
-    const config = await getConfig(req.params.key);
-    res.json(config);
-  } catch (error: any) {
-    console.error('Get config error:', error);
-    res.status(404).json({ error: error.message });
-  }
-});
-
-app.put('/api/v1/config/:key', async (req, res) => {
-  try {
-    const { value, description, updatedBy } = req.body;
-    const config = await updateConfig(req.params.key, value, description, updatedBy);
-    res.json(config);
-  } catch (error: any) {
-    console.error('Update config error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/v1/config/init', async (req, res) => {
-  try {
-    const result = await initDefaultConfigs();
-    res.json(result);
-  } catch (error: any) {
-    console.error('Init configs error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+app.use('/api/v1/config', configRouter);
 
 // ============ Logs ============
 app.get('/api/v1/logs', async (req, res) => {
