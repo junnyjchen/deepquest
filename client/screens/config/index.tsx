@@ -595,7 +595,12 @@ export default function ConfigScreen() {
         </View>
 
         {/* Init Confirm Modal */}
-        {showInitConfirm && (
+        <Modal
+          visible={showInitConfirm}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowInitConfirm(false)}
+        >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>初始化配置</Text>
@@ -616,7 +621,7 @@ export default function ConfigScreen() {
               </View>
             </View>
           </View>
-        )}
+        </Modal>
 
         {/* Actions */}
         <TouchableOpacity style={styles.initButton} onPress={handleInit}>
@@ -1174,7 +1179,7 @@ const styles = StyleSheet.create({
   },
   // Modal styles
   modalOverlay: {
-    position: 'absolute',
+    position: 'fixed',
     top: 0,
     left: 0,
     right: 0,
