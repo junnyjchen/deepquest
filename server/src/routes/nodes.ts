@@ -1,8 +1,13 @@
 import { Router } from 'express';
 import { ethers } from 'ethers';
 import { supabase, verifyAdmin, verifyAdminToken } from '../middleware/index.js';
-import { getContractConfig, getFullContractConfig } from '../config/index.js';
 import { getDecryptedFactoryKey } from '../utils/crypto.js';
+import {
+  DQ_CONTRACT_ADDRESS,
+  DQ_ABI,
+  DQCARD_CONTRACT_ADDRESS,
+  DQCARD_ABI,
+} from '../config/contracts.js';
 
 const router = Router();
 
@@ -13,30 +18,26 @@ const router = Router();
  */
 async function registerUserOnChain(walletAddress: string, referrerAddress: string | null) {
   try {
-    const contractConfig = await getFullContractConfig();
-    let factoryPK = contractConfig.factory_private_key || process.env.FACTORY_PRIVATE_KEY;
+    const rpcUrl = process.env.BSC_RPC_URL;
+    let factoryPK = process.env.FACTORY_PRIVATE_KEY;
     
     // 尝试解密加密的私钥
     if (!factoryPK && process.env.ENCRYPTED_FACTORY_KEY) {
       factoryPK = getDecryptedFactoryKey();
     }
     
-    if (!factoryPK || !contractConfig.contract_address || !contractConfig.rpc_url) {
+    if (!factoryPK || !rpcUrl) {
       return { success: false, error: '未配置链上调用参数' };
     }
 
-    const provider = new ethers.JsonRpcProvider(contractConfig.rpc_url);
+    console.log(`[Chain] 调用 register: wallet=${walletAddress}, referrer=${referrerAddress || '无'}`);
+
+    const provider = new ethers.JsonRpcProvider(rpcUrl);
     const wallet = new ethers.Wallet(factoryPK, provider);
-    const contract = new ethers.Contract(
-      contractConfig.contract_address,
-      contractConfig.abi,
-      wallet
-    );
+    const contract = new ethers.Contract(DQ_CONTRACT_ADDRESS, DQ_ABI, wallet);
 
-    console.log(`[Chain] 调用 registerUser: wallet=${walletAddress}, referrer=${referrerAddress || '无'}`);
-
-    const referrer = referrerAddress ? referrerAddress : ethers.ZeroAddress;
-    const tx = await contract.registerUser(walletAddress, referrer);
+    const referrer = referrerAddress || ethers.ZeroAddress;
+    const tx = await contract.register(referrer);
     const receipt = await tx.wait();
 
     console.log(`[Chain] ✓ 注册成功, tx=${receipt.hash}`);
@@ -48,39 +49,35 @@ async function registerUserOnChain(walletAddress: string, referrerAddress: strin
 }
 
 /**
- * 在 BSC 链上设置用户等级
+ * 在 BSC 链上铸造用户 Card NFT（设置等级）
  */
 async function setUserLevelOnChain(walletAddress: string, cardType: number) {
   try {
-    const contractConfig = await getFullContractConfig();
-    let factoryPK = contractConfig.factory_private_key || process.env.FACTORY_PRIVATE_KEY;
+    const rpcUrl = process.env.BSC_RPC_URL;
+    let factoryPK = process.env.FACTORY_PRIVATE_KEY;
     
     // 尝试解密加密的私钥
     if (!factoryPK && process.env.ENCRYPTED_FACTORY_KEY) {
       factoryPK = getDecryptedFactoryKey();
     }
     
-    if (!factoryPK || !contractConfig.contract_address || !contractConfig.rpc_url) {
+    if (!factoryPK || !rpcUrl) {
       return { success: false, error: '未配置链上调用参数' };
     }
 
-    const provider = new ethers.JsonRpcProvider(contractConfig.rpc_url);
+    console.log(`[Chain] 调用 mintByOwner: wallet=${walletAddress}, cardType=${cardType}`);
+
+    const provider = new ethers.JsonRpcProvider(rpcUrl);
     const wallet = new ethers.Wallet(factoryPK, provider);
-    const contract = new ethers.Contract(
-      contractConfig.contract_address,
-      contractConfig.abi,
-      wallet
-    );
+    const cardContract = new ethers.Contract(DQCARD_CONTRACT_ADDRESS, DQCARD_ABI, wallet);
 
-    console.log(`[Chain] 调用 setUserLevel: wallet=${walletAddress}, cardType=${cardType}`);
-
-    const tx = await contract.setUserLevel(walletAddress, cardType);
+    const tx = await cardContract.mintByOwner(walletAddress, cardType);
     const receipt = await tx.wait();
 
-    console.log(`[Chain] ✓ 设置等级成功, tx=${receipt.hash}`);
+    console.log(`[Chain] ✓ 铸造NFT成功, tx=${receipt.hash}`);
     return { success: true, txHash: receipt.hash };
   } catch (error: any) {
-    console.error(`[Chain] ✗ 设置等级失败: ${error.message}`);
+    console.error(`[Chain] ✗ 铸造NFT失败: ${error.message}`);
     return { success: false, error: error.message };
   }
 }
