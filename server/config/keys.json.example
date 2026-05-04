@@ -1,0 +1,4 @@
+{
+  "encryptedFactoryKey": "your_encrypted_factory_key_here",
+  "description": "加密后的工厂私钥（AES-256-CBC 加密）"
+}

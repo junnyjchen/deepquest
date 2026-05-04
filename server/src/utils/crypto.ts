@@ -1,8 +1,13 @@
 import crypto from 'crypto';
+import * as fs from 'fs';
+import path from 'path';
 
 /**
  * AES-256-CBC 加密/解密工具
  */
+
+// 配置文件路径
+const KEYS_CONFIG_PATH = path.resolve(__dirname, '../../config/keys.json');
 
 // 获取加密密钥（从环境变量）
 function getEncryptionKey(): string {
@@ -66,11 +71,29 @@ export function decrypt(encryptedText: string): string {
 
 /**
  * 便捷函数：获取解密后的工厂私钥
+ * 从 config/keys.json 文件读取加密字符串
  */
 export function getDecryptedFactoryKey(): string {
-  const encryptedKey = process.env.ENCRYPTED_FACTORY_KEY;
-  if (!encryptedKey) {
-    throw new Error('未设置 ENCRYPTED_FACTORY_KEY 环境变量');
+  let encryptedKey: string | undefined;
+  
+  try {
+    // 尝试从配置文件读取
+    if (fs.existsSync(KEYS_CONFIG_PATH)) {
+      const config = JSON.parse(fs.readFileSync(KEYS_CONFIG_PATH, 'utf8'));
+      encryptedKey = config.encryptedFactoryKey;
+    }
+  } catch (error) {
+    console.error('[Crypto] 读取配置文件失败:', error);
   }
+  
+  // 如果配置文件没有，尝试从环境变量读取（兼容旧方式）
+  if (!encryptedKey) {
+    encryptedKey = process.env.ENCRYPTED_FACTORY_KEY;
+  }
+  
+  if (!encryptedKey) {
+    throw new Error('未找到加密私钥：请在 config/keys.json 或环境变量中配置 ENCRYPTED_FACTORY_KEY');
+  }
+  
   return decrypt(encryptedKey);
 }
