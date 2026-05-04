@@ -71,7 +71,7 @@ router.get('/list', verifyAdmin, async (req, res) => {
 
     let query = supabase
       .from('users')
-      .select('wallet_address, card_type, card_level, total_invest, team_invest, created_at')
+      .select('wallet_address, card_type, total_invest, team_invest, created_at')
       .not('card_type', 'is', null)
       .order('created_at', { ascending: false });
 
@@ -164,8 +164,7 @@ router.post('/add', verifyAdmin, async (req, res) => {
         const { error: updateError } = await supabase
           .from('users')
           .update({
-            card_type: cardType,
-            card_level: cardType
+            card_type: cardType
           })
           .eq('id', existingUser.id);
 
@@ -386,7 +385,6 @@ router.post('/batch-init', verifyAdmin, async (req, res) => {
             .from('users')
             .update({
               card_type: cardType,
-              card_level: cardType,
               referrer_address: referrer_address?.toLowerCase() || (existingUser as any).referrer_address
             })
             .eq('id', existingUser.id);
@@ -397,7 +395,6 @@ router.post('/batch-init', verifyAdmin, async (req, res) => {
             .insert({
               wallet_address: wallet.toLowerCase(),
               card_type: cardType,
-              card_level: cardType,
               referrer_address: referrer_address?.toLowerCase() || null,
               status: 'active'
             });
