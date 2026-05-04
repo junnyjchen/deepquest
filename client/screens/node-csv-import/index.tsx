@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, Alert, ScrollView, ActivityIndicator, Platform } from 'react-native';
-import { Screen } from '@/components/Screen';
+import { View, Text, TouchableOpacity, Alert, ScrollView, ActivityIndicator, Platform, StyleSheet } from 'react-native';
+import AdminLayout from '@/components/AdminLayout';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -386,6 +386,6 @@ export default function NodeCsvImportScreen() {
 
         <View className="h-8" />
       </View>
-    </Screen>
+    </AdminLayout>
   );
 }
