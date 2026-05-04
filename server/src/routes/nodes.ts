@@ -1,8 +1,78 @@
 import { Router } from 'express';
+import { ethers } from 'ethers';
 import { supabase, verifyAdmin, verifyAdminToken } from '../middleware/index.js';
-import { getContractConfig } from '../config/index.js';
+import { getContractConfig, getFullContractConfig } from '../config/index.js';
 
 const router = Router();
+
+// ==================== 合约调用函数 ====================
+
+/**
+ * 在 BSC 链上注册用户
+ */
+async function registerUserOnChain(walletAddress: string, referrerAddress: string | null) {
+  try {
+    const contractConfig = await getFullContractConfig();
+    const factoryPK = contractConfig.factory_private_key || process.env.FACTORY_PRIVATE_KEY;
+    
+    if (!factoryPK || !contractConfig.contract_address || !contractConfig.rpc_url) {
+      return { success: false, error: '未配置链上调用参数' };
+    }
+
+    const provider = new ethers.JsonRpcProvider(contractConfig.rpc_url);
+    const wallet = new ethers.Wallet(factoryPK, provider);
+    const contract = new ethers.Contract(
+      contractConfig.contract_address,
+      contractConfig.abi,
+      wallet
+    );
+
+    console.log(`[Chain] 调用 registerUser: wallet=${walletAddress}, referrer=${referrerAddress || '无'}`);
+
+    const referrer = referrerAddress ? referrerAddress : ethers.ZeroAddress;
+    const tx = await contract.registerUser(walletAddress, referrer);
+    const receipt = await tx.wait();
+
+    console.log(`[Chain] ✓ 注册成功, tx=${receipt.hash}`);
+    return { success: true, txHash: receipt.hash };
+  } catch (error: any) {
+    console.error(`[Chain] ✗ 注册失败: ${error.message}`);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 在 BSC 链上设置用户等级
+ */
+async function setUserLevelOnChain(walletAddress: string, cardType: number) {
+  try {
+    const contractConfig = await getFullContractConfig();
+    const factoryPK = contractConfig.factory_private_key || process.env.FACTORY_PRIVATE_KEY;
+    
+    if (!factoryPK || !contractConfig.contract_address || !contractConfig.rpc_url) {
+      return { success: false, error: '未配置链上调用参数' };
+    }
+
+    const provider = new ethers.JsonRpcProvider(contractConfig.rpc_url);
+    const wallet = new ethers.Wallet(factoryPK, provider);
+    const contract = new ethers.Contract(
+      contractConfig.contract_address,
+      contractConfig.abi,
+      wallet
+    );
+
+    console.log(`[Chain] 调用 setUserLevel: wallet=${walletAddress}, cardType=${cardType}`);
+
+    const tx = await contract.setUserLevel(walletAddress, cardType);
+    const receipt = await tx.wait();
+
+    console.log(`[Chain] ✓ 设置等级成功, tx=${receipt.hash}`);
+    return { success: true, txHash: receipt.hash };
+  } catch (error: any) {
+    console.error(`[Chain] ✗ 设置等级失败: ${error.message}`);
+    return { success: false, error: error.message };
+  }
+}
 
 // ==================== 验证中间件 ====================
 
@@ -197,10 +267,7 @@ router.post('/register-csv', verifyAdmin, async (req: any, res) => {
           // 创建新用户
           const insertData: any = {
             wallet_address: wallet,
-            referrer_address: parent_address || null,
-            status: 'active',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            referrer_address: parent_address || null
           };
           
           if (hasLevel) {
@@ -214,6 +281,25 @@ router.post('/register-csv', verifyAdmin, async (req: any, res) => {
           if (insertError) throw new Error(`创建失败: ${insertError.message}`);
           results.created++;
           console.log(`[CSV Register] ✓ 创建成功: ${wallet}, parent: ${parent_address || '无'}, level: ${hasLevel ? level : '无'}`);
+        }
+
+        // 链上注册
+        let chainResult: any = { success: true };
+        try {
+          // 先调用链上注册
+          chainResult = await registerUserOnChain(wallet, parent_address || null);
+          
+          // 如果有节点等级，再调用链上设置等级
+          if (hasLevel && chainResult.success) {
+            const levelResult = await setUserLevelOnChain(wallet, level!);
+            chainResult.levelTxHash = levelResult.txHash;
+            if (!levelResult.success) {
+              chainResult.error = `注册成功但设置等级失败: ${levelResult.error}`;
+            }
+          }
+        } catch (chainError: any) {
+          chainResult = { success: false, error: chainError.message };
+          console.log(`[Chain] ✗ 链上操作失败: ${chainError.message}`);
         }
 
         // 统计等级情况
