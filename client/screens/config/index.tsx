@@ -605,7 +605,7 @@ export default function ConfigScreen() {
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>初始化配置</Text>
               <Text style={styles.modalText}>这将初始化默认配置值。继续吗？</Text>
-              <View style={styles.modalButtons}>
+              <View style={styles.modalButton}>
                 <TouchableOpacity 
                   style={[styles.modalButton, styles.cancelButton]} 
                   onPress={() => setShowInitConfirm(false)}
@@ -699,18 +699,18 @@ export default function ConfigScreen() {
               </>
             )}
             
-            <View style={styles.modalButtons}>
+            <View style={styles.modalButton}>
               <TouchableOpacity 
-                style={[styles.modalButton, styles.cancelBtn]}
+                style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => setEditModalVisible(false)}
               >
-                <Text style={styles.cancelBtnText}>取消</Text>
+                <Text style={styles.cancelButtonText}>取消</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={[styles.modalButton, styles.saveBtn]}
+                style={[styles.modalButton, styles.confirmButton]}
                 onPress={handleSave}
               >
-                <Text style={styles.saveBtnText}>保存</Text>
+                <Text style={styles.confirmButtonText}>保存</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1151,91 +1151,37 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#333',
   },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
   modalButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelBtn: {
-    backgroundColor: '#333',
-  },
-  saveBtn: {
-    backgroundColor: '#00F0FF',
-  },
-  cancelBtnText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  saveBtnText: {
-    color: '#000',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  // Modal styles
-  modalOverlay: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  modalContent: {
-    backgroundColor: '#1C1C2E',
-    borderRadius: 16,
-    padding: 24,
-    width: '85%',
-    maxWidth: 400,
-    borderWidth: 1,
-    borderColor: '#00F0FF30',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 12,
-    textAlign: 'center',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 20,
+    gap: 12,
   },
   modalText: {
-    fontSize: 14,
-    color: '#CCCCCC',
-    marginBottom: 24,
-    textAlign: 'center',
-    lineHeight: 20,
+    color: '#FFFFFF',
+    fontSize: 16,
+    marginBottom: 20,
+    lineHeight: 24,
   },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: 'center',
+  confirmButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
   },
   cancelButton: {
     backgroundColor: '#333',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
   },
-  confirmButton: {
-    backgroundColor: '#00F0FF',
+  confirmButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   cancelButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
-  },
-  confirmButtonText: {
-    color: '#000000',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });

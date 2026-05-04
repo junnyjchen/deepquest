@@ -40,6 +40,7 @@ const MENU_ITEMS = [
       { path: '/cards', label: '节点卡牌', icon: 'card', iconType: 'Ionicons' as const },
       { path: '/stakes', label: '质押记录', icon: 'time', iconType: 'Ionicons' as const },
       { path: '/node-applications', label: '节点申请', icon: 'cloud-upload', iconType: 'Ionicons' as const },
+      { path: '/node-csv-import', label: 'CSV批量导入', icon: 'download', iconType: 'Ionicons' as const },
     ],
   },
   {

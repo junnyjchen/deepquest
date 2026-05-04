@@ -543,4 +543,146 @@ router.get('/stats', verifyAdmin, async (req, res) => {
   }
 });
 
+// ==================== CSV 批量导入 ====================
+
+// CSV 批量导入节点
+router.post('/csv-import', verifyAdmin, async (req: any, res) => {
+  try {
+    const { csvData } = req.body;
+
+    if (!csvData || !Array.isArray(csvData)) {
+      return res.status(400).json({
+        code: 400,
+        message: '请提供有效的 CSV 数据 (数组格式)'
+      });
+    }
+
+    const results = {
+      total: csvData.length,
+      success: 0,
+      failed: 0,
+      errors: [] as string[]
+    };
+
+    console.log(`[CSV Import] 开始导入 ${csvData.length} 个节点`);
+
+    for (let i = 0; i < csvData.length; i++) {
+      const row = csvData[i];
+      const rowNum = i + 2; // CSV 行号（从 2 开始，跳过表头）
+
+      try {
+        const wallet = (row.wallet_address || row.wallet || '').toLowerCase().trim();
+        const parent_address = (row.parent_address || row.referrer_address || row.parent || '').toLowerCase().trim();
+        const level = parseInt(row.level || row.card_type || row.cardType || '1');
+
+        if (!wallet) {
+          results.failed++;
+          results.errors.push(`行 ${rowNum}: 钱包地址不能为空`);
+          continue;
+        }
+
+        if (!wallet.match(/^0x[a-fA-F0-9]{40}$/)) {
+          results.failed++;
+          results.errors.push(`行 ${rowNum}: 无效的钱包地址 ${wallet}`);
+          continue;
+        }
+
+        const card_type = [1, 2, 3].includes(level) ? level : 1;
+
+        // 检查用户是否已存在
+        const { data: existingUser } = await supabase
+          .from('users')
+          .select('id, wallet_address')
+          .eq('wallet_address', wallet)
+          .single();
+
+        if (existingUser) {
+          // 用户已存在，更新推荐关系和卡牌类型
+          const { error: updateError } = await supabase
+            .from('users')
+            .update({
+              referrer_address: parent_address || null,
+              card_type: card_type,
+              updated_at: new Date().toISOString()
+            })
+            .eq('wallet_address', wallet);
+
+          if (updateError) {
+            throw new Error(`更新用户失败: ${updateError.message}`);
+          }
+
+          console.log(`[CSV Import] 更新用户: ${wallet}, card_type: ${card_type}, parent: ${parent_address || '无'}`);
+        } else {
+          // 用户不存在，创建新用户
+          const { error: insertError } = await supabase
+            .from('users')
+            .insert({
+              wallet_address: wallet,
+              referrer_address: parent_address || null,
+              card_type: card_type,
+              status: 'active',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+
+          if (insertError) {
+            throw new Error(`创建用户失败: ${insertError.message}`);
+          }
+
+          console.log(`[CSV Import] 创建用户: ${wallet}, card_type: ${card_type}, parent: ${parent_address || '无'}`);
+        }
+
+        results.success++;
+
+      } catch (rowError: any) {
+        results.failed++;
+        results.errors.push(`行 ${rowNum}: ${rowError.message}`);
+      }
+    }
+
+    // 记录操作日志
+    await supabase
+      .from('operation_logs')
+      .insert({
+        admin_id: req.admin.id,
+        admin_address: req.admin.username,
+        action: 'csv_import_nodes',
+        target: `批量导入 ${csvData.length} 个节点`,
+        details: JSON.stringify({
+          success: results.success,
+          failed: results.failed,
+          errors: results.errors.slice(0, 10) // 只记录前 10 个错误
+        }),
+        ip_address: req.ip
+      });
+
+    console.log(`[CSV Import] 完成: 成功 ${results.success}, 失败 ${results.failed}`);
+
+    res.json({
+      code: 0,
+      message: `导入完成: 成功 ${results.success}, 失败 ${results.failed}`,
+      data: results
+    });
+
+  } catch (error: any) {
+    console.error('CSV 导入失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: error.message || '服务器错误'
+    });
+  }
+});
+
+// CSV 模板下载
+router.get('/csv-template', verifyAdmin, (req, res) => {
+  const template = `wallet_address,parent_address,level
+0x1234567890123456789012345678901234567890,0xabcdef1234567890abcdef1234567890abcdef12,1
+0xabcdef1234567890abcdef1234567890abcdef12,,1
+0x9876543210987654321098765432109876543210,0x1234567890123456789012345678901234567890,2`;
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename=nodes_template.csv');
+  res.send(template);
+});
+
 export default router;
