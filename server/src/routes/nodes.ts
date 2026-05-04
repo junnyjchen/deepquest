@@ -127,7 +127,7 @@ router.post('/add', verifyAdmin, async (req, res) => {
 
     // 模拟逐个添加节点
     for (const node of nodes) {
-      const { wallet, cardType, referrer } = node;
+      const { wallet, cardType, referrer_address } = node;
 
       if (!wallet || !cardType) {
         results.failed.push({
@@ -151,14 +151,13 @@ router.post('/add', verifyAdmin, async (req, res) => {
           .insert({
             wallet_address: wallet.toLowerCase(),
             card_type: cardType,
-            referrer: referrer || null,
-            status: 'active'
+            referrer_address_address: referrer_address ? referrer_address.toLowerCase() : null
           });
 
         if (insertError) {
           results.failed.push({ wallet, reason: insertError.message });
         } else {
-          results.success.push({ wallet, cardType, referrer });
+          results.success.push({ wallet, cardType, referrer_address });
         }
       } else {
         // 更新用户节点信息
@@ -173,7 +172,7 @@ router.post('/add', verifyAdmin, async (req, res) => {
         if (updateError) {
           results.failed.push({ wallet, reason: updateError.message });
         } else {
-          results.success.push({ wallet, cardType, referrer, updated: true });
+          results.success.push({ wallet, cardType, referrer_address, updated: true });
         }
       }
 
@@ -182,7 +181,7 @@ router.post('/add', verifyAdmin, async (req, res) => {
         admin_id: adminId,
         action: 'ADD_NODE',
         target: wallet,
-        details: JSON.stringify({ cardType, referrer }),
+        details: JSON.stringify({ cardType, referrer_address }),
         ip_address: req.ip
       });
     }
@@ -204,7 +203,7 @@ router.post('/add', verifyAdmin, async (req, res) => {
 // 注册用户并绑定推荐关系
 router.post('/register', verifyAdmin, async (req, res) => {
   try {
-    const { wallet, referrer } = req.body;
+    const { wallet, referrer_address } = req.body;
     const adminId = (req as any).admin?.id;
 
     if (!wallet) {
@@ -217,13 +216,13 @@ router.post('/register', verifyAdmin, async (req, res) => {
     // 检查用户是否已存在
     const { data: existingUser } = await supabase
       .from('users')
-      .select('id, wallet_address, referrer')
+      .select('id, wallet_address, referrer_address')
       .eq('wallet_address', wallet.toLowerCase())
       .single();
 
     if (existingUser) {
       // 如果已有推荐人，返回错误
-      if (existingUser.referrer) {
+      if (existingUser.referrer_address) {
         return res.status(400).json({
           code: 400,
           message: '用户已有推荐人，无法修改'
@@ -233,7 +232,7 @@ router.post('/register', verifyAdmin, async (req, res) => {
       // 更新推荐人
       const { error: updateError } = await supabase
         .from('users')
-        .update({ referrer: referrer?.toLowerCase() || null })
+        .update({ referrer_address: referrer_address?.toLowerCase() || null })
         .eq('id', existingUser.id);
 
       if (updateError) throw updateError;
@@ -243,14 +242,14 @@ router.post('/register', verifyAdmin, async (req, res) => {
         admin_id: adminId,
         action: 'UPDATE_REFERRER',
         target: wallet,
-        details: JSON.stringify({ oldReferrer: null, newReferrer: referrer }),
+        details: JSON.stringify({ oldReferrer: null, newReferrer: referrer_address }),
         ip_address: req.ip
       });
 
       return res.json({
         code: 0,
         message: '推荐人绑定成功',
-        data: { wallet, referrer }
+        data: { wallet, referrer_address }
       });
     }
 
@@ -259,7 +258,7 @@ router.post('/register', verifyAdmin, async (req, res) => {
       .from('users')
       .insert({
         wallet_address: wallet.toLowerCase(),
-        referrer: referrer?.toLowerCase() || null,
+        referrer_address: referrer_address?.toLowerCase() || null,
         status: 'active'
       })
       .select()
@@ -272,14 +271,14 @@ router.post('/register', verifyAdmin, async (req, res) => {
       admin_id: adminId,
       action: 'REGISTER_USER',
       target: wallet,
-      details: JSON.stringify({ referrer }),
+      details: JSON.stringify({ referrer_address }),
       ip_address: req.ip
     });
 
     res.json({
       code: 0,
       message: '用户注册成功',
-      data: { wallet, referrer }
+      data: { wallet, referrer_address }
     });
   } catch (error: any) {
     console.error('注册用户失败:', error);
@@ -317,24 +316,24 @@ router.get('/referral-tree', verifyAdmin, async (req: any, res) => {
     }
 
     // 获取直接推荐人
-    const { data: referrer } = await supabase
+    const { data: referrer_address } = await supabase
       .from('users')
       .select('wallet_address, card_type')
-      .eq('wallet_address', user.referrer?.toLowerCase())
+      .eq('wallet_address', user.referrer_address?.toLowerCase())
       .single();
 
     // 获取直推用户
     const { data: directChildren } = await supabase
       .from('users')
       .select('wallet_address, card_type, total_invest, created_at')
-      .eq('referrer', wallet.toLowerCase())
+      .eq('referrer_address', wallet.toLowerCase())
       .order('created_at', { ascending: false });
 
     res.json({
       code: 0,
       data: {
         user,
-        referrer,
+        referrer_address,
         directChildren: directChildren || []
       }
     });
@@ -366,7 +365,7 @@ router.post('/batch-init', verifyAdmin, async (req, res) => {
     };
 
     for (const node of nodes) {
-      const { wallet, cardType, referrer } = node;
+      const { wallet, cardType, referrer_address } = node;
 
       if (!wallet || !cardType) {
         results.failed.push({ wallet, reason: '缺少必要参数' });
@@ -388,7 +387,7 @@ router.post('/batch-init', verifyAdmin, async (req, res) => {
             .update({
               card_type: cardType,
               card_level: cardType,
-              referrer: referrer?.toLowerCase() || (existingUser as any).referrer
+              referrer_address: referrer_address?.toLowerCase() || (existingUser as any).referrer_address
             })
             .eq('id', existingUser.id);
         } else {
@@ -399,19 +398,19 @@ router.post('/batch-init', verifyAdmin, async (req, res) => {
               wallet_address: wallet.toLowerCase(),
               card_type: cardType,
               card_level: cardType,
-              referrer: referrer?.toLowerCase() || null,
+              referrer_address: referrer_address?.toLowerCase() || null,
               status: 'active'
             });
         }
 
-        results.success.push({ wallet, cardType, referrer });
+        results.success.push({ wallet, cardType, referrer_address });
 
         // 记录日志
         await supabase.from('operation_logs').insert({
           admin_id: adminId,
           action: 'BATCH_INIT_NODE',
           target: wallet,
-          details: JSON.stringify({ cardType, referrer }),
+          details: JSON.stringify({ cardType, referrer_address }),
           ip_address: req.ip
         });
       } catch (err: any) {
