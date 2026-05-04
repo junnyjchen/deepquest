@@ -197,8 +197,9 @@ export const DQCARD_ABI = [
   }
 ];
 
-// DQToken 合约 ABI
+// DQToken 合约 ABI (继承 ERC20 + Ownable)
 export const DQTOKEN_ABI = [
+  // transfer
   {
     "inputs": [
       { "internalType": "address", "name": "to", "type": "address" },
@@ -211,6 +212,7 @@ export const DQTOKEN_ABI = [
     "stateMutability": "nonpayable",
     "type": "function"
   },
+  // balanceOf
   {
     "inputs": [
       { "internalType": "address", "name": "account", "type": "address" }
@@ -222,11 +224,23 @@ export const DQTOKEN_ABI = [
     "stateMutability": "view",
     "type": "function"
   },
+  // burn (任何人都可以销毁自己的代币)
   {
     "inputs": [
       { "internalType": "uint256", "name": "amount", "type": "uint256" }
     ],
     "name": "burn",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  // burnFrom (onlyOwner，可以销毁任意地址的代币)
+  {
+    "inputs": [
+      { "internalType": "address", "name": "from", "type": "address" },
+      { "internalType": "uint256", "name": "amount", "type": "uint256" }
+    ],
+    "name": "burnFrom",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
