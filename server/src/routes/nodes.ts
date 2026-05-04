@@ -101,6 +101,12 @@ router.post('/set-level', verifyAdmin, async (req: any, res) => {
 router.post('/register-csv', verifyAdmin, async (req: any, res) => {
   try {
     const { csvData } = req.body;
+    
+    // 记录请求日志
+    console.log(`[CSV Register] ========== 新请求 ==========`);
+    console.log(`[CSV Register] 请求来源: ${req.ip}`);
+    console.log(`[CSV Register] 数据条数: ${csvData?.length || 0}`);
+    console.log(`[CSV Register] 数据内容:`, JSON.stringify(csvData, null, 2));
 
     if (!csvData || !Array.isArray(csvData)) {
       return res.status(400).json({
@@ -143,6 +149,7 @@ router.post('/register-csv', verifyAdmin, async (req: any, res) => {
         if (!wallet.match(/^0x[a-fA-F0-9]{40}$/)) {
           results.failed++;
           results.errors.push(`行 ${rowNum}: 无效的钱包地址 ${wallet}`);
+          console.log(`[CSV Register] ❌ 行 ${rowNum}: 无效的钱包地址 ${wallet}`);
           continue;
         }
 
@@ -150,6 +157,7 @@ router.post('/register-csv', verifyAdmin, async (req: any, res) => {
         if (hasLevel && ![1, 2, 3].includes(level)) {
           results.failed++;
           results.errors.push(`行 ${rowNum}: 无效的节点等级 ${levelValue}，必须为 1(A)、2(B) 或 3(C)`);
+          console.log(`[CSV Register] ❌ 行 ${rowNum}: 无效的节点等级 ${levelValue}`);
           continue;
         }
 
@@ -165,6 +173,8 @@ router.post('/register-csv', verifyAdmin, async (req: any, res) => {
         if (hasLevel) {
           updateData.card_type = level;
         }
+
+        console.log(`[CSV Register] → 处理: wallet=${wallet}, parent=${parent_address || '无'}, level=${hasLevel ? level : '无'}`);
 
         // 检查用户是否已存在
         const { data: existingUser } = await supabase
@@ -182,7 +192,7 @@ router.post('/register-csv', verifyAdmin, async (req: any, res) => {
 
           if (updateError) throw new Error(`更新失败: ${updateError.message}`);
           results.updated++;
-          console.log(`[CSV Register] 更新用户: ${wallet}, parent: ${parent_address || '无'}, level: ${hasLevel ? level : '无'}`);
+          console.log(`[CSV Register] ✓ 更新成功: ${wallet}, parent: ${parent_address || '无'}, level: ${hasLevel ? level : '无'}`);
         } else {
           // 创建新用户
           const insertData: any = {
@@ -203,7 +213,7 @@ router.post('/register-csv', verifyAdmin, async (req: any, res) => {
 
           if (insertError) throw new Error(`创建失败: ${insertError.message}`);
           results.created++;
-          console.log(`[CSV Register] 创建用户: ${wallet}, parent: ${parent_address || '无'}, level: ${hasLevel ? level : '无'}`);
+          console.log(`[CSV Register] ✓ 创建成功: ${wallet}, parent: ${parent_address || '无'}, level: ${hasLevel ? level : '无'}`);
         }
 
         // 统计等级情况
