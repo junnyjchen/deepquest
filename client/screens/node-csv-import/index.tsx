@@ -155,6 +155,10 @@ export default function NodeCsvImportScreen() {
   }, []);
 
   const handleConfirmImport = useCallback(async () => {
+    console.log('[CSV] handleConfirmImport 被调用');
+    console.log('[CSV] csvData.length:', csvData.length);
+    console.log('[CSV] parsedData.length:', parsedData.length);
+    
     if (csvData.length === 0) {
       Alert.alert('错误', '请先选择 CSV 文件');
       return;
@@ -165,61 +169,42 @@ export default function NodeCsvImportScreen() {
       return;
     }
 
-    // 统计带等级和不带等级的数量
-    const withLevel = parsedData.filter(r => r.level !== undefined).length;
-    const withoutLevel = parsedData.filter(r => r.level === undefined).length;
-
-    Alert.alert(
-      '确认导入',
-      `确定要导入 ${parsedData.length} 个节点吗？\n\n` +
-      `• 带节点等级: ${withLevel} 个\n` +
-      `• 无节点等级: ${withoutLevel} 个\n\n` +
-      `（无节点等级的用户只创建绑定关系，不设置等级）`,
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '确定导入',
-          onPress: async () => {
-            setLoading(true);
-            try {
-              // 获取管理员认证信息
-              const adminStr = await AsyncStorage.getItem('admin_auth');
-              const adminData = adminStr ? JSON.parse(adminStr) : null;
-              
-              console.log('[CSV] 开始导入:', parsedData);
-              console.log('[CSV] Admin data:', adminData);
-              
-              // 直接使用 fetch 发送请求，包含 Authorization 头
-              const response = await fetch(`${API_BASE}/nodes/register-csv`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer admin_${adminData?.username || 'unknown'}`,
-                },
-                body: JSON.stringify({ csvData: parsedData }),
-              });
-              
-              console.log('[CSV] 响应状态:', response.status);
-              
-              if (!response.ok) {
-                const errorText = await response.text();
-                console.error('[CSV] 导入失败:', errorText);
-                throw new Error(`请求失败: ${response.status} - ${errorText}`);
-              }
-              
-              const result = await response.json();
-              console.log('[CSV] 导入结果:', result);
-              setResults(result);
-            } catch (error: any) {
-              console.error('[CSV] 导入失败:', error);
-              Alert.alert('导入失败', error.message || '服务器错误');
-            } finally {
-              setLoading(false);
-            }
-          },
+    setLoading(true);
+    try {
+      // 获取管理员认证信息
+      const adminStr = await AsyncStorage.getItem('admin_auth');
+      const adminData = adminStr ? JSON.parse(adminStr) : null;
+      
+      console.log('[CSV] 开始导入, 数据条数:', parsedData.length);
+      console.log('[CSV] Admin data:', adminData);
+      
+      // 直接使用 fetch 发送请求，包含 Authorization 头
+      const response = await fetch(`${API_BASE}/nodes/register-csv`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer admin_${adminData?.username || 'unknown'}`,
         },
-      ]
-    );
+        body: JSON.stringify({ csvData: parsedData }),
+      });
+      
+      console.log('[CSV] 响应状态:', response.status);
+      
+      const result = await response.json();
+      console.log('[CSV] 导入结果:', result);
+      
+      if (!response.ok) {
+        Alert.alert('导入失败', result.message || result.error || `请求失败: ${response.status}`);
+      } else {
+        setResults(result);
+        Alert.alert('导入成功', `成功导入 ${result.data?.success || 0} 个节点`);
+      }
+    } catch (error: any) {
+      console.error('[CSV] 导入失败:', error);
+      Alert.alert('导入失败', error.message || '服务器错误');
+    } finally {
+      setLoading(false);
+    }
   }, [csvData, parsedData]);
 
   return (
