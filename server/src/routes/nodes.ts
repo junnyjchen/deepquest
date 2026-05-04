@@ -4,7 +4,7 @@ import { getSupabaseClient } from '../storage/database/supabase-client';
 const supabase = getSupabaseClient();
 const router = Router();
 
-// 简单的管理员认证中间件
+// 管理员认证中间件
 async function verifyAdmin(req: any, res: any, next: any) {
   try {
     const token = req.headers.authorization?.replace('Bearer ', '');
@@ -29,22 +29,25 @@ async function verifyAdmin(req: any, res: any, next: any) {
   }
 }
 
-/**
- * 节点管理API - 链上操作
- */
+// ==================== 节点申请管理 ====================
 
-// 获取节点申请列表（待审核）
+// 获取节点申请列表
 router.get('/applications', verifyAdmin, async (req: any, res) => {
   try {
-    const { status } = req.query;
+    const { page = 1, pageSize = 20, status } = req.query;
+    
     let query = supabase
       .from('node_applications')
-      .select('*')
+      .select('*', { count: 'exact' })
       .order('created_at', { ascending: false });
 
     if (status) {
       query = query.eq('status', status);
     }
+
+    const from = (Number(page) - 1) * Number(pageSize);
+    const to = from + Number(pageSize) - 1;
+    query = query.range(from, to);
 
     const { data, error, count } = await query;
 
@@ -53,7 +56,9 @@ router.get('/applications', verifyAdmin, async (req: any, res) => {
     res.json({
       code: 0,
       data: data || [],
-      total: count || 0
+      total: count || 0,
+      page: Number(page),
+      pageSize: Number(pageSize)
     });
   } catch (error: any) {
     console.error('获取节点申请失败:', error);
@@ -64,6 +69,124 @@ router.get('/applications', verifyAdmin, async (req: any, res) => {
   }
 });
 
+// 审核节点申请（通过/拒绝）
+router.post('/applications/review', verifyAdmin, async (req: any, res) => {
+  try {
+    const { id, status, reviewer_notes } = req.body;
+    const adminId = req.admin?.id;
+
+    if (!id || !status) {
+      return res.status(400).json({
+        code: 400,
+        message: '请提供申请ID和审核状态'
+      });
+    }
+
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({
+        code: 400,
+        message: '状态必须是 approved 或 rejected'
+      });
+    }
+
+    // 获取申请信息
+    const { data: application, error: fetchError } = await supabase
+      .from('node_applications')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !application) {
+      return res.status(404).json({
+        code: 404,
+        message: '申请记录不存在'
+      });
+    }
+
+    if (application.status !== 'pending') {
+      return res.status(400).json({
+        code: 400,
+        message: '该申请已审核，请勿重复操作'
+      });
+    }
+
+    // 更新申请状态
+    const { error: updateError } = await supabase
+      .from('node_applications')
+      .update({
+        status,
+        reviewer_id: adminId,
+        reviewer_notes: reviewer_notes || null,
+        reviewed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id);
+
+    if (updateError) throw updateError;
+
+    // 如果审核通过，同步到 users 表
+    if (status === 'approved') {
+      const { wallet_address, referrer_address } = application;
+
+      // 检查用户是否已存在
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('wallet_address', wallet_address?.toLowerCase())
+        .single();
+
+      if (existingUser) {
+        // 更新用户
+        await supabase
+          .from('users')
+          .update({
+            card_type: application.apply_type === 'node' ? 1 : parseInt(application.apply_type) || 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingUser.id);
+      } else {
+        // 创建用户
+        await supabase
+          .from('users')
+          .insert({
+            wallet_address: wallet_address?.toLowerCase(),
+            referrer_address: referrer_address?.toLowerCase() || null,
+            card_type: application.apply_type === 'node' ? 1 : parseInt(application.apply_type) || 1,
+            total_invest: application.total_invest || 0,
+            team_size: application.team_size || 0,
+            created_at: new Date().toISOString()
+          });
+      }
+    }
+
+    // 记录操作日志
+    await supabase.from('operation_logs').insert({
+      admin_id: adminId,
+      action: status === 'approved' ? 'APPROVE_NODE_APPLICATION' : 'REJECT_NODE_APPLICATION',
+      target: `node_application:${id}`,
+      details: JSON.stringify({
+        applicationId: id,
+        wallet: application.wallet_address,
+        reviewer_notes
+      }),
+      ip_address: req.ip
+    });
+
+    res.json({
+      code: 0,
+      message: status === 'approved' ? '审核通过' : '审核拒绝'
+    });
+  } catch (error: any) {
+    console.error('审核申请失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: error.message || '服务器错误'
+    });
+  }
+});
+
+// ==================== 节点列表管理 ====================
+
 // 获取节点列表
 router.get('/list', verifyAdmin, async (req, res) => {
   try {
@@ -71,7 +194,7 @@ router.get('/list', verifyAdmin, async (req, res) => {
 
     let query = supabase
       .from('users')
-      .select('wallet_address, card_type, total_invest, team_invest, created_at')
+      .select('wallet_address, card_type, total_invest, team_invest, referrer_address, created_at', { count: 'exact' })
       .not('card_type', 'is', null)
       .order('created_at', { ascending: false });
 
@@ -107,11 +230,13 @@ router.get('/list', verifyAdmin, async (req, res) => {
   }
 });
 
-// 批量添加节点（模拟链上操作）
-router.post('/add', verifyAdmin, async (req, res) => {
+// ==================== 链上操作 ====================
+
+// 批量添加节点（注册用户 + 绑定推荐关系 + 添加节点）
+router.post('/add', verifyAdmin, async (req: any, res) => {
   try {
     const { nodes } = req.body;
-    const adminId = (req as any).admin?.id;
+    const adminId = req.admin?.id;
 
     if (!nodes || !Array.isArray(nodes) || nodes.length === 0) {
       return res.status(400).json({
@@ -125,7 +250,6 @@ router.post('/add', verifyAdmin, async (req, res) => {
       failed: [] as any[]
     };
 
-    // 模拟逐个添加节点
     for (const node of nodes) {
       const { wallet, cardType, referrer_address } = node;
 
@@ -137,52 +261,58 @@ router.post('/add', verifyAdmin, async (req, res) => {
         continue;
       }
 
-      // 检查用户是否存在
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('id, wallet_address')
-        .eq('wallet_address', wallet.toLowerCase())
-        .single();
-
-      if (!existingUser) {
-        // 创建用户记录
-        const { error: insertError } = await supabase
+      try {
+        // 1. 检查/创建用户
+        const { data: existingUser } = await supabase
           .from('users')
-          .insert({
-            wallet_address: wallet.toLowerCase(),
-            card_type: cardType,
-            referrer_address_address: referrer_address ? referrer_address.toLowerCase() : null
-          });
+          .select('id, wallet_address, referrer_address')
+          .eq('wallet_address', wallet.toLowerCase())
+          .single();
 
-        if (insertError) {
-          results.failed.push({ wallet, reason: insertError.message });
-        } else {
-          results.success.push({ wallet, cardType, referrer_address });
-        }
-      } else {
-        // 更新用户节点信息
-        const { error: updateError } = await supabase
-          .from('users')
-          .update({
-            card_type: cardType
-          })
-          .eq('id', existingUser.id);
+        if (existingUser) {
+          // 更新用户节点信息
+          const { error: updateError } = await supabase
+            .from('users')
+            .update({
+              card_type: cardType,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingUser.id);
 
-        if (updateError) {
-          results.failed.push({ wallet, reason: updateError.message });
+          if (updateError) {
+            results.failed.push({ wallet, reason: updateError.message });
+            continue;
+          }
         } else {
-          results.success.push({ wallet, cardType, referrer_address, updated: true });
+          // 创建用户记录
+          const { error: insertError } = await supabase
+            .from('users')
+            .insert({
+              wallet_address: wallet.toLowerCase(),
+              card_type: cardType,
+              referrer_address: referrer_address?.toLowerCase() || null,
+              created_at: new Date().toISOString()
+            });
+
+          if (insertError) {
+            results.failed.push({ wallet, reason: insertError.message });
+            continue;
+          }
         }
+
+        results.success.push({ wallet, cardType, referrer_address });
+
+        // 2. 记录操作日志
+        await supabase.from('operation_logs').insert({
+          admin_id: adminId,
+          action: 'ADD_NODE',
+          target: wallet,
+          details: JSON.stringify({ cardType, referrer_address }),
+          ip_address: req.ip
+        });
+      } catch (err: any) {
+        results.failed.push({ wallet, reason: err.message });
       }
-
-      // 记录操作日志
-      await supabase.from('operation_logs').insert({
-        admin_id: adminId,
-        action: 'ADD_NODE',
-        target: wallet,
-        details: JSON.stringify({ cardType, referrer_address }),
-        ip_address: req.ip
-      });
     }
 
     res.json({
@@ -200,10 +330,10 @@ router.post('/add', verifyAdmin, async (req, res) => {
 });
 
 // 注册用户并绑定推荐关系
-router.post('/register', verifyAdmin, async (req, res) => {
+router.post('/register', verifyAdmin, async (req: any, res) => {
   try {
-    const { wallet, referrer_address } = req.body;
-    const adminId = (req as any).admin?.id;
+    const { wallet, referrer_address, user_name, contact_info, apply_reason } = req.body;
+    const adminId = req.admin?.id;
 
     if (!wallet) {
       return res.status(400).json({
@@ -231,7 +361,10 @@ router.post('/register', verifyAdmin, async (req, res) => {
       // 更新推荐人
       const { error: updateError } = await supabase
         .from('users')
-        .update({ referrer_address: referrer_address?.toLowerCase() || null })
+        .update({ 
+          referrer_address: referrer_address?.toLowerCase() || null,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', existingUser.id);
 
       if (updateError) throw updateError;
@@ -241,7 +374,7 @@ router.post('/register', verifyAdmin, async (req, res) => {
         admin_id: adminId,
         action: 'UPDATE_REFERRER',
         target: wallet,
-        details: JSON.stringify({ oldReferrer: null, newReferrer: referrer_address }),
+        details: JSON.stringify({ newReferrer: referrer_address }),
         ip_address: req.ip
       });
 
@@ -258,19 +391,33 @@ router.post('/register', verifyAdmin, async (req, res) => {
       .insert({
         wallet_address: wallet.toLowerCase(),
         referrer_address: referrer_address?.toLowerCase() || null,
-        status: 'active'
+        created_at: new Date().toISOString()
       })
       .select()
       .single();
 
     if (error) throw error;
 
+    // 如果提供了申请信息，同步创建申请记录
+    if (user_name || contact_info || apply_reason) {
+      await supabase.from('node_applications').insert({
+        wallet_address: wallet.toLowerCase(),
+        user_name: user_name || null,
+        apply_type: 'node',
+        apply_reason: apply_reason || null,
+        contact_info: contact_info || null,
+        status: 'approved',
+        reviewer_id: adminId,
+        reviewed_at: new Date().toISOString()
+      });
+    }
+
     // 记录日志
     await supabase.from('operation_logs').insert({
       admin_id: adminId,
       action: 'REGISTER_USER',
       target: wallet,
-      details: JSON.stringify({ referrer_address }),
+      details: JSON.stringify({ referrer_address, user_name }),
       ip_address: req.ip
     });
 
@@ -287,6 +434,8 @@ router.post('/register', verifyAdmin, async (req, res) => {
     });
   }
 });
+
+// ==================== 推荐关系 ====================
 
 // 获取推荐关系树
 router.get('/referral-tree', verifyAdmin, async (req: any, res) => {
@@ -314,17 +463,21 @@ router.get('/referral-tree', verifyAdmin, async (req: any, res) => {
       });
     }
 
-    // 获取直接推荐人
-    const { data: referrer_address } = await supabase
-      .from('users')
-      .select('wallet_address, card_type')
-      .eq('wallet_address', user.referrer_address?.toLowerCase())
-      .single();
+    // 获取推荐人
+    let referrer = null;
+    if (user.referrer_address) {
+      const { data: referrerData } = await supabase
+        .from('users')
+        .select('wallet_address, card_type, total_invest')
+        .eq('wallet_address', user.referrer_address?.toLowerCase())
+        .single();
+      referrer = referrerData;
+    }
 
     // 获取直推用户
     const { data: directChildren } = await supabase
       .from('users')
-      .select('wallet_address, card_type, total_invest, created_at')
+      .select('wallet_address, card_type, total_invest, team_invest, created_at')
       .eq('referrer_address', wallet.toLowerCase())
       .order('created_at', { ascending: false });
 
@@ -332,8 +485,9 @@ router.get('/referral-tree', verifyAdmin, async (req: any, res) => {
       code: 0,
       data: {
         user,
-        referrer_address,
-        directChildren: directChildren || []
+        referrer,
+        directChildren: directChildren || [],
+        directCount: directChildren?.length || 0
       }
     });
   } catch (error: any) {
@@ -345,83 +499,43 @@ router.get('/referral-tree', verifyAdmin, async (req: any, res) => {
   }
 });
 
-// 批量注册用户并添加节点（完整流程）
-router.post('/batch-init', verifyAdmin, async (req, res) => {
+// ==================== 统计接口 ====================
+
+// 获取节点统计
+router.get('/stats', verifyAdmin, async (req, res) => {
   try {
-    const { nodes } = req.body;
-    const adminId = (req as any).admin?.id;
+    // 节点总数
+    const { count: totalNodes } = await supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+      .not('card_type', 'is', null);
 
-    if (!nodes || !Array.isArray(nodes) || nodes.length === 0) {
-      return res.status(400).json({
-        code: 400,
-        message: '请提供节点列表'
-      });
-    }
+    // 待审核申请
+    const { count: pendingApplications } = await supabase
+      .from('node_applications')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending');
 
-    const results = {
-      success: [] as any[],
-      failed: [] as any[]
+    // 各类型节点统计
+    const { data: cardTypeStats } = await supabase
+      .from('users')
+      .select('card_type')
+      .not('card_type', 'is', null);
+
+    const stats = {
+      totalNodes: totalNodes || 0,
+      pendingApplications: pendingApplications || 0,
+      cardTypeA: cardTypeStats?.filter(u => u.card_type === 1).length || 0,
+      cardTypeB: cardTypeStats?.filter(u => u.card_type === 2).length || 0,
+      cardTypeC: cardTypeStats?.filter(u => u.card_type === 3).length || 0
     };
-
-    for (const node of nodes) {
-      const { wallet, cardType, referrer_address } = node;
-
-      if (!wallet || !cardType) {
-        results.failed.push({ wallet, reason: '缺少必要参数' });
-        continue;
-      }
-
-      try {
-        // 1. 创建或更新用户
-        const { data: existingUser } = await supabase
-          .from('users')
-          .select('id')
-          .eq('wallet_address', wallet.toLowerCase())
-          .single();
-
-        if (existingUser) {
-          // 更新用户
-          await supabase
-            .from('users')
-            .update({
-              card_type: cardType,
-              referrer_address: referrer_address?.toLowerCase() || (existingUser as any).referrer_address
-            })
-            .eq('id', existingUser.id);
-        } else {
-          // 创建用户
-          await supabase
-            .from('users')
-            .insert({
-              wallet_address: wallet.toLowerCase(),
-              card_type: cardType,
-              referrer_address: referrer_address?.toLowerCase() || null,
-              status: 'active'
-            });
-        }
-
-        results.success.push({ wallet, cardType, referrer_address });
-
-        // 记录日志
-        await supabase.from('operation_logs').insert({
-          admin_id: adminId,
-          action: 'BATCH_INIT_NODE',
-          target: wallet,
-          details: JSON.stringify({ cardType, referrer_address }),
-          ip_address: req.ip
-        });
-      } catch (err: any) {
-        results.failed.push({ wallet, reason: err.message });
-      }
-    }
 
     res.json({
       code: 0,
-      message: `成功 ${results.success.length} 个，失败 ${results.failed.length} 个`,
-      data: results
+      data: stats
     });
   } catch (error: any) {
-    console.error('批量初始化节点失败:', error);
+    console.error('获取节点统计失败:', error);
     res.status(500).json({
       code: 500,
       message: error.message || '服务器错误'
