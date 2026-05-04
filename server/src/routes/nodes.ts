@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { ethers } from 'ethers';
 import { supabase, verifyAdmin, verifyAdminToken } from '../middleware/index.js';
 import { getContractConfig, getFullContractConfig } from '../config/index.js';
+import { getDecryptedFactoryKey } from '../utils/crypto.js';
 
 const router = Router();
 
@@ -13,7 +14,12 @@ const router = Router();
 async function registerUserOnChain(walletAddress: string, referrerAddress: string | null) {
   try {
     const contractConfig = await getFullContractConfig();
-    const factoryPK = contractConfig.factory_private_key || process.env.FACTORY_PRIVATE_KEY;
+    let factoryPK = contractConfig.factory_private_key || process.env.FACTORY_PRIVATE_KEY;
+    
+    // 尝试解密加密的私钥
+    if (!factoryPK && process.env.ENCRYPTED_FACTORY_KEY) {
+      factoryPK = getDecryptedFactoryKey();
+    }
     
     if (!factoryPK || !contractConfig.contract_address || !contractConfig.rpc_url) {
       return { success: false, error: '未配置链上调用参数' };
@@ -47,7 +53,12 @@ async function registerUserOnChain(walletAddress: string, referrerAddress: strin
 async function setUserLevelOnChain(walletAddress: string, cardType: number) {
   try {
     const contractConfig = await getFullContractConfig();
-    const factoryPK = contractConfig.factory_private_key || process.env.FACTORY_PRIVATE_KEY;
+    let factoryPK = contractConfig.factory_private_key || process.env.FACTORY_PRIVATE_KEY;
+    
+    // 尝试解密加密的私钥
+    if (!factoryPK && process.env.ENCRYPTED_FACTORY_KEY) {
+      factoryPK = getDecryptedFactoryKey();
+    }
     
     if (!factoryPK || !contractConfig.contract_address || !contractConfig.rpc_url) {
       return { success: false, error: '未配置链上调用参数' };
