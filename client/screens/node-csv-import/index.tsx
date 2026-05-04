@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from 'react-native';
 import { Screen } from '@/components/Screen';
 import * as DocumentPicker from 'expo-document-picker';
@@ -17,6 +17,7 @@ export default function NodeCsvImportScreen() {
   const [parsedData, setParsedData] = useState<CsvRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any>(null);
+  const [debugInfo, setDebugInfo] = useState<string>('');
   const { admin } = useAdminAuth();
 
   const handlePickDocument = useCallback(async () => {
@@ -31,32 +32,51 @@ export default function NodeCsvImportScreen() {
       }
 
       const file = result.assets[0];
+      console.log('[CSV] 文件选择成功:', file.name, file.uri);
+      
       const content = await (FileSystem as any).readAsStringAsync(file.uri);
+      console.log('[CSV] 文件内容长度:', content.length);
+      console.log('[CSV] 文件前200字符:', content.substring(0, 200));
+      
       setCsvData(content);
       setResults(null);
 
+      // 解析 CSV
       const { valid, errors } = parseCsvData(content);
+      console.log('[CSV] 解析结果:', { validCount: valid.length, errorCount: errors.length, errors });
+      
       setParsedData(valid);
+      setDebugInfo(`解析: ${valid.length} 条数据, ${errors.length} 个错误`);
       
       if (errors.length > 0) {
-        Alert.alert('解析警告', `部分数据有问题:\n${errors.slice(0, 3).join('\n')}`);
+        Alert.alert('解析警告', `部分数据有问题:\n${errors.slice(0, 5).join('\n')}`);
       }
     } catch (error: any) {
+      console.error('[CSV] 读取文件失败:', error);
       Alert.alert('错误', `读取文件失败: ${error.message}`);
     }
   }, []);
 
   const parseCsvData = useCallback((csv: string) => {
     const lines = csv.trim().split('\n');
+    console.log('[CSV] 总行数:', lines.length);
+    
     if (lines.length < 2) {
       return { valid: [], errors: ['CSV 文件为空或只有表头'] };
     }
 
     // 解析表头（支持多种命名）
     const headerLine = lines[0].toLowerCase();
+    console.log('[CSV] 表头:', headerLine);
+    
     const walletIdx = headerLine.indexOf('wallet_address');
     const parentIdx = headerLine.indexOf('parent_address');
-    const levelIdx = headerLine.indexOf('level') !== -1 ? headerLine.indexOf('level') : headerLine.indexOf('card_type');
+    const levelIdx = headerLine.indexOf('level');
+    const cardTypeIdx = headerLine.indexOf('card_type');
+    
+    const actualLevelIdx = levelIdx !== -1 ? levelIdx : cardTypeIdx;
+    
+    console.log('[CSV] 列索引:', { walletIdx, parentIdx, levelIdx: actualLevelIdx });
 
     if (walletIdx === -1) {
       return { valid: [], errors: ['CSV 必须包含 wallet_address 列'] };
@@ -72,14 +92,15 @@ export default function NodeCsvImportScreen() {
       const values = line.split(',').map((v: string) => v.trim());
       
       // 提取钱包地址
-      const wallet = getValueByIndex(values, headerLine, 'wallet_address');
+      const wallet = walletIdx !== -1 ? values[walletIdx] : undefined;
+      
       if (!wallet) {
         errors.push(`第 ${i + 1} 行: 缺少钱包地址`);
         continue;
       }
       
       if (!wallet.startsWith('0x') || wallet.length !== 42) {
-        errors.push(`第 ${i + 1} 行: 无效的钱包地址`);
+        errors.push(`第 ${i + 1} 行: 无效的钱包地址 "${wallet}"`);
         continue;
       }
 
@@ -88,12 +109,12 @@ export default function NodeCsvImportScreen() {
       
       // 提取节点等级（可选）
       let level: number | undefined;
-      if (levelIdx !== -1 && values[levelIdx]) {
-        const levelStr = values[levelIdx].trim();
+      if (actualLevelIdx !== -1 && values[actualLevelIdx]) {
+        const levelStr = values[actualLevelIdx].trim();
         if (levelStr) {
           const parsedLevel = parseInt(levelStr, 10);
           if (isNaN(parsedLevel) || parsedLevel < 1 || parsedLevel > 3) {
-            errors.push(`第 ${i + 1} 行: 无效的等级 "${levelStr}"，应为 1(A)、2(B) 或 3(C)，已忽略`);
+            errors.push(`第 ${i + 1} 行: 无效的等级 "${levelStr}"`);
           } else {
             level = parsedLevel;
           }
@@ -110,32 +131,24 @@ export default function NodeCsvImportScreen() {
     return { valid, errors };
   }, []);
 
-  // 辅助函数：根据列名获取值
-  const getValueByIndex = (values: string[], headerLine: string, columnName: string): string | undefined => {
-    const columns = headerLine.split(',');
-    const idx = columns.indexOf(columnName);
-    return idx !== -1 ? values[idx] : undefined;
-  };
-
   const handleConfirmImport = useCallback(async () => {
     if (csvData.length === 0) {
       Alert.alert('错误', '请先选择 CSV 文件');
       return;
     }
 
-    const { valid, errors } = parseCsvData(csvData);
-    if (valid.length === 0) {
+    if (parsedData.length === 0) {
       Alert.alert('错误', '没有有效数据可导入');
       return;
     }
 
     // 统计带等级和不带等级的数量
-    const withLevel = valid.filter(r => r.level !== undefined).length;
-    const withoutLevel = valid.filter(r => r.level === undefined).length;
+    const withLevel = parsedData.filter(r => r.level !== undefined).length;
+    const withoutLevel = parsedData.filter(r => r.level === undefined).length;
 
     Alert.alert(
       '确认导入',
-      `确定要导入 ${valid.length} 个节点吗？\n\n` +
+      `确定要导入 ${parsedData.length} 个节点吗？\n\n` +
       `• 带节点等级: ${withLevel} 个\n` +
       `• 无节点等级: ${withoutLevel} 个\n\n` +
       `（无节点等级的用户只创建绑定关系，不设置等级）`,
@@ -146,9 +159,12 @@ export default function NodeCsvImportScreen() {
           onPress: async () => {
             setLoading(true);
             try {
-              const result = await nodesApi.importCsv(valid);
+              console.log('[CSV] 开始导入:', parsedData);
+              const result = await nodesApi.importCsv(parsedData);
+              console.log('[CSV] 导入结果:', result);
               setResults(result);
             } catch (error: any) {
+              console.error('[CSV] 导入失败:', error);
               Alert.alert('导入失败', error.message || '服务器错误');
             } finally {
               setLoading(false);
@@ -157,13 +173,25 @@ export default function NodeCsvImportScreen() {
         },
       ]
     );
-  }, [csvData, parseCsvData]);
+  }, [csvData, parsedData]);
+
+  // 调试信息显示
+  useEffect(() => {
+    console.log('[CSV] parsedData 更新:', parsedData.length);
+  }, [parsedData]);
 
   return (
     <Screen>
       <View className="flex-1 p-4">
         <Text className="text-2xl font-bold text-gray-900 mb-2">CSV 批量导入节点</Text>
         <Text className="text-sm text-gray-500 mb-6">一步到位：创建用户 + 绑定关系 + 节点等级（可选）</Text>
+
+        {/* 调试信息 */}
+        {debugInfo ? (
+          <View className="bg-yellow-50 rounded-lg p-2 mb-4">
+            <Text className="text-xs text-yellow-700">{debugInfo}</Text>
+          </View>
+        ) : null}
 
         {/* CSV 文件选择 */}
         <TouchableOpacity
