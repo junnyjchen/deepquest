@@ -3,7 +3,8 @@ import { View, Text, TouchableOpacity, Alert, ScrollView, ActivityIndicator, Pla
 import { Screen } from '@/components/Screen';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-import { nodesApi } from '@/utils/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE } from '@/utils/api';
 
 // Web 端读取文件内容
 async function readFileContent(uri: string): Promise<string> {
@@ -22,7 +23,6 @@ async function readFileContent(uri: string): Promise<string> {
     return (FileSystem as any).readAsStringAsync(uri);
   }
 }
-import { useAdminAuth } from '@/hooks/useAdminAuth';
 
 interface CsvRow {
   wallet_address: string;
@@ -36,7 +36,6 @@ export default function NodeCsvImportScreen() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any>(null);
   const [debugInfo, setDebugInfo] = useState<string>('');
-  const { admin } = useAdminAuth();
 
   const handlePickDocument = useCallback(async () => {
     try {
@@ -183,8 +182,32 @@ export default function NodeCsvImportScreen() {
           onPress: async () => {
             setLoading(true);
             try {
+              // 获取管理员认证信息
+              const adminStr = await AsyncStorage.getItem('admin_auth');
+              const adminData = adminStr ? JSON.parse(adminStr) : null;
+              
               console.log('[CSV] 开始导入:', parsedData);
-              const result = await nodesApi.importCsv(parsedData);
+              console.log('[CSV] Admin data:', adminData);
+              
+              // 直接使用 fetch 发送请求，包含 Authorization 头
+              const response = await fetch(`${API_BASE}/nodes/register-csv`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer admin_${adminData?.username || 'unknown'}`,
+                },
+                body: JSON.stringify({ csvData: parsedData }),
+              });
+              
+              console.log('[CSV] 响应状态:', response.status);
+              
+              if (!response.ok) {
+                const errorText = await response.text();
+                console.error('[CSV] 导入失败:', errorText);
+                throw new Error(`请求失败: ${response.status} - ${errorText}`);
+              }
+              
+              const result = await response.json();
               console.log('[CSV] 导入结果:', result);
               setResults(result);
             } catch (error: any) {

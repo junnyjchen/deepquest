@@ -661,14 +661,19 @@ export const dappNodeApi = {
 export const nodesApi = {
   // CSV批量导入用户（一步到位：创建用户 + 绑定关系 + 节点等级）
   // 节点等级可选，有则设置，无则跳过
-  importCsv: (csvData: { wallet_address: string; parent_address?: string; level?: number }[]) =>
+  importCsv: (csvData: { wallet_address: string; parent_address?: string; level?: number }[], token?: string) =>
     request<any>('/api/v1/nodes/register-csv', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ csvData }),
     }),
 
   // 获取导入历史
-  getImportHistory: (page: number = 1, pageSize: number = 20) =>
-    request<any>(`/api/v1/nodes/import-history?page=${page}&pageSize=${pageSize}`),
+  getImportHistory: (page: number = 1, pageSize: number = 20, token?: string) =>
+    request<any>(`/api/v1/nodes/import-history?page=${page}&pageSize=${pageSize}`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    }),
 };
