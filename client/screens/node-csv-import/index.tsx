@@ -1,9 +1,27 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, TouchableOpacity, Alert, ScrollView, ActivityIndicator, Platform } from 'react-native';
 import { Screen } from '@/components/Screen';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { nodesApi } from '@/utils/api';
+
+// Web 端读取文件内容
+async function readFileContent(uri: string): Promise<string> {
+  if (Platform.OS === 'web') {
+    // Web 端使用 fetch + blob 方式
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsText(blob);
+    });
+  } else {
+    // 原生端使用 expo-file-system
+    return (FileSystem as any).readAsStringAsync(uri);
+  }
+}
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 
 interface CsvRow {
@@ -34,7 +52,7 @@ export default function NodeCsvImportScreen() {
       const file = result.assets[0];
       console.log('[CSV] 文件选择成功:', file.name, file.uri);
       
-      const content = await (FileSystem as any).readAsStringAsync(file.uri);
+      const content = await readFileContent(file.uri);
       console.log('[CSV] 文件内容长度:', content.length);
       console.log('[CSV] 文件前200字符:', content.substring(0, 200));
       
