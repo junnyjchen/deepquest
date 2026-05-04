@@ -208,7 +208,7 @@ export default function NodeCsvImportScreen() {
   }, [csvData, parsedData]);
 
   return (
-    <Screen>
+    <AdminLayout>
       <View className="flex-1 p-4">
         <Text className="text-2xl font-bold text-gray-900 mb-2">CSV 批量导入节点</Text>
         <Text className="text-sm text-gray-500 mb-6">一步到位：创建用户 + 绑定关系 + 节点等级（可选）</Text>
