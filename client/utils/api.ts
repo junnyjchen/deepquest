@@ -1,7 +1,5 @@
 // API Base URL - 使用相对路径让 nginx 代理
-// 在测试环境使用 /api/v1/ 相对路径，由 nginx 代理到后端
-// 在需要外部访问时，设置为完整 URL 如 https://api.example.com
-const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || '/api/v1';
+export const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || '/api/v1';
 
 // 通用请求方法 - 使用 AbortController 处理超时
 async function request<T>(
@@ -658,4 +656,26 @@ export const dappNodeApi = {
   // 获取节点等级说明
   getLevels: () =>
     request<any>('/api/v1/dapp/node/levels'),
+};
+
+export const nodesApi = {
+  // 导入CSV创建用户并绑定关系
+  importCsvUsers: (nodes: { wallet_address: string; parent_address: string; level: number }[]) =>
+    request<any>('/api/v1/nodes/import-csv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nodes }),
+    }),
+
+  // 导入CSV设置用户节点等级
+  importCsvLevels: (nodes: { wallet_address: string; parent_address: string; level: number }[]) =>
+    request<any>('/api/v1/nodes/import-csv-levels', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nodes }),
+    }),
+
+  // 获取导入历史
+  getImportHistory: (page: number = 1, pageSize: number = 20) =>
+    request<any>(`/api/v1/nodes/import-history?page=${page}&pageSize=${pageSize}`),
 };
