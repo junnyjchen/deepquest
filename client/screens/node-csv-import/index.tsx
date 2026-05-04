@@ -83,14 +83,14 @@ export default function NodeCsvImportScreen() {
       return { valid: [], errors: ['CSV 文件为空或只有表头'] };
     }
 
-    // 解析表头（支持多种命名）
-    const headerLine = lines[0].toLowerCase();
-    console.log('[CSV] 表头:', headerLine);
+    // 解析表头 - 先分割成数组，再找列索引
+    const headers = lines[0].split(',').map((h: string) => h.trim().toLowerCase());
+    console.log('[CSV] 表头:', headers);
     
-    const walletIdx = headerLine.indexOf('wallet_address');
-    const parentIdx = headerLine.indexOf('parent_address');
-    const levelIdx = headerLine.indexOf('level');
-    const cardTypeIdx = headerLine.indexOf('card_type');
+    const walletIdx = headers.indexOf('wallet_address');
+    const parentIdx = headers.indexOf('parent_address');
+    const levelIdx = headers.indexOf('level');
+    const cardTypeIdx = headers.indexOf('card_type');
     
     const actualLevelIdx = levelIdx !== -1 ? levelIdx : cardTypeIdx;
     
@@ -122,13 +122,19 @@ export default function NodeCsvImportScreen() {
         continue;
       }
 
-      // 提取推荐人地址（可选）
-      const parent_address = parentIdx !== -1 ? values[parentIdx] : undefined;
+      // 提取推荐人地址（可选）- 避免与钱包地址混淆
+      let parent_address: string | undefined;
+      if (parentIdx !== -1 && parentIdx !== walletIdx) {
+        const parentVal = values[parentIdx];
+        if (parentVal && parentVal.startsWith('0x') && parentVal.length === 42) {
+          parent_address = parentVal;
+        }
+      }
       
       // 提取节点等级（可选）
       let level: number | undefined;
-      if (actualLevelIdx !== -1 && values[actualLevelIdx]) {
-        const levelStr = values[actualLevelIdx].trim();
+      if (actualLevelIdx !== -1 && actualLevelIdx !== walletIdx && actualLevelIdx !== parentIdx) {
+        const levelStr = values[actualLevelIdx]?.trim();
         if (levelStr) {
           const parsedLevel = parseInt(levelStr, 10);
           if (isNaN(parsedLevel) || parsedLevel < 1 || parsedLevel > 3) {
