@@ -1,6 +1,11 @@
 import crypto from 'crypto';
 import * as fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+// 获取当前文件目录（ES Module 兼容）
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * AES-256-CBC 加密/解密工具
