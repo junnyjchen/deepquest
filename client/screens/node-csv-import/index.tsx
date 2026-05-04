@@ -193,11 +193,6 @@ export default function NodeCsvImportScreen() {
     );
   }, [csvData, parsedData]);
 
-  // 调试信息显示
-  useEffect(() => {
-    console.log('[CSV] parsedData 更新:', parsedData.length);
-  }, [parsedData]);
-
   return (
     <Screen>
       <View className="flex-1 p-4">
