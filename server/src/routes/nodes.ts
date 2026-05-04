@@ -97,7 +97,7 @@ router.post('/set-level', verifyAdmin, async (req: any, res) => {
 
 // ==================== CSV 批量导入 ====================
 
-// CSV 批量创建用户并绑定关系（不含节点等级）
+// CSV 批量创建用户、绑定关系和节点等级（一步到位）
 router.post('/register-csv', verifyAdmin, async (req: any, res) => {
   try {
     const { csvData } = req.body;
@@ -113,6 +113,10 @@ router.post('/register-csv', verifyAdmin, async (req: any, res) => {
       total: csvData.length,
       success: 0,
       failed: 0,
+      created: 0,
+      updated: 0,
+      withLevel: 0,
+      withoutLevel: 0,
       errors: [] as string[]
     };
 
@@ -125,6 +129,10 @@ router.post('/register-csv', verifyAdmin, async (req: any, res) => {
       try {
         const wallet = (row.wallet_address || row.wallet || '').toLowerCase().trim();
         const parent_address = (row.parent_address || row.referrer_address || row.parent || '').toLowerCase().trim();
+        // 支持多种节点等级字段名
+        const levelValue = row.level || row.card_type || row.cardType || row.cardtype || '';
+        const level = levelValue ? parseInt(levelValue) : null;
+        const hasLevel = level !== null && [1, 2, 3].includes(level);
 
         if (!wallet) {
           results.failed++;
@@ -138,41 +146,71 @@ router.post('/register-csv', verifyAdmin, async (req: any, res) => {
           continue;
         }
 
+        // 验证节点等级有效性（如果有）
+        if (hasLevel && ![1, 2, 3].includes(level)) {
+          results.failed++;
+          results.errors.push(`行 ${rowNum}: 无效的节点等级 ${levelValue}，必须为 1(A)、2(B) 或 3(C)`);
+          continue;
+        }
+
+        // 构建更新数据
+        const updateData: any = {
+          updated_at: new Date().toISOString()
+        };
+        
+        if (parent_address) {
+          updateData.referrer_address = parent_address;
+        }
+        
+        if (hasLevel) {
+          updateData.card_type = level;
+        }
+
         // 检查用户是否已存在
         const { data: existingUser } = await supabase
           .from('users')
-          .select('id, wallet_address')
+          .select('id, wallet_address, card_type, referrer_address')
           .eq('wallet_address', wallet)
           .single();
 
         if (existingUser) {
-          // 更新推荐关系
-          if (parent_address) {
-            const { error: updateError } = await supabase
-              .from('users')
-              .update({
-                referrer_address: parent_address || null,
-                updated_at: new Date().toISOString()
-              })
-              .eq('wallet_address', wallet);
+          // 更新现有用户
+          const { error: updateError } = await supabase
+            .from('users')
+            .update(updateData)
+            .eq('wallet_address', wallet);
 
-            if (updateError) throw new Error(`更新失败: ${updateError.message}`);
-          }
-          console.log(`[CSV Register] 更新用户关系: ${wallet}, parent: ${parent_address || '无'}`);
+          if (updateError) throw new Error(`更新失败: ${updateError.message}`);
+          results.updated++;
+          console.log(`[CSV Register] 更新用户: ${wallet}, parent: ${parent_address || '无'}, level: ${hasLevel ? level : '无'}`);
         } else {
           // 创建新用户
+          const insertData: any = {
+            wallet_address: wallet,
+            referrer_address: parent_address || null,
+            status: 'active',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          
+          if (hasLevel) {
+            insertData.card_type = level;
+          }
+
           const { error: insertError } = await supabase
             .from('users')
-            .insert({
-              wallet_address: wallet,
-              referrer_address: parent_address || null,
-              status: 'active',
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            });
+            .insert(insertData);
 
           if (insertError) throw new Error(`创建失败: ${insertError.message}`);
-          console.log(`[CSV Register] 创建用户: ${wallet}, parent: ${parent_address || '无'}`);
+          results.created++;
+          console.log(`[CSV Register] 创建用户: ${wallet}, parent: ${parent_address || '无'}, level: ${hasLevel ? level : '无'}`);
+        }
+
+        // 统计等级情况
+        if (hasLevel) {
+          results.withLevel++;
+        } else {
+          results.withoutLevel++;
         }
 
         results.success++;
@@ -187,23 +225,27 @@ router.post('/register-csv', verifyAdmin, async (req: any, res) => {
     await supabase
       .from('operation_logs')
       .insert({
-        admin_id: req.admin.id,
-        admin_address: req.admin.username,
+        admin_id: req.admin?.id,
+        admin_address: req.admin?.username,
         action: 'csv_register_users',
-        target: `批量创建 ${csvData.length} 个用户`,
+        target: `批量导入 ${csvData.length} 个用户`,
         details: JSON.stringify({
+          total: results.total,
           success: results.success,
-          failed: results.failed,
+          created: results.created,
+          updated: results.updated,
+          withLevel: results.withLevel,
+          withoutLevel: results.withoutLevel,
           errors: results.errors.slice(0, 10)
         }),
         ip_address: req.ip
       });
 
-    console.log(`[CSV Register] 完成: 成功 ${results.success}, 失败 ${results.failed}`);
+    console.log(`[CSV Register] 完成: 成功 ${results.success}/${results.total}, 新建 ${results.created}, 更新 ${results.updated}, 带等级 ${results.withLevel}, 无等级 ${results.withoutLevel}`);
 
     res.json({
       code: 0,
-      message: `完成: 成功 ${results.success}, 失败 ${results.failed}`,
+      message: `完成: 成功 ${results.success}/${results.total}`,
       data: results
     });
 
