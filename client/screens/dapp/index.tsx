@@ -31,6 +31,8 @@ import {
   claimLP,
   claimNft,
   claimDTeam,
+  getUserFromChain,
+  registerUserOnChain,
   DQPROJECT_ABI,
 } from '@/utils/web3';
 import { CONTRACT_ADDRESSES } from '@/config/contracts';
@@ -92,6 +94,11 @@ export default function DappIndex() {
     { days: 180, label: '180天', reward: '15%' },
     { days: 360, label: '360天', reward: '20%' },
   ] as const;
+
+  // 激活相关状态
+  const [isOnChainRegistered, setIsOnChainRegistered] = useState(false);
+  const [activationModalVisible, setActivationModalVisible] = useState(false);
+  const [activating, setActivating] = useState(false);
 
   // SOL 代币颜色
   const SOL_PURPLE = '#9945FF';
@@ -252,35 +259,84 @@ export default function DappIndex() {
   // 同步用户信息：检查注册状态，未注册则注册
   const syncUserInfo = async (address: string) => {
     try {
-      // 1. 检查是否已注册
-      const { is_registered, referrer_address } = await dappApi.checkRegistered(address);
-      
-      if (is_registered) {
-        // 已注册，获取用户信息
-        const userInfo = await dappApi.getUserInfo(address);
-        console.log('[DApp] 用户已注册，获取信息:', userInfo);
-        // TODO: 更新用户状态
-      } else {
-        // 未注册，尝试注册
-        console.log('[DApp] 用户未注册，需要注册');
-        // 如果有待处理的推荐人，使用待处理推荐人
-        let referrer = referrer_address || '';
-        const pendingRef = await AsyncStorage.getItem('@deepquest_pending_referrer');
-        if (pendingRef) {
-          referrer = pendingRef;
-          await AsyncStorage.removeItem('@deepquest_pending_referrer');
-        }
-        
-        // 无条件注册（允许无推荐人）
-        try {
-          const result = await dappApi.register(address, referrer, '');
-          console.log('[DApp] 用户注册成功:', result);
-        } catch (regError: any) {
-          console.log('[DApp] 注册失败:', regError.message);
-        }
+      // 1. 检查链上注册状态
+      const chainUser = await getUserFromChain(address);
+      const onChainRegistered = chainUser !== null;
+      setIsOnChainRegistered(onChainRegistered);
+
+      // 2. 如果未在链上注册，显示激活弹窗
+      if (!onChainRegistered) {
+        console.log('[DApp] 用户未在链上注册，显示激活提示');
+        setActivationModalVisible(true);
+        return;
       }
+
+      // 3. 已注册，获取用户信息
+      const userInfo = await dappApi.getUserInfo(address);
+      console.log('[DApp] 用户已注册，获取信息:', userInfo);
     } catch (error: any) {
       console.error('[DApp] 同步用户信息失败:', error);
+    }
+  };
+
+  // 检查链上注册状态（手动刷新用）
+  const checkOnChainRegistration = async () => {
+    if (!walletAddress) return;
+    try {
+      const chainUser = await getUserFromChain(walletAddress);
+      const registered = chainUser !== null;
+      setIsOnChainRegistered(registered);
+      if (registered) {
+        setActivationModalVisible(false);
+        Alert.alert('成功', '账户已激活！');
+      }
+    } catch (error) {
+      console.error('检查链上注册失败:', error);
+    }
+  };
+
+  // 激活账户（发起链上注册交易）
+  const handleActivate = async () => {
+    if (!walletAddress) {
+      Alert.alert('提示', '请先连接钱包');
+      return;
+    }
+
+    try {
+      setActivating(true);
+
+      // 获取推荐人
+      let referrer = '0x0000000000000000000000000000000000000000'; // 默认零地址
+      const pendingRef = await AsyncStorage.getItem('@deepquest_pending_referrer');
+      if (pendingRef) {
+        referrer = pendingRef;
+      }
+
+      // 调用合约注册
+      const { provider } = await connectWallet();
+      const signer = await provider.getSigner();
+      const tx = await registerUserOnChain(signer, referrer);
+
+      Alert.alert(
+        '交易已提交',
+        '激活交易已提交，等待区块链确认...',
+        [
+          { text: '确定' },
+          { text: '查看详情', onPress: () => Linking.openURL(`https://bscscan.com/tx/${tx.hash}`) }
+        ]
+      );
+
+      // 监听交易确认
+      await tx.wait();
+      
+      // 重新检查注册状态
+      await checkOnChainRegistration();
+
+    } catch (error: any) {
+      console.error('激活失败:', error);
+      Alert.alert('激活失败', error.message || '请确保钱包已连接并有足够的手续费');
+    } finally {
+      setActivating(false);
     }
   };
 
@@ -531,6 +587,17 @@ export default function DappIndex() {
                     {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
                   </Text>
                 </TouchableOpacity>
+                {/* 未激活提示 */}
+                {!isOnChainRegistered && (
+                  <TouchableOpacity
+                    className="flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
+                    style={{ backgroundColor: 'rgba(255,210,63,0.2)', borderWidth: 1, borderColor: YELLOW }}
+                    onPress={() => setActivationModalVisible(true)}
+                  >
+                    <Ionicons name="warning" size={14} color={YELLOW} />
+                    <Text className="text-sm" style={{ color: YELLOW }}>激活</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   className="px-2.5 py-1.5 rounded-lg"
                   style={{ backgroundColor: 'rgba(255,80,80,0.2)', borderWidth: 1, borderColor: '#FF5050' }}
@@ -611,6 +678,54 @@ export default function DappIndex() {
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
+        </Modal>
+
+        {/* 账户激活弹窗 */}
+        <Modal
+          visible={activationModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setActivationModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.activationModalContent}>
+              <View style={styles.activationModalHeader}>
+                <Ionicons name="warning" size={48} color={YELLOW} />
+                <Text style={styles.activationModalTitle}>激活账户</Text>
+              </View>
+              
+              <Text style={styles.activationModalDesc}>
+                您的账户尚未在合约上激活，需要发起一笔激活交易才能使用完整功能。
+              </Text>
+              
+              <View style={styles.activationInfoBox}>
+                <Text style={styles.activationInfoLabel}>激活说明:</Text>
+                <Text style={styles.activationInfoText}>1. 点击下方「立即激活」按钮</Text>
+                <Text style={styles.activationInfoText}>2. 在钱包中确认交易</Text>
+                <Text style={styles.activationInfoText}>3. 等待区块链确认（约15-30秒）</Text>
+              </View>
+
+              <View style={styles.activationModalButtons}>
+                <TouchableOpacity
+                  style={[styles.activationModalBtn, styles.skipBtn]}
+                  onPress={() => setActivationModalVisible(false)}
+                >
+                  <Text style={styles.skipBtnText}>稍后激活</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.activationModalBtn, styles.activateBtn]}
+                  onPress={handleActivate}
+                  disabled={activating}
+                >
+                  {activating ? (
+                    <ActivityIndicator size="small" color="#0A0A12" />
+                  ) : (
+                    <Text style={styles.activateBtnText}>立即激活</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
         </Modal>
 
         {/* 邀请绑定弹窗 */}
@@ -1091,6 +1206,68 @@ const styles = StyleSheet.create({
     backgroundColor: YELLOW,
   },
   bindBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: BG_DARK,
+  },
+  // 激活弹窗样式
+  activationModalContent: {
+    backgroundColor: BG_CARD_SOLID,
+    borderRadius: 20,
+    padding: 24,
+    width: '90%',
+    maxWidth: 340,
+    borderWidth: 1,
+    borderColor: YELLOW,
+  },
+  activationModalHeader: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  activationModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: TEXT_WHITE,
+    marginTop: 12,
+  },
+  activationModalDesc: {
+    fontSize: 14,
+    color: TEXT_MUTED,
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  activationInfoBox: {
+    backgroundColor: BG_DARK,
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 20,
+  },
+  activationInfoLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: YELLOW,
+    marginBottom: 8,
+  },
+  activationInfoText: {
+    fontSize: 12,
+    color: TEXT_MUTED,
+    lineHeight: 20,
+  },
+  activationModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  activationModalBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  activateBtn: {
+    backgroundColor: YELLOW,
+  },
+  activateBtnText: {
     fontSize: 14,
     fontWeight: '700',
     color: BG_DARK,
