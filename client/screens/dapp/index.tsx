@@ -294,40 +294,22 @@ export default function DappIndex() {
     }
   };
 
-  // 点击激活按钮：检查并弹窗
+  // 点击激活按钮：直接打开激活弹窗
   const handleActivateClick = async () => {
     if (!walletAddress) {
       Alert.alert('提示', '请先连接钱包');
       return;
     }
     
-    try {
-      // 先查询注册状态
-      const registered = await isUserRegisteredOnChain(walletAddress);
-      setIsOnChainRegistered(registered);
-      
-      if (registered) {
-        Alert.alert('提示', '账户已经激活！');
-      } else {
-        // 未激活，填充推荐人地址并弹出激活弹窗
-        // 优先使用 URL 参数中的推荐人
-        const pendingRef = await AsyncStorage.getItem('@deepquest_pending_referrer');
-        // 备用：使用已绑定的推荐人
-        const bindedRef = pendingInviteReferrer || '';
-        
-        // 取最近的推荐人地址
-        const referrerToUse = pendingRef || bindedRef;
-        if (referrerToUse) {
-          setActivationReferrer(referrerToUse);
-          console.log('[DApp] 已填充推荐人地址:', referrerToUse);
-        }
-        setActivationModalVisible(true);
-      }
-    } catch (error) {
-      console.error('检查注册状态失败:', error);
-      // 出错时也弹窗
-      setActivationModalVisible(true);
+    // 直接打开激活弹窗（连接钱包时已查询过激活状态）
+    // 填充推荐人地址
+    const pendingRef = await AsyncStorage.getItem('@deepquest_pending_referrer');
+    const bindedRef = pendingInviteReferrer || '';
+    const referrerToUse = pendingRef || bindedRef;
+    if (referrerToUse) {
+      setActivationReferrer(referrerToUse);
     }
+    setActivationModalVisible(true);
   };
 
   // 激活账户（发起链上注册交易）
