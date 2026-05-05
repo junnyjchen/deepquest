@@ -64,7 +64,7 @@ export const QuickMenu: React.FC = () => {
           <ScrollView 
             horizontal 
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle="items-center gap-2"
+            className="items-center gap-2"
           >
             {menuItems.map((item) => (
               <TouchableOpacity
