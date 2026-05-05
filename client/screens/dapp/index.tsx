@@ -34,6 +34,7 @@ import {
   DQPROJECT_ABI,
 } from '@/utils/web3';
 import { CONTRACT_ADDRESSES } from '@/config/contracts';
+import LogoHeader from '@/components/LogoHeader';
 
 // 用户信息类型
 interface UserInfo {
@@ -410,10 +411,15 @@ export default function DappIndex() {
         contentContainerStyle={{ paddingBottom: 40 }}
       >
         {/* 顶部导航 */}
-        <QuickMenu
-          menuExpanded={menuExpanded}
-          onMenuPress={() => setMenuExpanded(!menuExpanded)}
-        />
+        <View className="px-4 pt-3 pb-2">
+          <View className="flex-row items-center justify-between">
+            <LogoHeader />
+            <QuickMenu
+              menuExpanded={menuExpanded}
+              onMenuPress={() => setMenuExpanded(!menuExpanded)}
+            />
+          </View>
+        </View>
 
         {/* 钱包+注册 */}
         <View className="px-4 pb-2">
