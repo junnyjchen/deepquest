@@ -173,7 +173,7 @@ export const getUserFromChain = async (userAddress: string): Promise<{
   teamInvest: string;
 } | null> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT, DQPROJECT_ABI);
+    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
     const user = await contract.users(userAddress);
 
     if (user.referrer === '0x0000000000000000000000000000000000000000') {
@@ -200,7 +200,7 @@ export const registerUserOnChain = async (
   signer: ethers.Signer,
   referrer: string
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT, DQPROJECT_ABI, signer);
+  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
 
   console.log('[Web3] 链上注册用户:', await signer.getAddress(), '推荐人:', referrer);
 
@@ -215,7 +215,7 @@ export const registerUserOnChain = async (
  */
 export const getInvestRange = async (): Promise<{ min: string; max: string }> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT, DQPROJECT_ABI);
+    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
     const min = await contract.INVEST_MIN();
     const max = await contract.getCurrentMaxInvest();
 
@@ -236,7 +236,7 @@ export const depositSOLOnChain = async (
   signer: ethers.Signer,
   amount: string
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT, DQPROJECT_ABI, signer);
+  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
   const amountInWei = ethers.parseEther(amount);
 
   console.log('[Web3] 链上质押:', amount, 'SOL');
@@ -253,7 +253,7 @@ export const depositSOLOnChain = async (
 export const claimLPOnChain = async (
   signer: ethers.Signer
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT, DQPROJECT_ABI, signer);
+  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
 
   console.log('[Web3] 链上领取 LP 奖励');
 
@@ -269,7 +269,7 @@ export const claimLPOnChain = async (
 export const claimNFTOnChain = async (
   signer: ethers.Signer
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT, DQPROJECT_ABI, signer);
+  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
 
   console.log('[Web3] 链上领取 NFT 奖励');
 
@@ -285,7 +285,7 @@ export const claimNFTOnChain = async (
 export const claimDTeamOnChain = async (
   signer: ethers.Signer
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT, DQPROJECT_ABI, signer);
+  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
 
   console.log('[Web3] 链上领取 D 团队奖励');
 
@@ -301,7 +301,7 @@ export const claimDTeamOnChain = async (
 export const claimPartnerOnChain = async (
   signer: ethers.Signer
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT, DQPROJECT_ABI, signer);
+  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
 
   console.log('[Web3] 链上领取合伙人奖励');
 
@@ -318,7 +318,7 @@ export const claimPartnerOnChain = async (
  */
 export const getDQTokenBalance = async (address: string): Promise<string> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQTOKEN, DQTOKEN_ABI);
+    const contract = getContract(CONTRACT_ADDRESSES.DQTOKEN.address, DQTOKEN_ABI);
     const balance = await contract.balanceOf(address);
     return ethers.formatEther(balance);
   } catch (error) {
@@ -334,7 +334,7 @@ export const buyNodeOnChain = async (
   signer: ethers.Signer,
   cardType: number // 1=A, 2=B, 3=C
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT, DQPROJECT_ABI, signer);
+  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
 
   console.log('[Web3] 链上购买 Node:', 'CardType:', cardType);
 
@@ -351,7 +351,7 @@ export const buyNodeOnChain = async (
  */
 export const getUserNFTCount = async (address: string): Promise<number> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQCARD, DQCARD_ABI);
+    const contract = getContract(CONTRACT_ADDRESSES.DQCARD.address, DQCARD_ABI);
     return await contract.balanceOf(address);
   } catch (error) {
     console.error('[Web3] 获取 NFT 数量失败:', error);
@@ -364,7 +364,7 @@ export const getUserNFTCount = async (address: string): Promise<number> => {
  */
 export const getCardPrices = async (): Promise<{ A: string; B: string; C: string }> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQCARD, DQCARD_ABI);
+    const contract = getContract(CONTRACT_ADDRESSES.DQCARD.address, DQCARD_ABI);
     const [priceA, priceB, priceC] = await Promise.all([
       contract.PRICE_A(),
       contract.PRICE_B(),
