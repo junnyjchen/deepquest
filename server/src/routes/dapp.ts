@@ -997,32 +997,25 @@ router.post('/register', async (req, res) => {
   try {
     const { wallet_address, referrer_address, tx_hash } = req.body;
 
-    if (!wallet_address || !referrer_address || !tx_hash) {
+    if (!wallet_address) {
       return res.status(400).json({
         code: 400,
-        message: '缺少必要参数'
+        message: '缺少必要参数：wallet_address'
       });
     }
 
-    // 验证推荐人是否为节点
-    const { data: referrer, error: referrerError } = await supabase
-      .from('users')
-      .select('wallet_address, level')
-      .eq('wallet_address', referrer_address.toLowerCase())
-      .single();
+    // 如果有推荐人，验证推荐人是否存在
+    let validReferrer = null;
+    if (referrer_address) {
+      const { data: referrer, error: referrerError } = await supabase
+        .from('users')
+        .select('wallet_address')
+        .eq('wallet_address', referrer_address.toLowerCase())
+        .single();
 
-    if (referrerError || !referrer) {
-      return res.status(400).json({
-        code: 400,
-        message: '推荐人不存在'
-      });
-    }
-
-    if (!referrer.level || referrer.level === 0) {
-      return res.status(400).json({
-        code: 400,
-        message: '推荐人必须是节点用户'
-      });
+      if (!referrerError && referrer) {
+        validReferrer = referrer_address.toLowerCase();
+      }
     }
 
     // 检查用户是否已注册
@@ -1033,9 +1026,10 @@ router.post('/register', async (req, res) => {
       .single();
 
     if (existing) {
-      return res.status(400).json({
-        code: 400,
-        message: '用户已注册'
+      return res.json({
+        code: 0,
+        message: '用户已注册',
+        data: { wallet_address: existing.wallet_address }
       });
     }
 
@@ -1044,15 +1038,13 @@ router.post('/register', async (req, res) => {
       .from('users')
       .insert({
         wallet_address: wallet_address.toLowerCase(),
-        referrer_address: referrer_address.toLowerCase(),
+        referrer_address: validReferrer || null,
         direct_count: 0,
         level: 0,
         total_invest: '0',
         team_invest: '0',
         energy: '0',
         lp_shares: '0',
-        qualified_lines: 0,
-        is_node_qualified: false,
         is_partner: false,
       })
       .select()
@@ -1066,10 +1058,12 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // 增加推荐人的直推数量
-    await supabase.rpc('increment_direct_count', {
-      user_address: referrer_address.toLowerCase()
-    });
+    // 如果有有效推荐人，增加推荐人的直推数量
+    if (validReferrer) {
+      await supabase.rpc('increment_direct_count', {
+        user_address: validReferrer
+      });
+    }
 
     res.json({
       code: 0,
