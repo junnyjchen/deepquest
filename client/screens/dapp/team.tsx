@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
+import { LogoHeader } from '@/components/LogoHeader';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
@@ -149,6 +150,7 @@ export default function DappTeam() {
 
   return (
     <Screen>
+      <LogoHeader />
       <ScrollView
         className="flex-1"
         style={{ backgroundColor: BG_DARK }}
@@ -163,21 +165,9 @@ export default function DappTeam() {
           />
         }
       >
-        {/* 顶部导航 */}
-        <View className="px-4 pt-3 pb-3">
+        {/* 团队统计 */}
+        <View className="px-4 pt-3 pb-4">
           <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center gap-3">
-              <View
-                className="w-12 h-12 rounded-2xl items-center justify-center"
-                style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-              >
-                <Ionicons name="diamond" size={24} color={CYAN} />
-              </View>
-              <View>
-                <Text className="text-xl font-bold" style={{ color: YELLOW }}>DeepQuest</Text>
-                <Text className="text-xs" style={{ color: TEXT_MUTED }}>Web3 DeFi</Text>
-              </View>
-            </View>
             <View className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}>
               <Ionicons name="people" size={16} color={CYAN} />
               <Text className="text-sm font-medium" style={{ color: CYAN }}>{teamData.totalMembers} 人</Text>

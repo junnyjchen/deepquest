@@ -9,6 +9,7 @@ import {
   Share,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
+import { LogoHeader } from '@/components/LogoHeader';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
@@ -224,6 +225,7 @@ export default function DappProfile() {
 
   return (
     <Screen>
+      <LogoHeader />
       <ScrollView
         className="flex-1"
         style={{ backgroundColor: BG_DARK }}

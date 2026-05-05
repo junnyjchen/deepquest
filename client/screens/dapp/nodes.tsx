@@ -9,6 +9,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
+import { LogoHeader } from '@/components/LogoHeader';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -207,12 +208,13 @@ export default function DappNodes() {
 
   return (
     <Screen>
+      <LogoHeader />
       <View style={[styles.container, { backgroundColor: BG_DARK }]}>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
+          {/* 页面标题 */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>节点权益</Text>
             <Text style={styles.headerSubtitle}>购买NFT卡牌，享受节点分红</Text>

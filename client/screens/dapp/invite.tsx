@@ -8,6 +8,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
+import { LogoHeader } from '@/components/LogoHeader';
 import { useSafeSearchParams, useSafeRouter } from '@/hooks/useSafeRouter';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -185,16 +186,8 @@ export default function InviteBinding() {
 
   return (
     <Screen>
+      <LogoHeader />
       <View style={styles.container}>
-        {/* 头部 */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={handleGoHome}>
-            <Ionicons name="arrow-back" size={24} color={TEXT_WHITE} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>邀请绑定</Text>
-          <View style={styles.headerRight} />
-        </View>
-
         {/* 内容区域 */}
         <View style={styles.content}>
           {/* 邀请图标 */}

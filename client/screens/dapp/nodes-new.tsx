@@ -10,6 +10,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
+import { LogoHeader } from '@/components/LogoHeader';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -171,8 +172,9 @@ export default function DappNodes() {
 
   return (
     <Screen>
+      <LogoHeader />
       <ScrollView style={[styles.container, { backgroundColor: BG_DARK }]}>
-        {/* Header */}
+        {/* 页面标题 */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>NODE CENTER</Text>
           <Text style={styles.headerSubtitle}>节点中心</Text>

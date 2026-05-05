@@ -11,6 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
+import { LogoHeader } from '@/components/LogoHeader';
 import { useFocusEffect } from 'expo-router';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Ionicons } from '@expo/vector-icons';
@@ -260,19 +261,8 @@ export default function DappWithdrawals() {
 
   return (
     <Screen>
+      <LogoHeader />
       <View style={[styles.container, { backgroundColor: BG_DARK }]}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="chevron-back" size={24} color={TEXT_WHITE} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>提现记录</Text>
-          <View style={styles.headerRight} />
-        </View>
-
         {/* 统计卡片 */}
         <View style={styles.statsCard}>
           <View style={styles.statsItem}>

@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
+import { LogoHeader } from '@/components/LogoHeader';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
@@ -228,25 +229,8 @@ export default function DappRewards() {
 
   return (
     <Screen>
+      <LogoHeader />
       <View className="flex-1" style={{ backgroundColor: BG_DARK }}>
-        {/* 顶部导航 */}
-        <View className="px-4 pt-3 pb-3">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center gap-3">
-              <View
-                className="w-12 h-12 rounded-2xl items-center justify-center"
-                style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-              >
-                <Ionicons name="diamond" size={24} color={CYAN} />
-              </View>
-              <View>
-                <Text className="text-xl font-bold" style={{ color: YELLOW }}>DeepQuest</Text>
-                <Text className="text-xs" style={{ color: TEXT_MUTED }}>收益记录</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
         {/* 收益汇总 */}
         {walletAddress && (
           <View className="px-4 pb-4">
