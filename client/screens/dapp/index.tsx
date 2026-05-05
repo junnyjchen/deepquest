@@ -1,1076 +1,987 @@
-import { useState, useCallback } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Linking,
-  ActivityIndicator,
-  Alert,
-  Modal,
-  StyleSheet,
-} from 'react-native';
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Platform, Linking } from 'react-native';
 import { Screen } from '@/components/Screen';
-import { useFocusEffect } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Clipboard from 'expo-clipboard';
-import * as Crypto from 'expo-crypto';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappApi } from '@/utils/api';
-import { useSafeRouter } from '@/hooks/useSafeRouter';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { formatAddress } from '@/utils/formatters';
+import {
+  connectWallet,
+  disconnectWallet,
+  isMetaMaskInstalled,
+  switchToBSC,
+  registerUserOnChain,
+  depositSOLOnChain,
+  claimLPOnChain,
+  claimNFTOnChain,
+  claimDTeamOnChain,
+  getUserFromChain,
+  waitForTransaction,
+  onAccountsChanged,
+  onChainChanged,
+} from '@/utils/web3';
+import type { ethers } from 'ethers';
 
-// 精确匹配参考图的颜色体系
-const BG_DARK = '#0A0A12';
-const BG_CARD_TRANS = 'rgba(26, 26, 48, 0.95)';
-const BG_CARD_SOLID = '#101018';
-const YELLOW = '#FFD23F';
-const BORDER_GRAY = '#303040';
-const TEXT_WHITE = '#F5F5F5';
-const TEXT_MUTED = '#A0A0B0';
-const CYAN = '#00F0FF';
-const PURPLE = '#D020FF';
+interface WalletState {
+  address: string;
+  chainId: number;
+  chainName: string;
+}
 
-const WALLET_STORAGE_KEY = '@deepquest_wallet';
+interface PlatformStats {
+  totalUsers: number;
+  todayDeposit: string;
+  networkPower: string;
+  usdtPoolBalance: string;
+  dqtPoolBalance: string;
+}
 
-export default function DappIndex() {
-  const router = useSafeRouter();
-  const { t, language, setLanguage, languages } = useLanguage();
-  const insets = useSafeAreaInsets();
-  const [mode, setMode] = useState<'swap' | 'stake'>('swap');
-  const [swapDirection, setSwapDirection] = useState<'dq_to_sol' | 'sol_to_dq'>('dq_to_sol');
-  const [menuExpanded, setMenuExpanded] = useState(false);
-  const [langModalVisible, setLangModalVisible] = useState(false);
-  const [sellAmount, setSellAmount] = useState('');
-  const [buyAmount, setBuyAmount] = useState('');
-  const [stakeAmount, setStakeAmount] = useState('');
-  const [stakePeriod, setStakePeriod] = useState<30 | 90 | 180 | 360>(30);
-  const [bnbBalance, setBnbBalance] = useState('0.0');
-  const [dqtBalance, setDqtBalance] = useState('0.0');
-  const [solBalance, setSolBalance] = useState('0.00');
-  const [walletAddress, setWalletAddress] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [statsLoading, setStatsLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  
-  // 邀请绑定相关状态
-  const [pendingInviteReferrer, setPendingInviteReferrer] = useState<string | null>(null);
-  const [inviteModalVisible, setInviteModalVisible] = useState(false);
-  const [bindLoading, setBindLoading] = useState(false);
+interface UserData {
+  referrer: string;
+  directCount: number;
+  level: number;
+  totalInvest: string;
+  teamInvest: string;
+  pendingLP: string;
+  pendingNFT: string;
+  pendingDTeam: string;
+}
 
-  // 质押周期配置
-  const stakePeriods = [
-    { days: 30, label: '30天', reward: '5%' },
-    { days: 90, label: '90天', reward: '10%' },
-    { days: 180, label: '180天', reward: '15%' },
-    { days: 360, label: '360天', reward: '20%' },
-  ] as const;
+const CHAIN_NAMES: Record<number, string> = {
+  56: 'BNB Chain Mainnet',
+  97: 'BNB Chain Testnet',
+  1: 'Ethereum',
+  5: 'Goerli Testnet',
+};
 
-  // SOL 代币颜色
-  const SOL_PURPLE = '#9945FF';
+export default function DAppPage() {
+  const [wallet, setWallet] = useState<WalletState | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [activeTab, setActiveTab] = useState<'home' | 'deposit' | 'team' | 'nft'>('home');
+  const [isLoading, setIsLoading] = useState(false);
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // 平台数据
-  const [stats, setStats] = useState({
-    totalSupply: '330,000,000',
-    totalBurned: '140,480,617',
-    todayDeposit: '0.00',
-    networkPower: '63,497,422',
-    solPoolBalance: '0.00',
-    dqtPoolBalance: '0.00',
-    totalUsers: 0,
-    totalDeposit: '0.00',
-    totalReward: 0,
-    dqtPrice: '0.15224',
-  });
+  const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
 
-  // 加载保存的钱包地址
-  useFocusEffect(
-    useCallback(() => {
-      const init = async () => {
-        try {
-          // 加载保存的钱包地址
-          const savedWallet = await AsyncStorage.getItem(WALLET_STORAGE_KEY);
-          if (savedWallet) {
-            setWalletAddress(savedWallet);
-            // 检查是否已绑定推荐人
-            await checkInviteBinding(savedWallet);
-          }
-          
-          // 获取平台统计数据
-          await fetchStats();
-        } catch (error) {
-          console.error('初始化失败:', error);
-        } finally {
-          setLoading(false);
-        }
-      };
-      
-      init();
-    }, [])
-  );
-  
-  // 检查邀请绑定状态
-  const checkInviteBinding = async (address: string) => {
-    try {
-      const result = await dappApi.checkBinding(address);
-      // 如果未绑定，检查本地存储的待绑定推荐人
-      if (!result.bound) {
-        const pendingRef = await AsyncStorage.getItem('@deepquest_pending_referrer');
-        if (pendingRef) {
-          // 验证推荐人是否有效
-          const validation = await dappApi.validateReferrer(pendingRef);
-          if (validation.valid) {
-            setPendingInviteReferrer(pendingRef);
-            setInviteModalVisible(true);
-          } else {
-            // 无效则清除
-            await AsyncStorage.removeItem('@deepquest_pending_referrer');
-          }
-        }
-      }
-    } catch (error) {
-      console.error('检查绑定状态失败:', error);
-    }
-  };
-  
-  // 绑定推荐人
-  const handleBindInvite = async () => {
-    if (!walletAddress || !pendingInviteReferrer) return;
-    
-    try {
-      setBindLoading(true);
-      const result = await dappApi.bindReferrer(walletAddress, pendingInviteReferrer);
-      
-      if (result.code === 0) {
-        Alert.alert('绑定成功', '您已成功绑定推荐人！');
-        await AsyncStorage.removeItem('@deepquest_pending_referrer');
-        setPendingInviteReferrer(null);
-      } else {
-        Alert.alert('绑定失败', result.message || '绑定推荐人失败');
-      }
-    } catch (error: any) {
-      Alert.alert('绑定失败', error.message || '绑定推荐人失败');
-    } finally {
-      setBindLoading(false);
-      setInviteModalVisible(false);
-    }
-  };
-  
-  // 跳过绑定
-  const handleSkipInvite = async () => {
-    await AsyncStorage.removeItem('@deepquest_pending_referrer');
-    setPendingInviteReferrer(null);
-    setInviteModalVisible(false);
-  };
+  // 用户数据
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [referrerInput, setReferrerInput] = useState('');
 
-  // 获取平台统计数据
-  const fetchStats = async () => {
+  // 加载平台统计
+  const loadPlatformStats = useCallback(async () => {
     try {
-      setStatsLoading(true);
-      const response = await dappApi.getStats();
-      if (response.code === 0 && response.data) {
-        setStats({
-          totalSupply: response.data.totalSupply || '330,000,000',
-          totalBurned: response.data.totalBurned || '140,480,617',
-          todayDeposit: response.data.todayDeposit || '0.00',
-          networkPower: response.data.networkPower || '63,497,422',
-          solPoolBalance: response.data.usdtPoolBalance || '0.00',
-          dqtPoolBalance: response.data.dqtPoolBalance || '0.00',
-          totalUsers: response.data.totalUsers || 0,
-          totalDeposit: response.data.totalDeposit || '0.00',
-          totalReward: response.data.totalReward || 0,
-          dqtPrice: response.data.dqtPrice || '0.15224',
+      const res = await dappApi.getStats();
+      if (res.code === 0) {
+        setPlatformStats(res.data);
+      }
+    } catch (err) {
+      console.error('加载平台统计失败:', err);
+    }
+  }, []);
+
+  // 加载用户链上数据
+  const loadUserChainData = useCallback(async () => {
+    if (!wallet?.address) return;
+
+    try {
+      const chainUser = await getUserFromChain(wallet.address);
+      if (chainUser) {
+        setUserData({
+          ...chainUser,
+          pendingLP: '0',
+          pendingNFT: '0',
+          pendingDTeam: '0',
         });
+      } else {
+        setUserData(null);
       }
-    } catch (error) {
-      console.error('获取平台数据失败:', error);
-    } finally {
-      setStatsLoading(false);
+    } catch (err) {
+      console.error('加载用户数据失败:', err);
     }
-  };
+  }, [wallet?.address]);
 
-  // 生成随机钱包地址（模拟）
-  const generateMockWallet = async () => {
-    const randomBytes = await Crypto.getRandomBytesAsync(20);
-    const address = '0x' + Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-    return address;
-  };
+  // 初始化
+  useEffect(() => {
+    loadPlatformStats();
+
+    // 监听账户变化
+    onAccountsChanged((accounts) => {
+      if (accounts.length === 0) {
+        setWallet(null);
+        setUserData(null);
+      } else {
+        // 尝试重新连接
+        handleConnect();
+      }
+    });
+
+    // 监听链变化
+    onChainChanged(() => {
+      // 刷新页面数据
+      loadPlatformStats();
+      loadUserChainData();
+    });
+
+    return () => {
+      disconnectWallet();
+    };
+  }, [loadPlatformStats, loadUserChainData]);
+
+  // 每次钱包变化时加载用户数据
+  useEffect(() => {
+    if (wallet?.address) {
+      loadUserChainData();
+    }
+  }, [wallet?.address, loadUserChainData]);
 
   // 连接钱包
   const handleConnect = async () => {
-    try {
-      Alert.alert(
-        '连接钱包',
-        '请选择钱包类型',
-        [
-          { text: '取消', style: 'cancel' },
-          { 
-            text: '模拟钱包（测试）', 
-            onPress: async () => {
-              const mockWallet = await generateMockWallet();
-              await AsyncStorage.setItem(WALLET_STORAGE_KEY, mockWallet);
-              setWalletAddress(mockWallet);
-              Alert.alert('成功', `钱包已连接: ${mockWallet.slice(0, 10)}...`);
-            }
-          },
-        ]
-      );
-    } catch (error) {
-      console.error('连接钱包失败:', error);
-      Alert.alert('错误', '钱包连接失败');
-    }
-  };
+    setIsConnecting(true);
+    setError(null);
 
-  // 断开钱包连接
-  const handleDisconnect = () => {
-    Alert.alert(
-      '断开钱包',
-      '确定要断开钱包连接吗？',
-      [
-        { text: '取消', style: 'cancel' },
-        { 
-          text: '确定', 
-          style: 'destructive',
-          onPress: async () => {
-            await AsyncStorage.removeItem(WALLET_STORAGE_KEY);
-            setWalletAddress(null);
-            setBnbBalance('0.0');
-            setDqtBalance('0.0');
-          }
-        },
-      ]
-    );
-  };
-
-  // 质押操作
-  const handleStake = async () => {
-    if (!walletAddress) {
-      Alert.alert('提示', '请先连接钱包');
-      return;
-    }
-    if (!stakeAmount || parseFloat(stakeAmount) <= 0) {
-      Alert.alert('提示', '请输入质押数量');
-      return;
-    }
-    
     try {
-      setSubmitting(true);
-      
-      // 模拟生成交易哈希
-      const txHash = '0x' + Array.from(await Crypto.getRandomBytesAsync(32)).map(b => b.toString(16).padStart(2, '0')).join('');
-      
-      const response = await dappApi.stake(walletAddress, stakeAmount, txHash);
-      
-      if (response.code === 0) {
-        Alert.alert('成功', `质押 ${stakeAmount} BNB 成功！\n交易哈希: ${txHash.slice(0, 20)}...`);
-        setStakeAmount('');
-      } else {
-        Alert.alert('失败', response.message || '质押失败');
+      // 检查 MetaMask
+      if (!isMetaMaskInstalled()) {
+        if (Platform.OS === 'web') {
+          setError('请安装 MetaMask 钱包');
+          // 打开 MetaMask 下载页面
+          Linking.openURL('https://metamask.io/download/');
+        } else {
+          setError('请使用浏览器访问并安装 MetaMask');
+        }
+        return;
       }
-    } catch (error) {
-      console.error('质押失败:', error);
-      Alert.alert('错误', '质押失败，请重试');
+
+      // 连接钱包
+      const result = await connectWallet();
+
+      if (result) {
+        // 检查链 ID
+        if (result.chainId !== 56 && result.chainId !== 97) {
+          await switchToBSC();
+          // 重新获取网络信息
+          const newProvider = result.provider;
+          const network = await newProvider.getNetwork();
+          const newChainId = Number(network.chainId);
+
+          setWallet({
+            address: result.address,
+            chainId: newChainId,
+            chainName: CHAIN_NAMES[newChainId] || `Chain ${newChainId}`,
+          });
+        } else {
+          setWallet({
+            address: result.address,
+            chainId: result.chainId,
+            chainName: CHAIN_NAMES[result.chainId] || `Chain ${result.chainId}`,
+          });
+        }
+
+        // 同步到后端
+        await syncWalletToBackend(result.address);
+      }
+    } catch (err: any) {
+      console.error('连接钱包失败:', err);
+      setError(err.message || '连接失败');
     } finally {
-      setSubmitting(false);
+      setIsConnecting(false);
     }
   };
 
-  // 兑换/质押确定
-  const handleConfirm = () => {
-    if (mode === 'swap') {
-      // 兑换
-      if (!walletAddress) {
-        Alert.alert('提示', '请先连接钱包');
-        return;
-      }
-      if (!sellAmount || !buyAmount) {
-        Alert.alert('提示', '请输入兑换数量');
-        return;
-      }
-      Alert.alert('功能开发中', '兑换功能正在开发中');
-    } else {
-      // 质押
-      handleStake();
+  // 断开钱包
+  const handleDisconnect = () => {
+    disconnectWallet();
+    setWallet(null);
+    setUserData(null);
+    setTxHash(null);
+  };
+
+  // 同步钱包到后端
+  const syncWalletToBackend = async (address: string) => {
+    try {
+      await dappApi.register({ wallet_address: address });
+      console.log('钱包已同步到后端');
+    } catch (err) {
+      console.error('同步钱包失败:', err);
     }
   };
 
-  // 复制地址
-  const handleCopyAddress = async () => {
-    if (walletAddress) {
-      await Clipboard.setStringAsync(walletAddress);
-      Alert.alert('已复制', '钱包地址已复制到剪贴板');
+  // 注册用户
+  const handleRegister = async () => {
+    if (!wallet) {
+      setError('请先连接钱包');
+      return;
+    }
+
+    if (!referrerInput.trim()) {
+      setError('请输入推荐人地址');
+      return;
+    }
+
+    if (!/^0x[a-fA-F0-9]{40}$/.test(referrerInput.trim())) {
+      setError('推荐人地址格式不正确');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setTxHash(null);
+
+    try {
+      // 1. 链上注册
+      const tx = await registerUserOnChain(null as any, referrerInput.trim());
+      setTxHash(tx.hash);
+      await waitForTransaction(tx);
+
+      // 2. 同步到后端
+      await dappApi.register({
+        wallet_address: wallet.address,
+        referrer_address: referrerInput.trim(),
+      });
+
+      // 3. 刷新用户数据
+      await loadUserChainData();
+      await loadPlatformStats();
+
+      setReferrerInput('');
+    } catch (err: any) {
+      console.error('注册失败:', err);
+      setError(err.message || '注册失败');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // 打开社交链接
-  const openTelegram = () => Linking.openURL('https://t.me/deepquest');
-  const openTwitter = () => Linking.openURL('https://twitter.com/deepquest');
+  // 质押
+  const handleDeposit = async (amount: string) => {
+    if (!wallet) {
+      setError('请先连接钱包');
+      return;
+    }
 
-  // 计算百分比
-  const handlePercent = (percent: number, setter: (v: string) => void, balance: string) => {
-    const bal = parseFloat(balance) || 0;
-    if (percent === 100) {
-      setter(bal.toString());
-    } else {
-      const amount = (bal * percent) / 100;
-      setter(amount.toFixed(6));
+    if (!userData) {
+      setError('请先完成注册');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setTxHash(null);
+
+    try {
+      // 1. 链上质押
+      const tx = await depositSOLOnChain(null as any, amount);
+      setTxHash(tx.hash);
+      await waitForTransaction(tx);
+
+      // 2. 同步到后端
+      await dappApi.deposit({
+        wallet_address: wallet.address,
+        amount,
+        tx_hash: tx.hash,
+      });
+
+      // 3. 刷新用户数据
+      await loadUserChainData();
+      await loadPlatformStats();
+    } catch (err: any) {
+      console.error('质押失败:', err);
+      setError(err.message || '质押失败');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // 切换兑换方向
-  const handleSwapDirection = () => {
-    setSwapDirection(prev => prev === 'dq_to_sol' ? 'sol_to_dq' : 'dq_to_sol');
-    setSellAmount('');
-    setBuyAmount('');
+  // 领取 LP 奖励
+  const handleClaimLP = async () => {
+    if (!wallet) return;
+
+    setIsLoading(true);
+    setError(null);
+    setTxHash(null);
+
+    try {
+      const tx = await claimLPOnChain(null as any);
+      setTxHash(tx.hash);
+      await waitForTransaction(tx);
+
+      await dappApi.claimLP({
+        wallet_address: wallet.address,
+        tx_hash: tx.hash,
+      });
+
+      await loadUserChainData();
+    } catch (err: any) {
+      setError(err.message || '领取失败');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  if (loading) {
+  // 领取 NFT 奖励
+  const handleClaimNFT = async () => {
+    if (!wallet) return;
+
+    setIsLoading(true);
+    setError(null);
+    setTxHash(null);
+
+    try {
+      const tx = await claimNFTOnChain(null as any);
+      setTxHash(tx.hash);
+      await waitForTransaction(tx);
+
+      await dappApi.claimNFT({
+        wallet_address: wallet.address,
+        tx_hash: tx.hash,
+      });
+
+      await loadUserChainData();
+    } catch (err: any) {
+      setError(err.message || '领取失败');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 领取 D 团队奖励
+  const handleClaimDTeam = async () => {
+    if (!wallet) return;
+
+    setIsLoading(true);
+    setError(null);
+    setTxHash(null);
+
+    try {
+      const tx = await claimDTeamOnChain(null as any);
+      setTxHash(tx.hash);
+      await waitForTransaction(tx);
+
+      await dappApi.claimDTeam({
+        wallet_address: wallet.address,
+        tx_hash: tx.hash,
+      });
+
+      await loadUserChainData();
+    } catch (err: any) {
+      setError(err.message || '领取失败');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 渲染钱包按钮
+  const renderWalletButton = () => {
+    if (isConnecting) {
+      return (
+        <TouchableOpacity style={styles.connectBtn} disabled>
+          <ActivityIndicator color="#fff" />
+          <Text style={styles.connectBtnText}>连接中...</Text>
+        </TouchableOpacity>
+      );
+    }
+
+    if (wallet) {
+      return (
+        <TouchableOpacity style={styles.walletBtn} onPress={handleDisconnect}>
+          <Text style={styles.walletAddress}>{formatAddress(wallet.address)}</Text>
+          <Text style={styles.walletChain}>{wallet.chainName}</Text>
+        </TouchableOpacity>
+      );
+    }
+
     return (
-      <Screen>
-        <View className="flex-1 items-center justify-center" style={{ backgroundColor: BG_DARK }}>
-          <ActivityIndicator size="large" color={YELLOW} />
-          <Text className="text-white mt-4">加载中...</Text>
-        </View>
-      </Screen>
+      <TouchableOpacity style={styles.connectBtn} onPress={handleConnect}>
+        <Text style={styles.connectBtnText}>连接钱包</Text>
+      </TouchableOpacity>
     );
-  }
+  };
+
+  // 渲染首页
+  const renderHome = () => (
+    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+      {/* 平台统计 */}
+      <View style={styles.statsCard}>
+        <Text style={styles.cardTitle}>平台数据</Text>
+        <View style={styles.statsGrid}>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{platformStats?.totalUsers || '--'}</Text>
+            <Text style={styles.statLabel}>总用户</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{platformStats?.todayDeposit || '--'}</Text>
+            <Text style={styles.statLabel}>今日入单(BNB)</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{platformStats?.networkPower || '--'}</Text>
+            <Text style={styles.statLabel}>全网算力</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{platformStats?.usdtPoolBalance || '--'}</Text>
+            <Text style={styles.statLabel}>USDT池</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* 用户数据 */}
+      {wallet && userData && (
+        <View style={styles.userCard}>
+          <Text style={styles.cardTitle}>我的数据</Text>
+          <View style={styles.userInfo}>
+            <View style={styles.userRow}>
+              <Text style={styles.userLabel}>等级</Text>
+              <Text style={styles.userValue}>LV.{userData.level}</Text>
+            </View>
+            <View style={styles.userRow}>
+              <Text style={styles.userLabel}>直推人数</Text>
+              <Text style={styles.userValue}>{userData.directCount}</Text>
+            </View>
+            <View style={styles.userRow}>
+              <Text style={styles.userLabel}>总投入</Text>
+              <Text style={styles.userValue}>{userData.totalInvest} BNB</Text>
+            </View>
+            <View style={styles.userRow}>
+              <Text style={styles.userLabel}>团队业绩</Text>
+              <Text style={styles.userValue}>{userData.teamInvest} BNB</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* 注册入口 */}
+      {wallet && !userData && (
+        <View style={styles.registerCard}>
+          <Text style={styles.cardTitle}>完成注册</Text>
+          <Text style={styles.registerDesc}>输入推荐人地址完成链上注册</Text>
+          <View style={styles.inputContainer}>
+            <input
+              type="text"
+              placeholder="推荐人地址 (0x...)"
+              value={referrerInput}
+              onChange={(e) => setReferrerInput(e.target.value)}
+              style={styles.input}
+            />
+          </View>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.primaryBtn]}
+            onPress={handleRegister}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.actionBtnText}>注册</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
+    </ScrollView>
+  );
+
+  // 渲染充值页
+  const renderDeposit = () => (
+    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+      {!wallet ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyText}>请先连接钱包</Text>
+        </View>
+      ) : !userData ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyText}>请先完成注册</Text>
+        </View>
+      ) : (
+        <>
+          <View style={styles.depositCard}>
+            <Text style={styles.cardTitle}>质押 BNB</Text>
+            <Text style={styles.depositDesc}>质押 BNB 获取算力和奖励</Text>
+            <View style={styles.amountButtons}>
+              {['1', '5', '10'].map((amount) => (
+                <TouchableOpacity
+                  key={amount}
+                  style={styles.amountBtn}
+                  onPress={() => handleDeposit(amount)}
+                  disabled={isLoading}
+                >
+                  <Text style={styles.amountBtnText}>{amount} BNB</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.claimCard}>
+            <Text style={styles.cardTitle}>领取奖励</Text>
+            <View style={styles.claimButtons}>
+              <TouchableOpacity
+                style={styles.claimBtn}
+                onPress={handleClaimLP}
+                disabled={isLoading}
+              >
+                <Text style={styles.claimBtnText}>领取 LP</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.claimBtn}
+                onPress={handleClaimNFT}
+                disabled={isLoading}
+              >
+                <Text style={styles.claimBtnText}>领取 NFT</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.claimBtn}
+                onPress={handleClaimDTeam}
+                disabled={isLoading}
+              >
+                <Text style={styles.claimBtnText}>D团队</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </>
+      )}
+    </ScrollView>
+  );
+
+  // 渲染团队页
+  const renderTeam = () => (
+    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+      {!wallet ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyText}>请先连接钱包</Text>
+        </View>
+      ) : !userData ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyText}>请先完成注册</Text>
+        </View>
+      ) : (
+        <View style={styles.teamCard}>
+          <Text style={styles.cardTitle}>我的团队</Text>
+          <View style={styles.teamInfo}>
+            <View style={styles.teamRow}>
+              <Text style={styles.teamLabel}>推荐人</Text>
+              <Text style={styles.teamValue}>
+                {userData.referrer ? formatAddress(userData.referrer) : '--'}
+              </Text>
+            </View>
+            <View style={styles.teamRow}>
+              <Text style={styles.teamLabel}>直推人数</Text>
+              <Text style={styles.teamValue}>{userData.directCount}</Text>
+            </View>
+            <View style={styles.teamRow}>
+              <Text style={styles.teamLabel}>团队业绩</Text>
+              <Text style={styles.teamValue}>{userData.teamInvest} BNB</Text>
+            </View>
+          </View>
+        </View>
+      )}
+    </ScrollView>
+  );
+
+  // 渲染 NFT 页
+  const renderNFT = () => (
+    <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
+      <View style={styles.nftCard}>
+        <Text style={styles.cardTitle}>Node NFT</Text>
+        <Text style={styles.nftDesc}>购买 Node NFT 获取额外奖励</Text>
+        <View style={styles.nftCards}>
+          <View style={styles.nftItem}>
+            <Text style={styles.nftName}>A 级节点</Text>
+            <Text style={styles.nftPrice}>100 BNB</Text>
+          </View>
+          <View style={styles.nftItem}>
+            <Text style={styles.nftName}>B 级节点</Text>
+            <Text style={styles.nftPrice}>500 BNB</Text>
+          </View>
+          <View style={styles.nftItem}>
+            <Text style={styles.nftName}>C 级节点</Text>
+            <Text style={styles.nftPrice}>2000 BNB</Text>
+          </View>
+        </View>
+        <TouchableOpacity style={[styles.actionBtn, styles.primaryBtn]} disabled>
+          <Text style={styles.actionBtnText}>即将上线</Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
 
   return (
     <Screen>
-      <ScrollView
-        className="flex-1"
-        style={{ backgroundColor: BG_DARK }}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
-      >
-        {/* 顶部导航 */}
-        <View className="px-4 pt-3 pb-3">
-          <View className="flex-row items-center justify-between">
-            {/* Logo */}
-            <View className="flex-row items-center gap-2">
-              <View
-                className="w-10 h-10 rounded-xl items-center justify-center"
-                style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-              >
-                <Ionicons name="diamond" size={22} color={CYAN} />
-              </View>
-              <Text className="text-xl font-bold" style={{ color: YELLOW }}>
-                DeepQuest
-              </Text>
-            </View>
-
-            {/* 菜单按钮 */}
-            <TouchableOpacity
-              className="w-10 h-10 rounded-xl items-center justify-center"
-              style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-              onPress={() => setMenuExpanded(!menuExpanded)}
-            >
-              <Ionicons 
-                name={menuExpanded ? "close" : "menu"} 
-                size={22} 
-                color={TEXT_WHITE} 
-              />
-            </TouchableOpacity>
-          </View>
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.logo}>DeepQuest</Text>
+          {renderWalletButton()}
         </View>
 
-        {/* 快捷菜单折叠区域 */}
-        {menuExpanded && (
-          <View className="px-4 pb-3">
-            <View 
-              className="rounded-2xl overflow-hidden"
-              style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-            >
-              <TouchableOpacity
-                className="flex-row items-center gap-3 p-4 border-b"
-                style={{ borderColor: BORDER_GRAY }}
-                onPress={() => { router.push('/profile'); setMenuExpanded(false); }}
-              >
-                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(255,215,0,0.1)' }}>
-                  <Ionicons name="person" size={20} color={YELLOW} />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.title')}</Text>
-                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('profile.myAssets')}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                className="flex-row items-center gap-3 p-4 border-b"
-                style={{ borderColor: BORDER_GRAY }}
-                onPress={() => { router.push('/team'); setMenuExpanded(false); }}
-              >
-                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(0,240,255,0.1)' }}>
-                  <Ionicons name="people" size={20} color={CYAN} />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('team.title')}</Text>
-                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('team.teamRewards')}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                className="flex-row items-center gap-3 p-4 border-b"
-                style={{ borderColor: BORDER_GRAY }}
-                onPress={() => { router.push('/stakes'); setMenuExpanded(false); }}
-              >
-                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(208,32,255,0.1)' }}>
-                  <Ionicons name="time" size={20} color={PURPLE} />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.stakes')}</Text>
-                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('stakes.title')}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                className="flex-row items-center gap-3 p-4 border-b"
-                style={{ borderColor: BORDER_GRAY }}
-                onPress={() => { router.push('/rewards'); setMenuExpanded(false); }}
-              >
-                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(255,215,0,0.1)' }}>
-                  <Ionicons name="gift" size={20} color={YELLOW} />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.rewards')}</Text>
-                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('rewards.title')}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                className="flex-row items-center gap-3 p-4 border-b"
-                style={{ borderColor: BORDER_GRAY }}
-                onPress={() => { router.push('/withdrawals'); setMenuExpanded(false); }}
-              >
-                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(0,240,255,0.1)' }}>
-                  <Ionicons name="wallet-outline" size={20} color={CYAN} />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.withdrawals')}</Text>
-                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('withdrawals.title')}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                className="flex-row items-center gap-3 p-4 border-b"
-                style={{ borderColor: BORDER_GRAY }}
-                onPress={() => { router.push('/nodes'); setMenuExpanded(false); }}
-              >
-                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(208,32,255,0.1)' }}>
-                  <Ionicons name="ribbon" size={20} color={PURPLE} />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.nodes')}</Text>
-                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('nodes.subtitle')}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
-              </TouchableOpacity>
-            </View>
+        {/* 错误提示 */}
+        {error && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity onPress={() => setError(null)}>
+              <Text style={styles.errorClose}>关闭</Text>
+            </TouchableOpacity>
           </View>
         )}
 
-        {/* 钱包+注册 */}
-        <View className="px-4 pb-2">
-          <View className="flex-row items-center gap-2">
-            {walletAddress ? (
-              <>
-                <TouchableOpacity
-                  className="flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
-                  style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-                  onPress={handleCopyAddress}
-                >
-                  <Ionicons name="folder-open" size={14} color={TEXT_WHITE} />
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>
-                    {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className="px-2.5 py-1.5 rounded-lg"
-                  style={{ backgroundColor: 'rgba(255,80,80,0.2)', borderWidth: 1, borderColor: '#FF5050' }}
-                  onPress={handleDisconnect}
-                >
-                  <Text className="text-sm" style={{ color: '#FF5050' }}>{t('home.disconnect')}</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <TouchableOpacity
-                className="px-2.5 py-1.5 rounded-lg"
-                style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-                onPress={handleConnect}
-              >
-                <Text className="text-sm" style={{ color: TEXT_WHITE }}>{t('home.connectWallet')}</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        {/* 语言切换 */}
-        <View className="px-4 pb-2">
-          <TouchableOpacity
-            className="flex-row items-center gap-1.5"
-            onPress={() => setLangModalVisible(true)}
-          >
-            <Ionicons name="globe-outline" size={14} color={YELLOW} />
-            <Text className="text-xs" style={{ color: YELLOW }}>
-              {t('home.language')}：{languages.find(l => l.code === language)?.nativeName || '繁體中文'}
-            </Text>
-            <Ionicons name="chevron-down" size={12} color={YELLOW} />
-          </TouchableOpacity>
-        </View>
-
-        {/* 语言选择 Modal */}
-        <Modal
-          visible={langModalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setLangModalVisible(false)}
-        >
-          <TouchableOpacity
-            className="flex-1 justify-center items-center"
-            style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}
-            onPress={() => setLangModalVisible(false)}
-            activeOpacity={1}
-          >
-            <View
-              className="w-64 rounded-2xl overflow-hidden"
-              style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 1, borderColor: BORDER_GRAY }}
-            >
-              <View className="p-4 border-b" style={{ borderColor: BORDER_GRAY }}>
-                <Text className="text-base font-semibold text-center" style={{ color: TEXT_WHITE }}>
-                  {t('home.language')}
-                </Text>
-              </View>
-              {languages.map((lang) => (
-                <TouchableOpacity
-                  key={lang.code}
-                  className="flex-row items-center justify-between p-4 border-b"
-                  style={{ borderColor: BORDER_GRAY }}
-                  onPress={() => {
-                    setLanguage(lang.code);
-                    setLangModalVisible(false);
-                  }}
-                >
-                  <Text style={{ color: TEXT_WHITE, fontSize: 15 }}>{lang.nativeName}</Text>
-                  {language === lang.code && (
-                    <Ionicons name="checkmark" size={20} color={YELLOW} />
-                  )}
-                </TouchableOpacity>
-              ))}
-              <TouchableOpacity
-                className="p-4 items-center"
-                onPress={() => setLangModalVisible(false)}
-              >
-                <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>{t('common.close')}</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </Modal>
-
-        {/* 邀请绑定弹窗 */}
-        <Modal
-          visible={inviteModalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setInviteModalVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.inviteModalContent}>
-              <View style={styles.inviteModalHeader}>
-                <Ionicons name="people-circle" size={48} color={YELLOW} />
-                <Text style={styles.inviteModalTitle}>邀请绑定</Text>
-              </View>
-              
-              <Text style={styles.inviteModalDesc}>
-                您有一个待绑定的推荐人，绑定后可以获得邀请奖励
-              </Text>
-              
-              {pendingInviteReferrer && (
-                <View style={styles.referrerAddressBox}>
-                  <Text style={styles.referrerLabel}>推荐人地址:</Text>
-                  <Text style={styles.referrerAddress} numberOfLines={1} ellipsizeMode="middle">
-                    {pendingInviteReferrer}
-                  </Text>
-                </View>
-              )}
-              
-              <View style={styles.inviteModalButtons}>
-                <TouchableOpacity
-                  style={[styles.inviteModalBtn, styles.skipBtn]}
-                  onPress={handleSkipInvite}
-                >
-                  <Text style={styles.skipBtnText}>暂不绑定</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.inviteModalBtn, styles.bindBtn]}
-                  onPress={handleBindInvite}
-                  disabled={bindLoading}
-                >
-                  {bindLoading ? (
-                    <ActivityIndicator size="small" color="#0A0A12" />
-                  ) : (
-                    <Text style={styles.bindBtnText}>确认绑定</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-
-        {/* 模式切换 */}
-        <View className="px-4 pb-2">
-          <View className="flex-row rounded-xl overflow-hidden" style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}>
-            <TouchableOpacity
-              className="flex-1 py-3 items-center"
-              style={{ backgroundColor: mode === 'swap' ? YELLOW : 'transparent' }}
-              onPress={() => setMode('swap')}
-            >
-              <Text className="text-sm font-medium" style={{ color: mode === 'swap' ? '#333' : TEXT_MUTED }}>
-                {t('home.swap')}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="flex-1 py-3 items-center"
-              style={{ backgroundColor: mode === 'stake' ? YELLOW : 'transparent' }}
-              onPress={() => setMode('stake')}
-            >
-              <Text className="text-sm font-medium" style={{ color: mode === 'stake' ? '#333' : TEXT_MUTED }}>
-                {t('home.stake')}
-              </Text>
+        {/* 交易哈希 */}
+        {txHash && (
+          <View style={styles.txBanner}>
+            <Text style={styles.txText}>交易已发送</Text>
+            <TouchableOpacity onPress={() => Linking.openURL(`https://bscscan.com/tx/${txHash}`)}>
+              <Text style={styles.txLink}>查看详情</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        )}
 
-        {/* 交易区 */}
-        <View className="px-4 pt-2 gap-3">
-          {/* 质押模式 */}
-          {mode === 'stake' && (
-            <View
-              className="rounded-2xl p-4"
-              style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-            >
-              <View className="flex-row items-center justify-between mb-3">
-                <View className="flex-row items-center gap-2">
-                  <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: CYAN }}>
-                    <Ionicons name="diamond" size={16} color="#0A0A12" />
-                  </View>
-                  <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>质押 DQ</Text>
-                </View>
-                <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                  余额: {dqtBalance} DQ
-                </Text>
-              </View>
-
-              <TextInput
-                className="text-xl font-semibold mb-3"
-                style={{ color: TEXT_WHITE, backgroundColor: 'transparent' }}
-                placeholder={t('home.inputAmount')}
-                placeholderTextColor={TEXT_MUTED}
-                value={stakeAmount}
-                onChangeText={setStakeAmount}
-                keyboardType="decimal-pad"
-              />
-
-              <View className="flex-row gap-2 mb-3">
-                {[
-                  { label: '25%', value: 25 },
-                  { label: '50%', value: 50 },
-                  { label: '75%', value: 75 },
-                  { label: 'MAX', value: 100 },
-                ].map((item) => (
-                  <TouchableOpacity
-                    key={item.label}
-                    className="flex-1 py-2.5 rounded-lg items-center"
-                    style={{
-                      backgroundColor: item.label === 'MAX' ? CYAN : 'transparent',
-                      borderWidth: 1,
-                      borderColor: item.label === 'MAX' ? CYAN : BORDER_GRAY,
-                    }}
-                    onPress={() => handlePercent(item.value, setStakeAmount, dqtBalance)}
-                  >
-                    <Text
-                      className="text-sm font-medium"
-                      style={{ color: item.label === 'MAX' ? '#0A0A12' : TEXT_WHITE }}
-                    >
-                      {item.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* 质押周期选择 */}
-              <View className="mb-3">
-                <Text className="text-sm mb-2" style={{ color: TEXT_MUTED }}>选择质押周期</Text>
-                <View className="flex-row gap-2">
-                  {stakePeriods.map((period) => (
-                    <TouchableOpacity
-                      key={period.days}
-                      className="flex-1 py-2.5 rounded-lg items-center"
-                      style={{
-                        backgroundColor: stakePeriod === period.days ? YELLOW : 'transparent',
-                        borderWidth: 1,
-                        borderColor: stakePeriod === period.days ? YELLOW : BORDER_GRAY,
-                      }}
-                      onPress={() => setStakePeriod(period.days)}
-                    >
-                      <Text
-                        className="text-xs font-medium"
-                        style={{ color: stakePeriod === period.days ? '#333' : TEXT_WHITE }}
-                      >
-                        {period.label}
-                      </Text>
-                      <Text
-                        className="text-xs"
-                        style={{ color: stakePeriod === period.days ? '#333' : YELLOW }}
-                      >
-                        {period.reward}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* 质押说明 */}
-              <View className="p-3 rounded-xl" style={{ backgroundColor: 'rgba(0,240,255,0.05)' }}>
-                <View className="flex-row items-center gap-2 mb-2">
-                  <Ionicons name="information-circle" size={16} color={CYAN} />
-                  <Text className="text-sm font-medium" style={{ color: CYAN }}>{t('home.stakeInfo')}</Text>
-                </View>
-                <Text className="text-xs" style={{ color: TEXT_MUTED }}>
-                  • 单币质押，爆块产出{'\n'}
-                  • 质押 {stakePeriod} 天，享 {stakePeriods.find(p => p.days === stakePeriod)?.reward} 加权分红{'\n'}
-                  • 加权按权重分配卖出手续费6%{'\n'}
-                  • 质押锁定期内不可提前解押
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* 兑换模式 */}
-          {mode === 'swap' && (
-            <>
-              {/* 出售区 */}
-              <View
-                className="rounded-2xl p-4"
-                style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-              >
-                <View className="flex-row items-center justify-between mb-3">
-                  <View className="flex-row items-center gap-2">
-                    <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: swapDirection === 'dq_to_sol' ? CYAN : SOL_PURPLE }}>
-                      {swapDirection === 'dq_to_sol' ? (
-                        <Ionicons name="diamond" size={16} color="#0A0A12" />
-                      ) : (
-                        <Text className="text-sm font-bold text-white">S</Text>
-                      )}
-                    </View>
-                    <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>
-                      {swapDirection === 'dq_to_sol' ? 'DQ' : 'SOL'}
-                    </Text>
-                  </View>
-                  <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                    余额: {swapDirection === 'dq_to_sol' ? dqtBalance : solBalance} {swapDirection === 'dq_to_sol' ? 'DQ' : 'SOL'}
-                  </Text>
-                </View>
-
-                <TextInput
-                  className="text-xl font-semibold mb-3"
-                  style={{ color: TEXT_WHITE, backgroundColor: 'transparent' }}
-                  placeholder={t('home.inputAmount')}
-                  placeholderTextColor={TEXT_MUTED}
-                  value={sellAmount}
-                  onChangeText={setSellAmount}
-                  keyboardType="decimal-pad"
-                />
-
-                <View className="flex-row gap-2">
-                  {[
-                    { label: '25%', value: 25 },
-                    { label: '50%', value: 50 },
-                    { label: '75%', value: 75 },
-                    { label: 'MAX', value: 100 },
-                  ].map((item) => (
-                    <TouchableOpacity
-                      key={item.label}
-                      className="flex-1 py-2.5 rounded-lg items-center"
-                      style={{
-                        backgroundColor: item.label === 'MAX' ? (swapDirection === 'dq_to_sol' ? CYAN : SOL_PURPLE) : 'transparent',
-                        borderWidth: 1,
-                        borderColor: item.label === 'MAX' ? (swapDirection === 'dq_to_sol' ? CYAN : SOL_PURPLE) : BORDER_GRAY,
-                      }}
-                      onPress={() => {
-                        const balance = swapDirection === 'dq_to_sol' ? dqtBalance : solBalance;
-                        if (balance) {
-                          handlePercent(item.value, setSellAmount, balance);
-                        }
-                      }}
-                    >
-                      <Text
-                        className="text-sm font-medium"
-                        style={{ color: item.label === 'MAX' ? '#0A0A12' : TEXT_WHITE }}
-                      >
-                        {item.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* 切换按钮 */}
-              <View className="items-center -my-2 z-10">
-                <TouchableOpacity
-                  className="w-12 h-12 rounded-full items-center justify-center"
-                  style={{ backgroundColor: BG_DARK, borderWidth: 2, borderColor: YELLOW }}
-                  onPress={handleSwapDirection}
-                >
-                  <Ionicons name="swap-vertical" size={24} color={YELLOW} />
-                </TouchableOpacity>
-              </View>
-
-              {/* 购买区 */}
-              <View
-                className="rounded-2xl p-4"
-                style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-              >
-                <View className="flex-row items-center justify-between mb-3">
-                  <View className="flex-row items-center gap-2">
-                    <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: swapDirection === 'dq_to_sol' ? SOL_PURPLE : CYAN }}>
-                      {swapDirection === 'dq_to_sol' ? (
-                        <Text className="text-sm font-bold text-white">S</Text>
-                      ) : (
-                        <Ionicons name="diamond" size={16} color="#0A0A12" />
-                      )}
-                    </View>
-                    <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>
-                      {swapDirection === 'dq_to_sol' ? 'SOL' : 'DQ'}
-                    </Text>
-                  </View>
-                  <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                    余额: {swapDirection === 'dq_to_sol' ? solBalance : dqtBalance} {swapDirection === 'dq_to_sol' ? 'SOL' : 'DQ'}
-                  </Text>
-                </View>
-
-                <View className="h-12 rounded-lg overflow-hidden" style={{ backgroundColor: 'rgba(0,240,255,0.05)' }}>
-                  <View className="flex-1 flex-row items-end px-2 gap-0.5">
-                    {[30, 45, 35, 50, 40, 55, 45, 60, 50, 65, 55, 70, 60, 55, 65].map((h, i) => (
-                      <View key={i} className="flex-1 rounded-sm" style={{
-                        height: `${h}%`,
-                        backgroundColor: i > 10 ? (swapDirection === 'dq_to_sol' ? SOL_PURPLE : CYAN) : 'rgba(208,32,255,0.5)'
-                      }} />
-                    ))}
-                  </View>
-                </View>
-              </View>
-            </>
-          )}
-
-          {/* 确定兑换按钮 */}
-          <TouchableOpacity
-            className="py-4 rounded-xl items-center"
-            style={{ backgroundColor: YELLOW }}
-            onPress={handleConfirm}
-            disabled={submitting}
-          >
-            {submitting ? (
-              <ActivityIndicator size="small" color="#333" />
-            ) : (
-              <Text className="text-base font-semibold" style={{ color: '#333' }}>
-                {mode === 'swap' ? t('home.confirmSwap') : t('home.confirmStake')}
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* 数据卡片区 */}
-        <View className="px-4 pt-4 pb-2">
-          <Text className="text-base font-semibold mb-3" style={{ color: TEXT_WHITE }}>
-            {t('home.networkData')}
-          </Text>
-          <View className="flex-row flex-wrap gap-2">
-            {/* 今日入单 */}
-            <View 
-              className="w-[calc(50%-4px)] p-3 rounded-xl"
-              style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 1, borderColor: YELLOW }}
-            >
-              <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('home.todayDeposit')}</Text>
-              <Text className="text-lg font-bold" style={{ color: YELLOW }}>
-                {statsLoading ? '...' : stats.todayDeposit}
-              </Text>
-            </View>
-            
-            {/* 全网算力 */}
-            <View 
-              className="w-[calc(50%-4px)] p-3 rounded-xl"
-              style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 1, borderColor: CYAN }}
-            >
-              <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>全网算力(T/H)</Text>
-              <Text className="text-lg font-bold" style={{ color: CYAN }}>
-                {statsLoading ? '...' : stats.networkPower}
-              </Text>
-            </View>
-            
-            {/* 总销毁 */}
-            <View 
-              className="w-[calc(50%-4px)] p-3 rounded-xl"
-              style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 1, borderColor: PURPLE }}
-            >
-              <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>总销毁</Text>
-              <Text className="text-lg font-bold" style={{ color: PURPLE }}>
-                {statsLoading ? '...' : stats.totalBurned}
-              </Text>
-            </View>
-            
-            {/* 总用户 */}
-            <View 
-              className="w-[calc(50%-4px)] p-3 rounded-xl"
-              style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 1, borderColor: TEXT_MUTED }}
-            >
-              <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>总用户数</Text>
-              <Text className="text-lg font-bold" style={{ color: TEXT_WHITE }}>
-                {statsLoading ? '...' : stats.totalUsers}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* 底池数据 */}
-        <View className="px-4 pt-4 pb-2">
-          <Text className="text-base font-semibold mb-3" style={{ color: TEXT_WHITE }}>
-            底池数据
-          </Text>
-          <View className="flex-row flex-wrap gap-2">
-            {/* SOL池 */}
-            <View 
-              className="w-[calc(50%-4px)] p-3 rounded-xl"
-              style={{ backgroundColor: SOL_PURPLE }}
-            >
-              <Text className="text-xs mb-1" style={{ color: '#FFF' }}>SOL池</Text>
-              <Text className="text-lg font-bold" style={{ color: '#FFF' }}>
-                {statsLoading ? '...' : stats.solPoolBalance}
-              </Text>
-            </View>
-            
-            {/* DQ池 */}
-            <View 
-              className="w-[calc(50%-4px)] p-3 rounded-xl"
-              style={{ backgroundColor: CYAN }}
-            >
-              <Text className="text-xs mb-1" style={{ color: '#0A0A12' }}>DQ池</Text>
-              <Text className="text-lg font-bold" style={{ color: '#0A0A12' }}>
-                {statsLoading ? '...' : stats.dqtPoolBalance}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* 社交链接 */}
-        <View className="px-4 pt-4 pb-8">
-          <View className="flex-row justify-center gap-4">
+        {/* Tab 导航 */}
+        <View style={styles.tabNav}>
+          {[
+            { key: 'home', label: '首页' },
+            { key: 'deposit', label: '质押' },
+            { key: 'team', label: '团队' },
+            { key: 'nft', label: 'NFT' },
+          ].map((tab) => (
             <TouchableOpacity
-              className="flex-row items-center gap-2 px-4 py-2 rounded-lg"
-              style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-              onPress={openTelegram}
+              key={tab.key}
+              style={[styles.tabItem, activeTab === tab.key && styles.tabItemActive]}
+              onPress={() => setActiveTab(tab.key as any)}
             >
-              <Ionicons name="paper-plane" size={18} color="#0088CC" />
-              <Text className="text-sm" style={{ color: TEXT_WHITE }}>Telegram</Text>
+              <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
+                {tab.label}
+              </Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity
-              className="flex-row items-center gap-2 px-4 py-2 rounded-lg"
-              style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-              onPress={openTwitter}
-            >
-              <Ionicons name="logo-twitter" size={18} color="#1DA1F2" />
-              <Text className="text-sm" style={{ color: TEXT_WHITE }}>Twitter</Text>
-            </TouchableOpacity>
-          </View>
+          ))}
         </View>
-      </ScrollView>
+
+        {/* Tab 内容 */}
+        {activeTab === 'home' && renderHome()}
+        {activeTab === 'deposit' && renderDeposit()}
+        {activeTab === 'team' && renderTeam()}
+        {activeTab === 'nft' && renderNFT()}
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  modalOverlay: {
+  container: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+    backgroundColor: '#0a0a0f',
   },
-  inviteModalContent: {
-    backgroundColor: BG_CARD_TRANS,
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-    maxWidth: 340,
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#12121a',
+  },
+  logo: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#00f0ff',
+  },
+  walletBtn: {
+    backgroundColor: '#1a1a2e',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: YELLOW,
+    borderColor: '#00f0ff',
   },
-  inviteModalHeader: {
+  walletAddress: {
+    color: '#00f0ff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  walletChain: {
+    color: '#666',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  connectBtn: {
+    backgroundColor: '#00f0ff',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+  },
+  connectBtnText: {
+    color: '#000',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  errorBanner: {
+    backgroundColor: '#ff4444',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  errorText: {
+    color: '#fff',
+    fontSize: 13,
+    flex: 1,
+  },
+  errorClose: {
+    color: '#fff',
+    fontSize: 13,
+    marginLeft: 8,
+  },
+  txBanner: {
+    backgroundColor: '#00ff88',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  txText: {
+    color: '#000',
+    fontSize: 13,
+  },
+  txLink: {
+    color: '#000',
+    fontSize: 13,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  tabNav: {
+    flexDirection: 'row',
+    backgroundColor: '#12121a',
+    paddingVertical: 8,
+  },
+  tabItem: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  tabItemActive: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#00f0ff',
+  },
+  tabText: {
+    color: '#666',
+    fontSize: 14,
+  },
+  tabTextActive: {
+    color: '#00f0ff',
+    fontWeight: '600',
+  },
+  tabContent: {
+    flex: 1,
+    padding: 16,
+  },
+  statsCard: {
+    backgroundColor: '#12121a',
+    borderRadius: 12,
+    padding: 16,
     marginBottom: 16,
   },
-  inviteModalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: TEXT_WHITE,
-    marginTop: 12,
+  cardTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 12,
   },
-  inviteModalDesc: {
-    fontSize: 14,
-    color: TEXT_MUTED,
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 20,
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
   },
-  referrerAddressBox: {
-    backgroundColor: BG_DARK,
+  statItem: {
+    width: '47%',
+    backgroundColor: '#1a1a2e',
     borderRadius: 8,
     padding: 12,
-    marginBottom: 20,
   },
-  referrerLabel: {
-    fontSize: 11,
-    color: TEXT_MUTED,
-    marginBottom: 4,
+  statValue: {
+    color: '#00f0ff',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
-  referrerAddress: {
+  statLabel: {
+    color: '#666',
     fontSize: 12,
-    fontFamily: 'monospace',
-    color: CYAN,
+    marginTop: 4,
   },
-  inviteModalButtons: {
+  userCard: {
+    backgroundColor: '#12121a',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  userInfo: {
+    gap: 8,
+  },
+  userRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1a1a2e',
+  },
+  userLabel: {
+    color: '#666',
+    fontSize: 14,
+  },
+  userValue: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  registerCard: {
+    backgroundColor: '#12121a',
+    borderRadius: 12,
+    padding: 16,
+  },
+  registerDesc: {
+    color: '#666',
+    fontSize: 13,
+    marginBottom: 12,
+  },
+  inputContainer: {
+    marginBottom: 12,
+  },
+  input: {
+    backgroundColor: '#1a1a2e',
+    borderWidth: 1,
+    borderColor: '#333',
+    borderRadius: 8,
+    padding: 12,
+    color: '#fff',
+    fontSize: 14,
+    width: '100%',
+  },
+  actionBtn: {
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  primaryBtn: {
+    backgroundColor: '#00f0ff',
+  },
+  actionBtnText: {
+    color: '#000',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  depositCard: {
+    backgroundColor: '#12121a',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  depositDesc: {
+    color: '#666',
+    fontSize: 13,
+    marginBottom: 12,
+  },
+  amountButtons: {
     flexDirection: 'row',
     gap: 12,
   },
-  inviteModalBtn: {
+  amountBtn: {
     flex: 1,
+    backgroundColor: '#1a1a2e',
     paddingVertical: 14,
-    borderRadius: 10,
+    borderRadius: 8,
     alignItems: 'center',
-  },
-  skipBtn: {
-    backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: BORDER_GRAY,
+    borderColor: '#333',
   },
-  skipBtnText: {
+  amountBtnText: {
+    color: '#fff',
     fontSize: 14,
     fontWeight: '600',
-    color: TEXT_MUTED,
   },
-  bindBtn: {
-    backgroundColor: YELLOW,
+  claimCard: {
+    backgroundColor: '#12121a',
+    borderRadius: 12,
+    padding: 16,
   },
-  bindBtnText: {
+  claimButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  claimBtn: {
+    flex: 1,
+    backgroundColor: '#00ff88',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  claimBtnText: {
+    color: '#000',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  teamCard: {
+    backgroundColor: '#12121a',
+    borderRadius: 12,
+    padding: 16,
+  },
+  teamInfo: {
+    gap: 8,
+  },
+  teamRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1a1a2e',
+  },
+  teamLabel: {
+    color: '#666',
     fontSize: 14,
-    fontWeight: '700',
-    color: BG_DARK,
+  },
+  teamValue: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  nftCard: {
+    backgroundColor: '#12121a',
+    borderRadius: 12,
+    padding: 16,
+  },
+  nftDesc: {
+    color: '#666',
+    fontSize: 13,
+    marginBottom: 12,
+  },
+  nftCards: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  nftItem: {
+    flex: 1,
+    backgroundColor: '#1a1a2e',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+  nftName: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  nftPrice: {
+    color: '#00f0ff',
+    fontSize: 11,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    color: '#666',
+    fontSize: 15,
   },
 });
