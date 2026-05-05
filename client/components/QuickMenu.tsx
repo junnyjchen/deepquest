@@ -123,3 +123,5 @@ export const QuickMenu: React.FC<QuickMenuProps> = ({ onClose }) => {
     </View>
   );
 };
+
+export default QuickMenu;
