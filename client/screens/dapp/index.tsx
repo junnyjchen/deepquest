@@ -271,14 +271,12 @@ export default function DappIndex() {
           await AsyncStorage.removeItem('@deepquest_pending_referrer');
         }
         
-        if (referrer) {
-          try {
-            // 调用后端注册（tx_hash 为空，因为注册不上链）
-            const result = await dappApi.register(address, referrer, '');
-            console.log('[DApp] 用户注册成功:', result);
-          } catch (regError: any) {
-            console.log('[DApp] 注册失败（可能推荐人不存在）:', regError.message);
-          }
+        // 无条件注册（允许无推荐人）
+        try {
+          const result = await dappApi.register(address, referrer, '');
+          console.log('[DApp] 用户注册成功:', result);
+        } catch (regError: any) {
+          console.log('[DApp] 注册失败:', regError.message);
         }
       }
     } catch (error: any) {
