@@ -410,16 +410,15 @@ export default function DappIndex() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
       >
-        {/* 顶部导航 */}
-        <View className="px-4 pt-3 pb-2">
-          <View className="flex-row items-center justify-between">
-            <LogoHeader />
-            <QuickMenu
-              menuExpanded={menuExpanded}
-              onMenuPress={() => setMenuExpanded(!menuExpanded)}
-            />
-          </View>
+        {/* 顶部导航 - Logo + 语言 */}
+        <View className="px-4 pt-3">
+          <LogoHeader />
         </View>
+
+        {/* 展开的菜单 - 在 Logo 下方 */}
+        {menuExpanded && (
+          <QuickMenu menuExpanded={menuExpanded} />
+        )}
 
         {/* 钱包+注册 */}
         <View className="px-4 pb-2">
