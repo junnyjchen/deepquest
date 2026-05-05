@@ -275,24 +275,18 @@ export default function DappIndex() {
   };
 
   // 断开钱包连接
-  const handleDisconnect = () => {
-    Alert.alert(
-      '断开钱包',
-      '确定要断开钱包连接吗？',
-      [
-        { text: '取消', style: 'cancel' },
-        { 
-          text: '确定', 
-          style: 'destructive',
-          onPress: async () => {
-            await AsyncStorage.removeItem(WALLET_STORAGE_KEY);
-            setWalletAddress(null);
-            setBnbBalance('0.0');
-            setDqtBalance('0.0');
-          }
-        },
-      ]
-    );
+  const handleDisconnect = async () => {
+    try {
+      await AsyncStorage.removeItem(WALLET_STORAGE_KEY);
+    } catch (e) {
+      // 忽略存储错误
+    }
+    setWalletAddress(null);
+    setBnbBalance('0.0');
+    setDqtBalance('0.0');
+    setUserInfo(null);
+    // 刷新页面
+    router.replace('/(dapp)');
   };
 
   // 质押操作
