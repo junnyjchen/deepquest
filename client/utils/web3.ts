@@ -41,7 +41,7 @@ export const connectWallet = async (): Promise<{
   try {
     const provider = getBrowserProvider();
     if (!provider) {
-      throw new Error('请在浏览器中使用 MetaMask 钱包');
+      throw new Error('请在浏览器中安装 TP 钱包或 MetaMask 钱包');
     }
 
     // 请求账户连接

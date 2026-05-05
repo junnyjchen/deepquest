@@ -21,7 +21,7 @@ import { dappApi } from '@/utils/api';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
-  connectMetaMask,
+  connectWallet,
   getCurrentAccount,
   switchToBSC,
   registerUser,
@@ -202,11 +202,11 @@ export default function DappIndex() {
     }
   };
 
-  // 连接 MetaMask 钱包
+  // 连接 TP/钱包
   const handleConnect = async () => {
     try {
-      // 尝试连接 MetaMask
-      const { provider, address } = await connectMetaMask();
+      // 尝试连接钱包
+      const { provider, address } = await connectWallet();
       
       // 切换到 BSC 主网
       await switchToBSC(provider);
@@ -222,7 +222,7 @@ export default function DappIndex() {
       if (typeof window !== 'undefined' && !window.ethereum) {
         Alert.alert(
           '提示',
-          '未检测到 MetaMask 钱包。请在浏览器中安装 MetaMask 扩展。',
+          '未检测到钱包扩展。请在浏览器中安装 TP 钱包或 MetaMask 扩展。',
           [{ text: '确定' }]
         );
       } else {
@@ -266,7 +266,7 @@ export default function DappIndex() {
     try {
       setSubmitting(true);
       
-      // 检查是否连接了 MetaMask
+      // 检查是否连接了钱包
       if (typeof window !== 'undefined' && window.ethereum) {
         // 调用链上质押
         const amountInWei = (parseFloat(stakeAmount) * 1e18).toString();
