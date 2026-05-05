@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import QuickMenu from '@/components/QuickMenu';
 import {
   View,
   Text,
@@ -13,7 +14,6 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Screen } from '@/components/Screen';
-import { LogoHeader } from '@/components/LogoHeader';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -410,111 +410,10 @@ export default function DappIndex() {
         contentContainerStyle={{ paddingBottom: 40 }}
       >
         {/* 顶部导航 */}
-        <LogoHeader
-          showMenuButton
+        <QuickMenu
           menuExpanded={menuExpanded}
           onMenuPress={() => setMenuExpanded(!menuExpanded)}
         />
-
-        {/* 快捷菜单折叠区域 */}
-        {menuExpanded && (
-          <View className="px-4 pb-3">
-            <View 
-              className="rounded-2xl overflow-hidden"
-              style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-            >
-              <TouchableOpacity
-                className="flex-row items-center gap-3 p-4 border-b"
-                style={{ borderColor: BORDER_GRAY }}
-                onPress={() => { router.push('/profile'); setMenuExpanded(false); }}
-              >
-                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(255,215,0,0.1)' }}>
-                  <Ionicons name="person" size={20} color={YELLOW} />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.title')}</Text>
-                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('profile.myAssets')}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                className="flex-row items-center gap-3 p-4 border-b"
-                style={{ borderColor: BORDER_GRAY }}
-                onPress={() => { router.push('/team'); setMenuExpanded(false); }}
-              >
-                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(0,240,255,0.1)' }}>
-                  <Ionicons name="people" size={20} color={CYAN} />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('team.title')}</Text>
-                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('team.teamRewards')}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                className="flex-row items-center gap-3 p-4 border-b"
-                style={{ borderColor: BORDER_GRAY }}
-                onPress={() => { router.push('/stakes'); setMenuExpanded(false); }}
-              >
-                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(208,32,255,0.1)' }}>
-                  <Ionicons name="time" size={20} color={PURPLE} />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.stakes')}</Text>
-                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('stakes.title')}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                className="flex-row items-center gap-3 p-4 border-b"
-                style={{ borderColor: BORDER_GRAY }}
-                onPress={() => { router.push('/rewards'); setMenuExpanded(false); }}
-              >
-                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(255,215,0,0.1)' }}>
-                  <Ionicons name="gift" size={20} color={YELLOW} />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.rewards')}</Text>
-                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('rewards.title')}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                className="flex-row items-center gap-3 p-4 border-b"
-                style={{ borderColor: BORDER_GRAY }}
-                onPress={() => { router.push('/withdrawals'); setMenuExpanded(false); }}
-              >
-                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(0,240,255,0.1)' }}>
-                  <Ionicons name="wallet-outline" size={20} color={CYAN} />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.withdrawals')}</Text>
-                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('withdrawals.title')}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                className="flex-row items-center gap-3 p-4 border-b"
-                style={{ borderColor: BORDER_GRAY }}
-                onPress={() => { router.push('/nodes'); setMenuExpanded(false); }}
-              >
-                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(208,32,255,0.1)' }}>
-                  <Ionicons name="ribbon" size={20} color={PURPLE} />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.nodes')}</Text>
-                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('nodes.subtitle')}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
 
         {/* 钱包+注册 */}
         <View className="px-4 pb-2">

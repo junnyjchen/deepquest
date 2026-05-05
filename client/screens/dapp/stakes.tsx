@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import QuickMenu from '@/components/QuickMenu';
 import {
   View,
   Text,
@@ -9,7 +10,7 @@ import {
   FlatList,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
-import { LogoHeader } from '@/components/LogoHeader';
+
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
@@ -198,7 +199,7 @@ export default function DappStakes() {
 
   return (
     <Screen>
-      <LogoHeader />
+      <QuickMenu />
       <View className="flex-1" style={{ backgroundColor: BG_DARK }}>
         {/* 钱包提示 */}
         {!walletAddress && (

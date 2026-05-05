@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import QuickMenu from '@/components/QuickMenu';
 import {
   View,
   Text,
@@ -8,7 +9,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
-import { LogoHeader } from '@/components/LogoHeader';
+
 import { useSafeSearchParams, useSafeRouter } from '@/hooks/useSafeRouter';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -186,7 +187,7 @@ export default function InviteBinding() {
 
   return (
     <Screen>
-      <LogoHeader />
+      <QuickMenu />
       <View style={styles.container}>
         {/* 内容区域 */}
         <View style={styles.content}>
