@@ -309,7 +309,18 @@ export default function DappIndex() {
       if (registered) {
         Alert.alert('提示', '账户已经激活！');
       } else {
-        // 未激活，弹出激活弹窗
+        // 未激活，填充推荐人地址并弹出激活弹窗
+        // 优先使用 URL 参数中的推荐人
+        const pendingRef = await AsyncStorage.getItem('@deepquest_pending_referrer');
+        // 备用：使用已绑定的推荐人
+        const bindedRef = pendingInviteReferrer || '';
+        
+        // 取最近的推荐人地址
+        const referrerToUse = pendingRef || bindedRef;
+        if (referrerToUse) {
+          setActivationReferrer(referrerToUse);
+          console.log('[DApp] 已填充推荐人地址:', referrerToUse);
+        }
         setActivationModalVisible(true);
       }
     } catch (error) {
