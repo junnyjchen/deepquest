@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import { QuickMenu } from '@/components/QuickMenu';
 import {
   View,
   Text,
@@ -10,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
-
+import { LogoHeader } from '@/components/LogoHeader';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
@@ -230,7 +229,7 @@ export default function DappRewards() {
 
   return (
     <Screen>
-      <QuickMenu />
+      <LogoHeader />
       <View className="flex-1" style={{ backgroundColor: BG_DARK }}>
         {/* 收益汇总 */}
         {walletAddress && (

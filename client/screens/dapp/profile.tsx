@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import { QuickMenu } from '@/components/QuickMenu';
 import {
   View,
   Text,
@@ -10,8 +9,7 @@ import {
   Share,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
-
-
+import { LogoHeader } from '@/components/LogoHeader';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
@@ -38,7 +36,6 @@ export default function DappProfile() {
   const router = useSafeRouter();
   const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
-  const [menuExpanded, setMenuExpanded] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [userLoading, setUserLoading] = useState(false);
 
@@ -234,7 +231,7 @@ export default function DappProfile() {
 
   return (
     <Screen>
-      <QuickMenu />
+      <LogoHeader />
       <ScrollView
         className="flex-1"
         style={{ backgroundColor: BG_DARK }}

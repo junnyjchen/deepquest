@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import { QuickMenu } from '@/components/QuickMenu';
 import {
   View,
   Text,
@@ -10,7 +9,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
-
+import { LogoHeader } from '@/components/LogoHeader';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -209,7 +208,7 @@ export default function DappNodes() {
 
   return (
     <Screen>
-      <QuickMenu />
+      <LogoHeader />
       <View style={[styles.container, { backgroundColor: BG_DARK }]}>
         <ScrollView
           contentContainerStyle={styles.scrollContent}

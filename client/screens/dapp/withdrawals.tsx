@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import { QuickMenu } from '@/components/QuickMenu';
 import {
   View,
   Text,
@@ -12,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
-
+import { LogoHeader } from '@/components/LogoHeader';
 import { useFocusEffect } from 'expo-router';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Ionicons } from '@expo/vector-icons';
@@ -262,7 +261,7 @@ export default function DappWithdrawals() {
 
   return (
     <Screen>
-      <QuickMenu />
+      <LogoHeader />
       <View style={[styles.container, { backgroundColor: BG_DARK }]}>
         {/* 统计卡片 */}
         <View style={styles.statsCard}>
