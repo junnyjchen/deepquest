@@ -11,6 +11,7 @@ import {
   Modal,
   StyleSheet,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Screen } from '@/components/Screen';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -406,18 +407,22 @@ export default function DappIndex() {
         {/* 顶部导航 */}
         <View className="px-4 pt-3 pb-3">
           <View className="flex-row items-center justify-between">
-            {/* Logo */}
-            <View className="flex-row items-center gap-2">
-              <View
+            {/* Logo - 点击返回首页 */}
+            <TouchableOpacity 
+              className="flex-row items-center gap-2"
+              onPress={() => router.push('/')}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={['#00F0FF', '#BF00FF']}
                 className="w-10 h-10 rounded-xl items-center justify-center"
-                style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
               >
-                <Ionicons name="diamond" size={22} color={CYAN} />
-              </View>
+                <Text className="text-lg font-bold text-white">DQ</Text>
+              </LinearGradient>
               <Text className="text-xl font-bold" style={{ color: YELLOW }}>
                 DeepQuest
               </Text>
-            </View>
+            </TouchableOpacity>
 
             {/* 菜单按钮 */}
             <TouchableOpacity

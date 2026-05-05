@@ -88,8 +88,12 @@ export default function Sidebar({ currentPath = '/dashboard', onNavigate }: Side
 
   return (
     <View style={styles.sidebar}>
-      {/* Logo Area */}
-      <View style={styles.logoArea}>
+      {/* Logo Area - 可点击跳转到首页 */}
+      <TouchableOpacity 
+        style={styles.logoArea} 
+        onPress={() => handleNavigate('/')}
+        activeOpacity={0.7}
+      >
         <LinearGradient
           colors={['#00F0FF', '#BF00FF']}
           style={styles.logoGradient}
@@ -97,10 +101,10 @@ export default function Sidebar({ currentPath = '/dashboard', onNavigate }: Side
           <Text style={styles.logoText}>DQ</Text>
         </LinearGradient>
         <View style={styles.logoTextArea}>
-          <Text style={styles.logoTitle}>ADMIN</Text>
+          <Text style={styles.logoTitle}>DeepQuest</Text>
           <Text style={styles.logoSubtitle}>管理系统</Text>
         </View>
-      </View>
+      </TouchableOpacity>
 
       {/* Divider */}
       <View style={styles.divider} />
