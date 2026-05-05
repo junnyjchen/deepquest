@@ -2,7 +2,6 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useTranslation } from '@/hooks/useTranslation';
 
 // 颜色常量
 const YELLOW = '#FFD23F';
@@ -26,8 +25,6 @@ export function LogoHeader({
   onMenuPress,
   rightContent,
 }: LogoHeaderProps) {
-  const { t } = useTranslation();
-
   return (
     <View className="px-4 pt-3 pb-3">
       <View className="flex-row items-center justify-between">
@@ -84,8 +81,8 @@ export function LogoHeader({
               <Ionicons name="person" size={20} color={YELLOW} />
             </View>
             <View className="flex-1">
-              <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.title')}</Text>
-              <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('profile.myAssets')}</Text>
+              <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>Profile</Text>
+              <Text className="text-xs" style={{ color: TEXT_MUTED }}>My Assets</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
           </TouchableOpacity>
@@ -99,8 +96,8 @@ export function LogoHeader({
               <Ionicons name="people" size={20} color={CYAN} />
             </View>
             <View className="flex-1">
-              <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('team.title')}</Text>
-              <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('team.teamRewards')}</Text>
+              <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>Team</Text>
+              <Text className="text-xs" style={{ color: TEXT_MUTED }}>Team Rewards</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
           </TouchableOpacity>
@@ -114,8 +111,8 @@ export function LogoHeader({
               <Ionicons name="time" size={20} color={PURPLE} />
             </View>
             <View className="flex-1">
-              <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.stakes')}</Text>
-              <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('stakes.title')}</Text>
+              <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>Stakes</Text>
+              <Text className="text-xs" style={{ color: TEXT_MUTED }}>My Stakes</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
           </TouchableOpacity>
@@ -129,8 +126,8 @@ export function LogoHeader({
               <Ionicons name="gift" size={20} color="#20C850" />
             </View>
             <View className="flex-1">
-              <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('rewards.title')}</Text>
-              <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('rewards.claimRewards')}</Text>
+              <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>Rewards</Text>
+              <Text className="text-xs" style={{ color: TEXT_MUTED }}>Claim Rewards</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
           </TouchableOpacity>
@@ -144,8 +141,8 @@ export function LogoHeader({
               <Ionicons name="wallet" size={20} color="#FF6432" />
             </View>
             <View className="flex-1">
-              <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('withdrawals.title')}</Text>
-              <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('withdrawals.records')}</Text>
+              <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>Withdraw</Text>
+              <Text className="text-xs" style={{ color: TEXT_MUTED }}>Records</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
           </TouchableOpacity>
@@ -158,8 +155,8 @@ export function LogoHeader({
               <Ionicons name="diamond" size={20} color="#FFC800" />
             </View>
             <View className="flex-1">
-              <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('nodes.title')}</Text>
-              <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('nodes.myNode')}</Text>
+              <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>Nodes</Text>
+              <Text className="text-xs" style={{ color: TEXT_MUTED }}>My Nodes</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
           </TouchableOpacity>
