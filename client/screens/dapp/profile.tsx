@@ -184,10 +184,11 @@ export default function DappProfile() {
   // 分享邀请链接
   const handleShare = async () => {
     try {
-      const appUrl = process.env.EXPO_PUBLIC_APP_URL || 'https://app.deepquest.io';
+      // 使用当前域名
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://app.deepquest.io';
       if (walletAddress) {
         // 生成邀请链接
-        const inviteLink = `${appUrl}/invite?ref=${walletAddress}`;
+        const inviteLink = `${origin}/invite?ref=${walletAddress}`;
         await Share.share({
           title: 'Join DeepQuest',
           message: `加入DeepQuest，质押DQ获取被动收益！\n我的邀请链接: ${inviteLink}`,
@@ -207,8 +208,9 @@ export default function DappProfile() {
   // 复制邀请链接
   const handleCopyInviteLink = async () => {
     if (walletAddress) {
-      const appUrl = process.env.EXPO_PUBLIC_APP_URL || 'https://app.deepquest.io';
-      const inviteLink = `${appUrl}/invite?ref=${walletAddress}`;
+      // 使用当前域名
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://app.deepquest.io';
+      const inviteLink = `${origin}/invite?ref=${walletAddress}`;
       await Clipboard.setStringAsync(inviteLink);
       Alert.alert('复制成功', '邀请链接已复制到剪贴板');
     } else {

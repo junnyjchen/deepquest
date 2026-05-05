@@ -141,7 +141,9 @@ export default function DappTeam() {
   // 复制完整邀请链接
   const handleCopyInviteLink = async () => {
     if (walletAddress) {
-      const inviteLink = `${process.env.EXPO_PUBLIC_APP_URL || 'https://app.deepquest.io'}/invite?ref=${walletAddress}`;
+      // 使用当前域名
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://app.deepquest.io';
+      const inviteLink = `${origin}/invite?ref=${walletAddress}`;
       await Clipboard.setStringAsync(inviteLink);
       Alert.alert('复制成功', '邀请链接已复制到剪贴板');
     } else {
