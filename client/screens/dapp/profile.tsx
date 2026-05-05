@@ -38,7 +38,6 @@ export default function DappProfile() {
   const [loading, setLoading] = useState(true);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [userLoading, setUserLoading] = useState(false);
-  const [menuExpanded, setMenuExpanded] = useState(false);
 
   // 用户数据
   const [userData, setUserData] = useState({
@@ -232,11 +231,7 @@ export default function DappProfile() {
 
   return (
     <Screen>
-      <LogoHeader 
-        showMenuButton={true}
-        menuExpanded={menuExpanded}
-        onMenuPress={() => setMenuExpanded(!menuExpanded)}
-      />
+      <LogoHeader />
       <ScrollView
         className="flex-1"
         style={{ backgroundColor: BG_DARK }}

@@ -44,7 +44,6 @@ export default function DappStakes() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [menuExpanded, setMenuExpanded] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -199,11 +198,7 @@ export default function DappStakes() {
 
   return (
     <Screen>
-      <LogoHeader 
-        showMenuButton={true}
-        menuExpanded={menuExpanded}
-        onMenuPress={() => setMenuExpanded(!menuExpanded)}
-      />
+      <LogoHeader />
       <View className="flex-1" style={{ backgroundColor: BG_DARK }}>
         {/* 钱包提示 */}
         {!walletAddress && (

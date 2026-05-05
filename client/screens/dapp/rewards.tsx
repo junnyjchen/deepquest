@@ -53,7 +53,6 @@ export default function DappRewards() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [claiming, setClaiming] = useState(false);
-  const [menuExpanded, setMenuExpanded] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -230,11 +229,7 @@ export default function DappRewards() {
 
   return (
     <Screen>
-      <LogoHeader 
-        showMenuButton={true}
-        menuExpanded={menuExpanded}
-        onMenuPress={() => setMenuExpanded(!menuExpanded)}
-      />
+      <LogoHeader />
       <View className="flex-1" style={{ backgroundColor: BG_DARK }}>
         {/* 收益汇总 */}
         {walletAddress && (
