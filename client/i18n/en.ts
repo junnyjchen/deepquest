@@ -43,6 +43,19 @@ export default {
     stakeInfo2: 'Lock period is 30 days',
     stakeInfo3: 'Yield based on level and duration',
   },
+  // LogoHeader menu
+  menu: {
+    home: 'Home',
+    team: 'Team',
+    stakes: 'Stakes',
+    profile: 'Profile',
+    withdraw: 'Withdraw',
+    rewards: 'Rewards',
+    claimRewards: 'Claim Rewards',
+    records: 'Records',
+    nodes: 'Nodes',
+    myNodes: 'My Nodes',
+  },
   profile: {
     title: 'Profile',
     myAssets: 'My Assets',
