@@ -35,6 +35,17 @@ import {
 } from '@/utils/web3';
 import { CONTRACT_ADDRESSES } from '@/config/contracts';
 
+// 用户信息类型
+interface UserInfo {
+  wallet_address: string;
+  referrer_address?: string;
+  level?: number;
+  directCount?: number;
+  totalInvest?: string;
+  teamInvest?: string;
+  directSales?: string;
+}
+
 // 精确匹配参考图的颜色体系
 const BG_DARK = '#0A0A12';
 const BG_CARD_TRANS = 'rgba(26, 26, 48, 0.95)';
@@ -64,6 +75,7 @@ export default function DappIndex() {
   const [dqtBalance, setDqtBalance] = useState('0.0');
   const [solBalance, setSolBalance] = useState('0.00');
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
