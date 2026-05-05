@@ -51,7 +51,7 @@ export default function DappIndex() {
   const { t, language, setLanguage, languages } = useLanguage();
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<'swap' | 'stake'>('swap');
-  const [swapDirection, setSwapDirection] = useState<'dq_to_sol' | 'sol_to_dq'>('dq_to_sol');
+
   const [menuExpanded, setMenuExpanded] = useState(false);
   const [langModalVisible, setLangModalVisible] = useState(false);
   const [sellAmount, setSellAmount] = useState('');
@@ -341,13 +341,6 @@ export default function DappIndex() {
       const amount = (bal * percent) / 100;
       setter(amount.toFixed(6));
     }
-  };
-
-  // 切换兑换方向
-  const handleSwapDirection = () => {
-    setSwapDirection(prev => prev === 'dq_to_sol' ? 'sol_to_dq' : 'dq_to_sol');
-    setSellAmount('');
-    setBuyAmount('');
   };
 
   if (loading) {
@@ -786,19 +779,15 @@ export default function DappIndex() {
               >
                 <View className="flex-row items-center justify-between mb-3">
                   <View className="flex-row items-center gap-2">
-                    <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: swapDirection === 'dq_to_sol' ? CYAN : SOL_PURPLE }}>
-                      {swapDirection === 'dq_to_sol' ? (
-                        <Ionicons name="diamond" size={16} color="#0A0A12" />
-                      ) : (
-                        <Text className="text-sm font-bold text-white">S</Text>
-                      )}
+                    <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: CYAN }}>
+                      <Ionicons name="diamond" size={16} color="#0A0A12" />
                     </View>
                     <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>
-                      {swapDirection === 'dq_to_sol' ? 'DQ' : 'SOL'}
+                      DQ
                     </Text>
                   </View>
                   <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                    余额: {swapDirection === 'dq_to_sol' ? dqtBalance : solBalance} {swapDirection === 'dq_to_sol' ? 'DQ' : 'SOL'}
+                    余额: {dqtBalance} DQ
                   </Text>
                 </View>
 
@@ -823,14 +812,13 @@ export default function DappIndex() {
                       key={item.label}
                       className="flex-1 py-2.5 rounded-lg items-center"
                       style={{
-                        backgroundColor: item.label === 'MAX' ? (swapDirection === 'dq_to_sol' ? CYAN : SOL_PURPLE) : 'transparent',
+                        backgroundColor: item.label === 'MAX' ? CYAN : 'transparent',
                         borderWidth: 1,
-                        borderColor: item.label === 'MAX' ? (swapDirection === 'dq_to_sol' ? CYAN : SOL_PURPLE) : BORDER_GRAY,
+                        borderColor: item.label === 'MAX' ? CYAN : BORDER_GRAY,
                       }}
                       onPress={() => {
-                        const balance = swapDirection === 'dq_to_sol' ? dqtBalance : solBalance;
-                        if (balance) {
-                          handlePercent(item.value, setSellAmount, balance);
+                        if (dqtBalance) {
+                          handlePercent(item.value, setSellAmount, dqtBalance);
                         }
                       }}
                     >
@@ -845,16 +833,7 @@ export default function DappIndex() {
                 </View>
               </View>
 
-              {/* 切换按钮 */}
-              <View className="items-center -my-2 z-10">
-                <TouchableOpacity
-                  className="w-12 h-12 rounded-full items-center justify-center"
-                  style={{ backgroundColor: BG_DARK, borderWidth: 2, borderColor: YELLOW }}
-                  onPress={handleSwapDirection}
-                >
-                  <Ionicons name="swap-vertical" size={24} color={YELLOW} />
-                </TouchableOpacity>
-              </View>
+              {/* 切换按钮 - 已隐藏，仅支持 DQ 兑换 SOL */}
 
               {/* 购买区 */}
               <View
@@ -863,19 +842,15 @@ export default function DappIndex() {
               >
                 <View className="flex-row items-center justify-between mb-3">
                   <View className="flex-row items-center gap-2">
-                    <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: swapDirection === 'dq_to_sol' ? SOL_PURPLE : CYAN }}>
-                      {swapDirection === 'dq_to_sol' ? (
-                        <Text className="text-sm font-bold text-white">S</Text>
-                      ) : (
-                        <Ionicons name="diamond" size={16} color="#0A0A12" />
-                      )}
+                    <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: SOL_PURPLE }}>
+                      <Text className="text-sm font-bold text-white">S</Text>
                     </View>
                     <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>
-                      {swapDirection === 'dq_to_sol' ? 'SOL' : 'DQ'}
+                      SOL
                     </Text>
                   </View>
                   <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                    余额: {swapDirection === 'dq_to_sol' ? solBalance : dqtBalance} {swapDirection === 'dq_to_sol' ? 'SOL' : 'DQ'}
+                    余额: {solBalance} SOL
                   </Text>
                 </View>
 
@@ -884,7 +859,7 @@ export default function DappIndex() {
                     {[30, 45, 35, 50, 40, 55, 45, 60, 50, 65, 55, 70, 60, 55, 65].map((h, i) => (
                       <View key={i} className="flex-1 rounded-sm" style={{
                         height: `${h}%`,
-                        backgroundColor: i > 10 ? (swapDirection === 'dq_to_sol' ? SOL_PURPLE : CYAN) : 'rgba(208,32,255,0.5)'
+                        backgroundColor: i > 10 ? SOL_PURPLE : 'rgba(208,32,255,0.5)'
                       }} />
                     ))}
                   </View>
