@@ -34,7 +34,7 @@ import {
   DQPROJECT_ABI,
 } from '@/utils/web3';
 import { CONTRACT_ADDRESSES } from '@/config/contracts';
-import LogoHeader from '@/components/LogoHeader';
+import { LogoHeader } from '@/components/LogoHeader';
 
 // 用户信息类型
 interface UserInfo {
