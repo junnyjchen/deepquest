@@ -258,23 +258,19 @@ export default function DappIndex() {
     }
   };
   
-  // 同步用户信息：检查注册状态，未注册则注册
+  // 同步用户信息：连接钱包时检查注册状态
   const syncUserInfo = async (address: string) => {
     try {
-      // 1. 检查链上注册状态
+      // 检查链上注册状态
       const registered = await isUserRegisteredOnChain(address);
       setIsOnChainRegistered(registered);
+      console.log('[DApp] 钱包已连接，注册状态:', registered);
 
-      // 2. 如果未在链上注册，显示激活弹窗
-      if (!registered) {
-        console.log('[DApp] 用户未在链上注册，显示激活提示');
-        setActivationModalVisible(true);
-        return;
+      // 已注册则获取用户信息
+      if (registered) {
+        const userInfo = await dappApi.getUserInfo(address);
+        console.log('[DApp] 用户已注册，获取信息:', userInfo);
       }
-
-      // 3. 已注册，获取用户信息
-      const userInfo = await dappApi.getUserInfo(address);
-      console.log('[DApp] 用户已注册，获取信息:', userInfo);
     } catch (error: any) {
       console.error('[DApp] 同步用户信息失败:', error);
     }
@@ -284,15 +280,42 @@ export default function DappIndex() {
   const checkOnChainRegistration = async () => {
     if (!walletAddress) return;
     try {
-      // 使用 isRegistered 方法检查，更可靠
       const registered = await isUserRegisteredOnChain(walletAddress);
       setIsOnChainRegistered(registered);
       if (registered) {
         setActivationModalVisible(false);
         Alert.alert('成功', '账户已激活！');
+      } else {
+        // 未激活，弹出激活弹窗
+        setActivationModalVisible(true);
       }
     } catch (error) {
       console.error('检查链上注册失败:', error);
+    }
+  };
+
+  // 点击激活按钮：检查并弹窗
+  const handleActivateClick = async () => {
+    if (!walletAddress) {
+      Alert.alert('提示', '请先连接钱包');
+      return;
+    }
+    
+    try {
+      // 先查询注册状态
+      const registered = await isUserRegisteredOnChain(walletAddress);
+      setIsOnChainRegistered(registered);
+      
+      if (registered) {
+        Alert.alert('提示', '账户已经激活！');
+      } else {
+        // 未激活，弹出激活弹窗
+        setActivationModalVisible(true);
+      }
+    } catch (error) {
+      console.error('检查注册状态失败:', error);
+      // 出错时也弹窗
+      setActivationModalVisible(true);
     }
   };
 
@@ -625,7 +648,7 @@ export default function DappIndex() {
                   <TouchableOpacity
                     className="flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
                     style={{ backgroundColor: 'rgba(255,210,63,0.2)', borderWidth: 1, borderColor: YELLOW }}
-                    onPress={() => setActivationModalVisible(true)}
+                    onPress={handleActivateClick}
                   >
                     <Ionicons name="warning" size={14} color={YELLOW} />
                     <Text className="text-sm" style={{ color: YELLOW }}>激活</Text>
