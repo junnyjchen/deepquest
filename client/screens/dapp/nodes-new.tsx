@@ -57,6 +57,7 @@ export default function DappNodes() {
   const [pendingNFT, setPendingNFT] = useState('0.00');
   const [submitting, setSubmitting] = useState(false);
   const [selectedCardType, setSelectedCardType] = useState<number | null>(null);
+  const [menuExpanded, setMenuExpanded] = useState(false);
 
   // 加载数据
   const loadData = useCallback(async () => {
@@ -172,7 +173,11 @@ export default function DappNodes() {
 
   return (
     <Screen>
-      <LogoHeader />
+      <LogoHeader
+          walletAddress={walletAddress}
+          menuExpanded={menuExpanded}
+          onToggleMenu={() => setMenuExpanded(!menuExpanded)}
+        />
       <ScrollView style={[styles.container, { backgroundColor: BG_DARK }]}>
         {/* 页面标题 */}
         <View style={styles.header}>

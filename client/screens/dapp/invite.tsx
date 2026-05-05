@@ -48,6 +48,7 @@ export default function InviteBinding() {
   } | null>(null);
   const [alreadyBound, setAlreadyBound] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [menuExpanded, setMenuExpanded] = useState(false);
 
   useEffect(() => {
     initPage();
@@ -186,7 +187,11 @@ export default function InviteBinding() {
 
   return (
     <Screen>
-      <LogoHeader />
+      <LogoHeader 
+        showMenuButton={true}
+        menuExpanded={menuExpanded}
+        onMenuPress={() => setMenuExpanded(!menuExpanded)}
+      />
       <View style={styles.container}>
         {/* 内容区域 */}
         <View style={styles.content}>

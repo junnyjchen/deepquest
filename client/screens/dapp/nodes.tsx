@@ -66,6 +66,7 @@ export default function DappNodes() {
     totalReward: '0.00',
   });
   const [activeTab, setActiveTab] = useState<'buy' | 'mine'>('buy');
+  const [menuExpanded, setMenuExpanded] = useState(false);
 
   // 加载数据
   const loadData = useCallback(async () => {
@@ -208,7 +209,11 @@ export default function DappNodes() {
 
   return (
     <Screen>
-      <LogoHeader />
+      <LogoHeader 
+        showMenuButton={true}
+        menuExpanded={menuExpanded}
+        onMenuPress={() => setMenuExpanded(!menuExpanded)}
+      />
       <View style={[styles.container, { backgroundColor: BG_DARK }]}>
         <ScrollView
           contentContainerStyle={styles.scrollContent}

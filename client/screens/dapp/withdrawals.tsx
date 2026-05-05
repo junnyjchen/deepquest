@@ -63,7 +63,8 @@ export default function DappWithdrawals() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [totalWithdraw, setTotalWithdraw] = useState('0.0');
+  const [menuExpanded, setMenuExpanded] = useState(false);
+	  const [totalWithdraw, setTotalWithdraw] = useState('0.0');
 
   // 加载钱包地址
   const loadWalletAddress = useCallback(async () => {
@@ -261,7 +262,11 @@ export default function DappWithdrawals() {
 
   return (
     <Screen>
-      <LogoHeader />
+      <LogoHeader 
+        showMenuButton={true}
+        menuExpanded={menuExpanded}
+        onMenuPress={() => setMenuExpanded(!menuExpanded)}
+      />
       <View style={[styles.container, { backgroundColor: BG_DARK }]}>
         {/* 统计卡片 */}
         <View style={styles.statsCard}>

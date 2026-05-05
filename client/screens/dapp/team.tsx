@@ -35,6 +35,7 @@ export default function DappTeam() {
   const [refreshing, setRefreshing] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [teamLoading, setTeamLoading] = useState(false);
+  const [menuExpanded, setMenuExpanded] = useState(false);
 
   // 团队数据
   const [teamData, setTeamData] = useState({
@@ -164,7 +165,11 @@ export default function DappTeam() {
 
   return (
     <Screen>
-      <LogoHeader />
+      <LogoHeader 
+        showMenuButton={true}
+        menuExpanded={menuExpanded}
+        onMenuPress={() => setMenuExpanded(!menuExpanded)}
+      />
       <ScrollView
         className="flex-1"
         style={{ backgroundColor: BG_DARK }}
