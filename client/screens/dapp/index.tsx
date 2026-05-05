@@ -410,12 +410,12 @@ export default function DappIndex() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
       >
-        {/* 顶部导航 - Logo + 语言 */}
+        {/* 顶部导航 - Logo + 语言 + 菜单 */}
         <View className="px-4 pt-3">
-          <LogoHeader />
-
-        {/* 菜单按钮 */}
-        <QuickMenu />
+          <View className="flex-row items-center justify-between">
+            <LogoHeader />
+            <QuickMenu />
+          </View>
         </View>
 
 

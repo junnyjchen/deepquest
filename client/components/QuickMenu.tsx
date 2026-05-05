@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -13,115 +13,73 @@ const BG_CARD_TRANS = 'rgba(255,255,255,0.05)';
 const TEXT_WHITE = '#FFFFFF';
 const TEXT_MUTED = 'rgba(255,255,255,0.5)';
 
-interface QuickMenuProps {
-  onClose?: () => void;
-}
+const menuItems = [
+  { icon: 'person', color: YELLOW, key: 'profile', path: '/profile', titleKey: 'profile.title', descKey: 'profile.myAssets' },
+  { icon: 'people', color: CYAN, key: 'team', path: '/team', titleKey: 'team.title', descKey: 'team.teamRewards' },
+  { icon: 'wallet', color: PURPLE, key: 'rewards', path: '/rewards', titleKey: 'rewards.title', descKey: 'rewards.claimable' },
+  { icon: 'diamond', color: YELLOW, key: 'stakes', path: '/stakes', titleKey: 'stakes.title', descKey: 'stakes.myStakes' },
+  { icon: 'cash', color: CYAN, key: 'withdrawals', path: '/withdrawals', titleKey: 'withdrawals.title', descKey: 'withdrawals.record' },
+  { icon: 'share-social', color: PURPLE, key: 'invite', path: '/invite', titleKey: 'invite.title', descKey: 'invite.inviteFriends' },
+  { icon: 'extension-puzzle', color: YELLOW, key: 'nodes', path: '/nodes', titleKey: 'nodes.title', descKey: 'nodes.earnByNodes' },
+  { icon: 'color-filter', color: CYAN, key: 'nodes-new', path: '/nodes-new', titleKey: 'nodesNew.title', descKey: 'nodesNew.nodeCenter' },
+];
 
-export const QuickMenu: React.FC<QuickMenuProps> = ({ onClose }) => {
+export const QuickMenu: React.FC = () => {
   const { t } = useLanguage();
+  const [isOpen, setIsOpen] = useState(false);
 
   const handleNavigate = (path: string) => {
     router.push(path);
-    onClose?.();
+    setIsOpen(false);
+  };
+
+  const toggleMenu = () => {
+    setIsOpen(!isOpen);
   };
 
   return (
-    <View className="px-4 pb-3">
-      <View 
-        className="rounded-2xl overflow-hidden"
-        style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
-      >
+    <>
+      {/* 菜单按钮 - 收起状态显示 */}
+      {!isOpen && (
         <TouchableOpacity
-          className="flex-row items-center gap-3 p-4 border-b"
-          style={{ borderColor: BORDER_GRAY }}
-          onPress={() => handleNavigate('/profile')}
+          className="w-10 h-10 rounded-xl items-center justify-center"
+          style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
+          onPress={toggleMenu}
         >
-          <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(255,215,0,0.1)' }}>
-            <Ionicons name="person" size={20} color={YELLOW} />
-          </View>
-          <View className="flex-1">
-            <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.title')}</Text>
-            <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('profile.myAssets')}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
+          <Ionicons name="menu" size={22} color={TEXT_WHITE} />
         </TouchableOpacity>
+      )}
 
-        <TouchableOpacity
-          className="flex-row items-center gap-3 p-4 border-b"
-          style={{ borderColor: BORDER_GRAY }}
-          onPress={() => handleNavigate('/team')}
-        >
-          <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(0,240,255,0.1)' }}>
-            <Ionicons name="people" size={20} color={CYAN} />
-          </View>
-          <View className="flex-1">
-            <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('team.title')}</Text>
-            <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('team.teamRewards')}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="flex-row items-center gap-3 p-4 border-b"
-          style={{ borderColor: BORDER_GRAY }}
-          onPress={() => handleNavigate('/stakes')}
-        >
-          <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(208,32,255,0.1)' }}>
-            <Ionicons name="time" size={20} color={PURPLE} />
-          </View>
-          <View className="flex-1">
-            <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.stakes')}</Text>
-            <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('stakes.title')}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="flex-row items-center gap-3 p-4 border-b"
-          style={{ borderColor: BORDER_GRAY }}
-          onPress={() => handleNavigate('/rewards')}
-        >
-          <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(255,215,0,0.1)' }}>
-            <Ionicons name="gift" size={20} color={YELLOW} />
-          </View>
-          <View className="flex-1">
-            <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.rewards')}</Text>
-            <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('rewards.title')}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="flex-row items-center gap-3 p-4 border-b"
-          style={{ borderColor: BORDER_GRAY }}
-          onPress={() => handleNavigate('/withdrawals')}
-        >
-          <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(0,240,255,0.1)' }}>
-            <Ionicons name="wallet-outline" size={20} color={CYAN} />
-          </View>
-          <View className="flex-1">
-            <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.withdrawals')}</Text>
-            <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('withdrawals.title')}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="flex-row items-center gap-3 p-4"
-          onPress={() => handleNavigate('/nodes')}
-        >
-          <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(208,32,255,0.1)' }}>
-            <Ionicons name="ribbon" size={20} color={PURPLE} />
-          </View>
-          <View className="flex-1">
-            <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.nodes')}</Text>
-            <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('nodes.subtitle')}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
-        </TouchableOpacity>
-      </View>
-    </View>
+      {/* 菜单内容 - 展开状态 */}
+      {isOpen && (
+        <View className="flex-1 flex-row items-center gap-2">
+          <TouchableOpacity
+            className="w-10 h-10 rounded-xl items-center justify-center"
+            style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
+            onPress={toggleMenu}
+          >
+            <Ionicons name="close" size={22} color={TEXT_WHITE} />
+          </TouchableOpacity>
+          
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle="items-center gap-2"
+          >
+            {menuItems.map((item) => (
+              <TouchableOpacity
+                key={item.key}
+                className="flex-row items-center gap-2 px-3 py-2 rounded-xl"
+                style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
+                onPress={() => handleNavigate(item.path)}
+              >
+                <Ionicons name={item.icon as any} size={16} color={item.color} />
+                <Text className="text-xs text-white font-medium">{t(item.titleKey)}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+    </>
   );
-};
-
-export default QuickMenu;
+}
