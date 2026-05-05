@@ -99,6 +99,7 @@ export default function DappIndex() {
   const [isOnChainRegistered, setIsOnChainRegistered] = useState(false);
   const [activationModalVisible, setActivationModalVisible] = useState(false);
   const [activating, setActivating] = useState(false);
+  const [activationReferrer, setActivationReferrer] = useState('');
 
   // SOL 代币颜色
   const SOL_PURPLE = '#9945FF';
@@ -302,15 +303,31 @@ export default function DappIndex() {
       return;
     }
 
-    try {
-      setActivating(true);
-
-      // 获取推荐人
-      let referrer = '0x0000000000000000000000000000000000000000'; // 默认零地址
+    // 优先使用用户输入的推荐人地址
+    let referrer = activationReferrer.trim() || '';
+    
+    // 如果没有输入，检查本地存储的推荐人
+    if (!referrer) {
       const pendingRef = await AsyncStorage.getItem('@deepquest_pending_referrer');
       if (pendingRef) {
         referrer = pendingRef;
       }
+    }
+
+    // 如果仍然没有推荐人，提示用户
+    if (!referrer) {
+      Alert.alert('提示', '激活需要提供节点推荐人地址，请联系您的推荐人获取地址后重新激活。');
+      return;
+    }
+
+    // 验证地址格式
+    if (!/^0x[a-fA-F0-9]{40}$/.test(referrer)) {
+      Alert.alert('错误', '推荐人地址格式不正确，请检查后重试。');
+      return;
+    }
+
+    try {
+      setActivating(true);
 
       // 调用合约注册
       const { provider } = await connectWallet();
@@ -334,7 +351,14 @@ export default function DappIndex() {
 
     } catch (error: any) {
       console.error('激活失败:', error);
-      Alert.alert('激活失败', error.message || '请确保钱包已连接并有足够的手续费');
+      // 解析合约错误信息
+      let errorMsg = '请确保钱包已连接并有足够的手续费';
+      if (error.message && error.message.includes('invalid referrer')) {
+        errorMsg = '推荐人必须是节点会员，请联系您的推荐人确认其是否为有效节点。';
+      } else if (error.message) {
+        errorMsg = error.message.substring(0, 100);
+      }
+      Alert.alert('激活失败', errorMsg);
     } finally {
       setActivating(false);
     }
@@ -700,9 +724,24 @@ export default function DappIndex() {
               
               <View style={styles.activationInfoBox}>
                 <Text style={styles.activationInfoLabel}>激活说明:</Text>
-                <Text style={styles.activationInfoText}>1. 点击下方「立即激活」按钮</Text>
-                <Text style={styles.activationInfoText}>2. 在钱包中确认交易</Text>
-                <Text style={styles.activationInfoText}>3. 等待区块链确认（约15-30秒）</Text>
+                <Text style={styles.activationInfoText}>1. 激活需要有效的节点推荐人地址</Text>
+                <Text style={styles.activationInfoText}>2. 点击下方「立即激活」按钮</Text>
+                <Text style={styles.activationInfoText}>3. 在钱包中确认交易</Text>
+                <Text style={styles.activationInfoText}>4. 等待区块链确认（约15-30秒）</Text>
+              </View>
+
+              {/* 推荐人地址输入 */}
+              <View style={styles.referrerInputBox}>
+                <Text style={styles.referrerInputLabel}>节点推荐人地址:</Text>
+                <TextInput
+                  style={styles.referrerInput}
+                  value={activationReferrer}
+                  onChangeText={setActivationReferrer}
+                  placeholder="0x..."
+                  placeholderTextColor={TEXT_MUTED}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
               </View>
 
               <View style={styles.activationModalButtons}>
@@ -1271,5 +1310,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: BG_DARK,
+  },
+  referrerInputBox: {
+    marginBottom: 16,
+  },
+  referrerInputLabel: {
+    fontSize: 12,
+    color: TEXT_MUTED,
+    marginBottom: 6,
+  },
+  referrerInput: {
+    backgroundColor: BG_DARK,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: CYAN,
+    borderWidth: 1,
+    borderColor: BORDER_GRAY,
   },
 });
