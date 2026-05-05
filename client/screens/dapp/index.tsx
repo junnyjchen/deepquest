@@ -32,6 +32,7 @@ import {
   claimNft,
   claimDTeam,
   getUserFromChain,
+  isUserRegisteredOnChain,
   registerUserOnChain,
   DQPROJECT_ABI,
 } from '@/utils/web3';
@@ -261,12 +262,11 @@ export default function DappIndex() {
   const syncUserInfo = async (address: string) => {
     try {
       // 1. 检查链上注册状态
-      const chainUser = await getUserFromChain(address);
-      const onChainRegistered = chainUser !== null;
-      setIsOnChainRegistered(onChainRegistered);
+      const registered = await isUserRegisteredOnChain(address);
+      setIsOnChainRegistered(registered);
 
       // 2. 如果未在链上注册，显示激活弹窗
-      if (!onChainRegistered) {
+      if (!registered) {
         console.log('[DApp] 用户未在链上注册，显示激活提示');
         setActivationModalVisible(true);
         return;
@@ -284,8 +284,8 @@ export default function DappIndex() {
   const checkOnChainRegistration = async () => {
     if (!walletAddress) return;
     try {
-      const chainUser = await getUserFromChain(walletAddress);
-      const registered = chainUser !== null;
+      // 使用 isRegistered 方法检查，更可靠
+      const registered = await isUserRegisteredOnChain(walletAddress);
       setIsOnChainRegistered(registered);
       if (registered) {
         setActivationModalVisible(false);

@@ -175,8 +175,9 @@ export const getUserFromChain = async (userAddress: string): Promise<{
   try {
     const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
     const user = await contract.users(userAddress);
-
-    if (user.referrer === '0x0000000000000000000000000000000000000000') {
+    
+    // 检查是否未注册（referrer 为零地址）
+    if (!user.referrer || user.referrer === '0x0000000000000000000000000000000000000000') {
       return null;
     }
 
@@ -187,9 +188,28 @@ export const getUserFromChain = async (userAddress: string): Promise<{
       totalInvest: ethers.formatEther(user.totalInvest),
       teamInvest: ethers.formatEther(user.teamInvest),
     };
-  } catch (error) {
+  } catch (error: any) {
+    // 如果是 require(false) 错误，认为用户未注册
+    if (error.code === 'CALL_EXCEPTION' || error.message?.includes('require')) {
+      console.log('[Web3] 用户未注册或数据不存在');
+      return null;
+    }
     console.error('[Web3] 获取用户信息失败:', error);
     return null;
+  }
+};
+
+/**
+ * 检查用户是否已注册（链上）
+ */
+export const isUserRegisteredOnChain = async (userAddress: string): Promise<boolean> => {
+  try {
+    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
+    const result = await contract.isRegistered(userAddress);
+    return result === true;
+  } catch (error) {
+    console.error('[Web3] 检查注册状态失败:', error);
+    return false;
   }
 };
 
