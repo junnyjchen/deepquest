@@ -214,6 +214,10 @@ export default function DappIndex() {
       // 保存钱包地址
       await AsyncStorage.setItem(WALLET_STORAGE_KEY, address);
       setWalletAddress(address);
+      
+      // 同步获取用户信息
+      await syncUserInfo(address);
+      
       Alert.alert('成功', `钱包已连接: ${address.slice(0, 10)}...`);
     } catch (error: any) {
       console.error('连接钱包失败:', error);
@@ -228,6 +232,43 @@ export default function DappIndex() {
       } else {
         Alert.alert('错误', error.message || '钱包连接失败');
       }
+    }
+  };
+  
+  // 同步用户信息：检查注册状态，未注册则注册
+  const syncUserInfo = async (address: string) => {
+    try {
+      // 1. 检查是否已注册
+      const { is_registered, referrer_address } = await dappApi.checkRegistered(address);
+      
+      if (is_registered) {
+        // 已注册，获取用户信息
+        const userInfo = await dappApi.getUserInfo(address);
+        console.log('[DApp] 用户已注册，获取信息:', userInfo);
+        // TODO: 更新用户状态
+      } else {
+        // 未注册，尝试注册
+        console.log('[DApp] 用户未注册，需要注册');
+        // 如果有待处理的推荐人，使用待处理推荐人
+        let referrer = referrer_address || '';
+        const pendingRef = await AsyncStorage.getItem('@deepquest_pending_referrer');
+        if (pendingRef) {
+          referrer = pendingRef;
+          await AsyncStorage.removeItem('@deepquest_pending_referrer');
+        }
+        
+        if (referrer) {
+          try {
+            // 调用后端注册（tx_hash 为空，因为注册不上链）
+            const result = await dappApi.register(address, referrer, '');
+            console.log('[DApp] 用户注册成功:', result);
+          } catch (regError: any) {
+            console.log('[DApp] 注册失败（可能推荐人不存在）:', regError.message);
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('[DApp] 同步用户信息失败:', error);
     }
   };
 
