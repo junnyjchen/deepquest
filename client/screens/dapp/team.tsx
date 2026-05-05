@@ -130,8 +130,20 @@ export default function DappTeam() {
 
   const handleCopyInviteCode = async () => {
     if (walletAddress) {
-      await Clipboard.setStringAsync(walletAddress);
+      const inviteCode = walletAddress;
+      await Clipboard.setStringAsync(inviteCode);
       Alert.alert('复制成功', '邀请码已复制到剪贴板');
+    } else {
+      Alert.alert('提示', '请先连接钱包');
+    }
+  };
+
+  // 复制完整邀请链接
+  const handleCopyInviteLink = async () => {
+    if (walletAddress) {
+      const inviteLink = `${process.env.EXPO_PUBLIC_APP_URL || 'https://app.deepquest.io'}/invite?ref=${walletAddress}`;
+      await Clipboard.setStringAsync(inviteLink);
+      Alert.alert('复制成功', '邀请链接已复制到剪贴板');
     } else {
       Alert.alert('提示', '请先连接钱包');
     }
@@ -293,7 +305,7 @@ export default function DappTeam() {
             <TouchableOpacity
               className="mt-4 py-3 rounded-xl items-center"
               style={{ backgroundColor: YELLOW }}
-              onPress={handleCopyInviteCode}
+              onPress={handleCopyInviteLink}
             >
               <Text className="text-sm font-semibold" style={{ color: '#333' }}>复制邀请链接</Text>
             </TouchableOpacity>
