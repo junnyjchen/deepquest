@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import QuickMenu from '@/components/QuickMenu';
+import { QuickMenu } from '@/components/QuickMenu';
 import {
   View,
   Text,
