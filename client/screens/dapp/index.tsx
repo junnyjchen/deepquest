@@ -303,31 +303,40 @@ export default function DappIndex() {
       return;
     }
 
-    // 优先使用用户输入的推荐人地址
-    let referrer = activationReferrer.trim() || '';
-    
-    // 如果没有输入，检查本地存储的推荐人
-    if (!referrer) {
-      const pendingRef = await AsyncStorage.getItem('@deepquest_pending_referrer');
-      if (pendingRef) {
-        referrer = pendingRef;
-      }
-    }
-
-    // 如果仍然没有推荐人，提示用户
-    if (!referrer) {
-      Alert.alert('提示', '激活需要提供节点推荐人地址，请联系您的推荐人获取地址后重新激活。');
-      return;
-    }
-
-    // 验证地址格式
-    if (!/^0x[a-fA-F0-9]{40}$/.test(referrer)) {
-      Alert.alert('错误', '推荐人地址格式不正确，请检查后重试。');
-      return;
-    }
-
     try {
       setActivating(true);
+
+      // 先检查是否已经注册
+      const alreadyRegistered = await isUserRegisteredOnChain(walletAddress);
+      if (alreadyRegistered) {
+        setIsOnChainRegistered(true);
+        setActivationModalVisible(false);
+        Alert.alert('提示', '账户已经激活，无需重复激活！');
+        return;
+      }
+
+      // 优先使用用户输入的推荐人地址
+      let referrer = activationReferrer.trim() || '';
+      
+      // 如果没有输入，检查本地存储的推荐人
+      if (!referrer) {
+        const pendingRef = await AsyncStorage.getItem('@deepquest_pending_referrer');
+        if (pendingRef) {
+          referrer = pendingRef;
+        }
+      }
+
+      // 如果仍然没有推荐人，提示用户
+      if (!referrer) {
+        Alert.alert('提示', '激活需要提供节点推荐人地址，请联系您的推荐人获取地址后重新激活。');
+        return;
+      }
+
+      // 验证地址格式
+      if (!/^0x[a-fA-F0-9]{40}$/.test(referrer)) {
+        Alert.alert('错误', '推荐人地址格式不正确，请检查后重试。');
+        return;
+      }
 
       // 调用合约注册
       const { provider } = await connectWallet();
