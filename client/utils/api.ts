@@ -425,7 +425,14 @@ export const dappApi = {
       method: 'POST',
       body: JSON.stringify({ wallet_address }),
     }),
-  
+
+  // 绑定推荐人
+  bindReferrer: (wallet_address: string, referrer_address: string) =>
+    request<any>('/api/v1/dapp/referrer', {
+      method: 'PUT',
+      body: JSON.stringify({ wallet_address, referrer_address }),
+    }),
+
   // 入金
   deposit: (wallet_address: string, amount: string, tx_hash: string) =>
     request<any>('/api/v1/dapp/deposit', {

@@ -1219,6 +1219,82 @@ router.post('/activate', async (req, res) => {
   }
 });
 
+// 绑定/更新推荐人关系
+router.put('/referrer', async (req, res) => {
+  try {
+    const { wallet_address, referrer_address } = req.body;
+
+    if (!wallet_address || !referrer_address) {
+      return res.status(400).json({
+        code: 400,
+        message: '缺少必要参数'
+      });
+    }
+
+    // 验证推荐人地址格式
+    if (!/^0x[a-fA-F0-9]{40}$/.test(referrer_address)) {
+      return res.status(400).json({
+        code: 400,
+        message: '推荐人地址格式不正确'
+      });
+    }
+
+    // 不能绑定自己
+    if (wallet_address.toLowerCase() === referrer_address.toLowerCase()) {
+      return res.status(400).json({
+        code: 400,
+        message: '不能绑定自己为推荐人'
+      });
+    }
+
+    // 查询用户是否存在
+    const { data: existing, error: findError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('wallet_address', wallet_address.toLowerCase())
+      .single();
+
+    if (findError || !existing) {
+      return res.status(404).json({
+        code: 404,
+        message: '用户不存在，请先注册'
+      });
+    }
+
+    // 更新推荐人关系
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({
+        referrer_address: referrer_address.toLowerCase(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('wallet_address', wallet_address.toLowerCase());
+
+    if (updateError) {
+      console.error('[DApp] 更新推荐人失败:', updateError);
+      return res.status(500).json({
+        code: 500,
+        message: '绑定推荐人失败'
+      });
+    }
+
+    res.json({
+      code: 0,
+      message: '绑定推荐人成功',
+      data: {
+        wallet_address: wallet_address.toLowerCase(),
+        referrer_address: referrer_address.toLowerCase()
+      }
+    });
+  } catch (error) {
+    console.error('绑定推荐人失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
 // 入金
 router.post('/deposit', async (req, res) => {
   try {

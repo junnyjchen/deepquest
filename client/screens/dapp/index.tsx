@@ -407,7 +407,15 @@ export default function DappIndex() {
         return;
       }
 
-      // 调用合约注册
+      // 1. 先绑定推荐人关系到后端（不管激活成功失败，先绑定）
+      try {
+        await dappApi.bindReferrer(walletAddress, referrer);
+        console.log('[DApp] 推荐人绑定成功');
+      } catch (bindErr) {
+        console.log('[DApp] 推荐人绑定失败，继续激活:', bindErr);
+      }
+
+      // 2. 调用合约注册
       const { provider } = await connectWallet();
       const signer = await provider.getSigner();
       const tx = await registerUserOnChain(signer, referrer);
