@@ -870,6 +870,9 @@ router.get('/user-info/:wallet_address', async (req, res) => {
         wallet_address: user.wallet_address,
         referrer_address: user.referrer_address,
         is_registered: true,
+        is_activated: user.is_activated || false,
+        activation_tx_hash: user.activation_tx_hash || null,
+        activated_at: user.activated_at || null,
         is_node: !!user.level && user.level > 0,
         level: user.level || 0,
         total_invest: user.total_invest || '0',
@@ -1155,12 +1158,15 @@ router.post('/activate', async (req, res) => {
 
     // 如果已经激活，直接返回
     if (existing.is_activated) {
+      // 从链上再次查询确认
+      const chainTxHash = await getUserRegisterTxHash(wallet_address);
       return res.json({
         code: 0,
         message: '用户已激活',
         data: { 
           wallet_address: existing.wallet_address,
-          is_activated: true
+          is_activated: true,
+          activation_tx_hash: chainTxHash || existing.activation_tx_hash
         }
       });
     }
