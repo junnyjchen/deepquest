@@ -238,7 +238,7 @@ export default function DappIndex() {
       await AsyncStorage.setItem(WALLET_STORAGE_KEY, address);
       setWalletAddress(address);
       
-      // 1. 从后端获取用户信息
+      // 1. 从后端获取用户信息（包含激活状态）
       let userData = null;
       try {
         userData = await dappApi.getUserInfo(address);
@@ -251,41 +251,47 @@ export default function DappIndex() {
       if (!userData) {
         try {
           const referrer = await AsyncStorage.getItem('@deepquest_pending_referrer') || pendingInviteReferrer || '';
-          await dappApi.register(address, referrer, '');
+          userData = await dappApi.register(address, referrer, '');
           console.log('[DApp] 后端注册成功');
         } catch (err) {
-          console.log('[DApp] 后端注册跳过（可能已注册）:', err);
+          console.log('[DApp] 后端注册跳过:', err);
         }
       }
       
-      // 3. 查询链上激活状态
-      const registered = await isUserRegisteredOnChain(address);
-      console.log('[DApp] 链上激活状态:', registered);
-      
-      // 4. 如果链上有用户 → 设置已激活，同步状态到后端
-      if (registered) {
+      // 3. 检查后端返回的激活状态
+      if (userData?.data?.is_activated) {
+        // 后端已激活，前端直接认为已激活
+        console.log('[DApp] 后端已激活，直接设置已激活');
         setIsOnChainRegistered(true);
-        try {
-          // 同步激活状态到后端
-          await dappApi.register(address, '', '');
-          console.log('[DApp] 激活状态同步到后端成功');
-        } catch (err) {
-          console.log('[DApp] 同步状态跳过:', err);
-        }
       } else {
-        // 5. 如果链上没有用户 → 提示用户激活
-        setIsOnChainRegistered(false);
-        Alert.alert(
-          '账户未激活',
-          '您的账户尚未激活。激活后即可享受完整功能。',
-          [
-            { text: '取消', style: 'cancel' },
-            { 
-              text: '立即激活', 
-              onPress: () => handleActivateClick() 
-            }
-          ]
-        );
+        // 后端未激活，再查询链上状态
+        const registered = await isUserRegisteredOnChain(address);
+        console.log('[DApp] 链上激活状态:', registered);
+        
+        if (registered) {
+          // 链上已激活，同步状态到后端
+          setIsOnChainRegistered(true);
+          try {
+            await dappApi.register(address, '', '');
+            console.log('[DApp] 激活状态同步到后端成功');
+          } catch (err) {
+            console.log('[DApp] 同步状态跳过:', err);
+          }
+        } else {
+          // 链上也未激活，提示用户激活
+          setIsOnChainRegistered(false);
+          Alert.alert(
+            '账户未激活',
+            '您的账户尚未激活。激活后即可享受完整功能。',
+            [
+              { text: '取消', style: 'cancel' },
+              { 
+                text: '立即激活', 
+                onPress: () => handleActivateClick() 
+              }
+            ]
+          );
+        }
       }
       
       Alert.alert('成功', `钱包已连接: ${address.slice(0, 10)}...`);
