@@ -48,8 +48,9 @@ export async function getAllUsersFromChain(): Promise<string[]> {
     // 从事件中提取用户地址
     const usersSet = new Set<string>();
     for (const event of events) {
-      if (event.args && event.args[0]) {
-        usersSet.add(event.args[0]);
+      const user = 'args' in event ? event.args?.[0] : undefined;
+      if (typeof user === 'string') {
+        usersSet.add(user);
       }
     }
     

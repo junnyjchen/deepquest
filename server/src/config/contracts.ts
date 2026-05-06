@@ -21,6 +21,16 @@ export const DQ_ABI = [
     "stateMutability": "nonpayable",
     "type": "function"
   },
+    // 用户注册事件
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "user", "type": "address" },
+      { "indexed": true, "internalType": "address", "name": "referrer", "type": "address" }
+    ],
+    "name": "Register",
+    "type": "event"
+  },
   // 存款
   {
     "inputs": [
