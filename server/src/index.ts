@@ -50,15 +50,6 @@ app.get('/api/v1/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
-// ============ 启动链上数据同步定时任务 ============
-import { startSyncTask, syncChainData } from './utils/sync-chain-service';
-
-// 启动定时同步任务（默认每5分钟同步一次）
-if (process.env.ENABLE_CHAIN_SYNC !== 'false') {
-  startSyncTask();
-  console.log('[Server] 链上数据同步定时任务已启动');
-}
-
 // ============ Dashboard ============
 app.get('/api/v1/dashboard/stats', async (req, res) => {
   console.log('[Dashboard] Request from:', req.headers.origin, 'IP:', req.ip);

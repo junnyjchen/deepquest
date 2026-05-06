@@ -1,10 +1,11 @@
 /**
  * 链上数据同步服务
- * 定时从区块链同步数据到数据库，保证数据一致性
+ * 从区块链同步数据到数据库，保证数据一致性
+ * 
+ * 使用方式：外部服务器定时调用 /api/v1/dapp/sync 接口
  */
 
 import { getSupabaseClient } from '../storage/database/supabase-client';
-import { getUserInfoFromChain, isUserRegisteredOnChain } from '../utils/bsc-web3';
 import { DQ_CONTRACT_ADDRESS, DQ_ABI } from '../config/contracts';
 import { ethers } from 'ethers';
 
@@ -14,29 +15,27 @@ const supabase = getSupabaseClient();
 const BSC_RPC_URL = process.env.BSC_RPC_URL || 'https://bsc-dataseed.binance.org/';
 const provider = new ethers.JsonRpcProvider(BSC_RPC_URL);
 
-// 同步间隔（毫秒）- 默认 5 分钟
-const SYNC_INTERVAL = parseInt(process.env.CHAIN_SYNC_INTERVAL || '300000'); // 5分钟
-
 // 单次同步最大用户数（防止 Gas 限制）
 const BATCH_SIZE = 50;
 
 // 记录同步状态
 let syncInProgress = false;
 let lastSyncTime: Date | null = null;
-let syncError: string | null = null;
+let lastError: string | null = null;
+let lastSyncResult: { totalUsers: number; syncedUsers: number; failedUsers: number } | null = null;
 
 /**
  * 获取合约实例
  */
-async function getContract() {
+function getContract() {
   return new ethers.Contract(DQ_CONTRACT_ADDRESS, DQ_ABI, provider);
 }
 
 /**
  * 从链上获取所有用户地址
  */
-async function getAllUsersFromChain(): Promise<string[]> {
-  const contract = await getContract();
+export async function getAllUsersFromChain(): Promise<string[]> {
+  const contract = getContract();
   try {
     const totalUsers = await contract.allUsersLength();
     console.log(`[ChainSync] 链上总用户数: ${totalUsers}`);
@@ -61,7 +60,7 @@ async function getAllUsersFromChain(): Promise<string[]> {
 /**
  * 从链上获取单个用户信息
  */
-async function getChainUserInfo(userAddress: string): Promise<{
+export async function getChainUserInfo(userAddress: string): Promise<{
   referrer: string;
   directCount: number;
   level: number;
@@ -72,7 +71,7 @@ async function getChainUserInfo(userAddress: string): Promise<{
   dLevel: number;
 } | null> {
   try {
-    const contract = await getContract();
+    const contract = getContract();
     const userInfo = await contract.getUser(userAddress);
     
     return {
@@ -174,6 +173,17 @@ async function syncUserToDatabase(userAddress: string, userInfo: {
 }
 
 /**
+ * 同步单个用户（供外部调用）
+ */
+export async function syncSingleUser(userAddress: string): Promise<boolean> {
+  const userInfo = await getChainUserInfo(userAddress);
+  if (userInfo) {
+    return await syncUserToDatabase(userAddress, userInfo);
+  }
+  return false;
+}
+
+/**
  * 执行一次完整同步
  */
 export async function syncChainData(): Promise<{
@@ -211,6 +221,9 @@ export async function syncChainData(): Promise<{
 
     if (totalUsers === 0) {
       console.log('[ChainSync] 链上无用户数据');
+      lastSyncTime = new Date();
+      lastError = null;
+      lastSyncResult = { totalUsers: 0, syncedUsers: 0, failedUsers: 0 };
       syncInProgress = false;
       return {
         success: true,
@@ -257,7 +270,8 @@ export async function syncChainData(): Promise<{
 
     const duration = Date.now() - startTime;
     lastSyncTime = new Date();
-    syncError = null;
+    lastError = null;
+    lastSyncResult = { totalUsers, syncedUsers, failedUsers };
 
     console.log(`[ChainSync] ========== 同步完成 ==========`);
     console.log(`[ChainSync] 总用户: ${totalUsers}, 成功: ${syncedUsers}, 失败: ${failedUsers}`);
@@ -272,7 +286,8 @@ export async function syncChainData(): Promise<{
     };
   } catch (error: any) {
     const duration = Date.now() - startTime;
-    syncError = error.message;
+    lastError = error.message;
+    lastSyncResult = { totalUsers, syncedUsers, failedUsers };
     console.error('[ChainSync] 同步失败:', error);
 
     return {
@@ -295,43 +310,12 @@ export function getSyncStatus(): {
   inProgress: boolean;
   lastSyncTime: Date | null;
   lastError: string | null;
-  interval: number;
+  lastResult: { totalUsers: number; syncedUsers: number; failedUsers: number } | null;
 } {
   return {
     inProgress: syncInProgress,
     lastSyncTime,
-    lastError: syncError,
-    interval: SYNC_INTERVAL,
+    lastError,
+    lastResult: lastSyncResult,
   };
-}
-
-// 仅在 Node.js 环境中启动定时任务
-if (process.env.NODE_ENV !== 'test') {
-  // 启动定时同步任务
-  let syncInterval: NodeJS.Timeout | null = null;
-
-  export function startSyncTask() {
-    if (syncInterval) {
-      console.log('[ChainSync] 定时任务已启动');
-      return;
-    }
-
-    console.log(`[ChainSync] 启动定时同步任务，间隔: ${SYNC_INTERVAL / 1000}秒`);
-
-    // 立即执行一次同步
-    syncChainData().catch(console.error);
-
-    // 设置定时同步
-    syncInterval = setInterval(() => {
-      syncChainData().catch(console.error);
-    }, SYNC_INTERVAL);
-  }
-
-  export function stopSyncTask() {
-    if (syncInterval) {
-      clearInterval(syncInterval);
-      syncInterval = null;
-      console.log('[ChainSync] 定时同步任务已停止');
-    }
-  }
 }
