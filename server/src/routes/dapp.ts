@@ -1955,4 +1955,55 @@ router.post('/swap-dq', async (req, res) => {
   }
 });
 
+/**
+ * 手动触发链上数据同步
+ * POST /api/v1/dapp/sync
+ */
+router.post('/sync', async (req, res) => {
+  try {
+    // 动态导入避免循环依赖
+    const { syncChainData, getSyncStatus, startSyncTask, stopSyncTask } = await import('../utils/sync-chain-service');
+    
+    // 启动定时任务
+    startSyncTask();
+    
+    // 立即执行一次同步
+    const result = await syncChainData();
+    
+    res.json({
+      code: 0,
+      message: '同步完成',
+      data: result
+    });
+  } catch (error: any) {
+    console.error('同步失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: error.message || '同步失败'
+    });
+  }
+});
+
+/**
+ * 获取同步状态
+ * GET /api/v1/dapp/sync/status
+ */
+router.get('/sync/status', async (req, res) => {
+  try {
+    const { getSyncStatus } = await import('../utils/sync-chain-service');
+    const status = getSyncStatus();
+    
+    res.json({
+      code: 0,
+      data: status
+    });
+  } catch (error: any) {
+    console.error('获取同步状态失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: error.message || '获取状态失败'
+    });
+  }
+});
+
 export default router;

@@ -194,6 +194,47 @@ export const DQCARD_ABI = [
     ],
     "stateMutability": "view",
     "type": "function"
+  },
+  // 获取所有用户数量
+  {
+    "inputs": [],
+    "name": "allUsersLength",
+    "outputs": [
+      { "internalType": "uint256", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  // 获取指定索引的用户地址
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "", "type": "uint256" }
+    ],
+    "name": "allUsers",
+    "outputs": [
+      { "internalType": "address", "type": "address" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  // 获取用户完整信息（新版本接口）
+  {
+    "inputs": [
+      { "internalType": "address", "name": "_user", "type": "address" }
+    ],
+    "name": "getUser",
+    "outputs": [
+      { "internalType": "address", "name": "referrer", "type": "address" },
+      { "internalType": "uint256", "name": "directCount", "type": "uint256" },
+      { "internalType": "uint8", "name": "level", "type": "uint8" },
+      { "internalType": "uint256", "name": "totalInvest", "type": "uint256" },
+      { "internalType": "uint256", "name": "teamInvest", "type": "uint256" },
+      { "internalType": "uint256", "name": "energy", "type": "uint256" },
+      { "internalType": "uint256", "name": "lpShares", "type": "uint256" },
+      { "internalType": "uint8", "name": "dLevel", "type": "uint8" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   }
 ];
 
