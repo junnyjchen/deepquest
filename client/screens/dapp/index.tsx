@@ -238,8 +238,35 @@ export default function DappIndex() {
       await AsyncStorage.setItem(WALLET_STORAGE_KEY, address);
       setWalletAddress(address);
       
-      // 同步获取用户信息
-      await syncUserInfo(address);
+      // 1. 先注册到后端（如果未注册）
+      try {
+        const referrer = await AsyncStorage.getItem('@deepquest_pending_referrer') || pendingInviteReferrer || '';
+        await dappApi.register(address, referrer, '');
+        console.log('[DApp] 后端注册成功');
+      } catch (err) {
+        // 后端注册可能失败（比如已注册），忽略错误继续
+        console.log('[DApp] 后端注册跳过:', err);
+      }
+      
+      // 2. 查询链上激活状态
+      const registered = await isUserRegisteredOnChain(address);
+      setIsOnChainRegistered(registered);
+      console.log('[DApp] 链上激活状态:', registered);
+
+      // 3. 如果未激活，弹出激活提示
+      if (!registered) {
+        Alert.alert(
+          '账户未激活',
+          '您的账户尚未激活。激活后即可享受完整功能。',
+          [
+            { text: '取消', style: 'cancel' },
+            { 
+              text: '立即激活', 
+              onPress: () => handleActivateClick() 
+            }
+          ]
+        );
+      }
       
       Alert.alert('成功', `钱包已连接: ${address.slice(0, 10)}...`);
     } catch (error: any) {
@@ -371,8 +398,18 @@ export default function DappIndex() {
       // 监听交易确认
       await tx.wait();
       
-      // 重新检查注册状态
-      await checkOnChainRegistration();
+      // 交易确认后，同步状态到后端
+      setTimeout(async () => {
+        try {
+          await dappApi.register(walletAddress, activationReferrer, tx.hash);
+          console.log('[DApp] 激活成功，同步后端成功');
+        } catch (err) {
+          console.log('[DApp] 同步后端跳过（可能已注册）:', err);
+        }
+        
+        // 重新检查注册状态
+        await checkOnChainRegistration();
+      }, 3000); // 等待3秒确保链上状态已更新
 
     } catch (error: any) {
       console.error('激活失败:', error);
