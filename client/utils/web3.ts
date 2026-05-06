@@ -165,36 +165,34 @@ export const getSignedContract = async (
 /**
  * 获取用户信息（从链上）
  */
-export const getUserFromChain = async (userAddress: string): Promise<{
-  referrer: string;
-  directCount: number;
-  level: number;
-  totalInvest: string;
-  teamInvest: string;
-} | null> => {
+export const getUserFromChain = async (userAddress: string) => {
+  const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
+
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
-    const user = await contract.users(userAddress);
-    
-    // 检查是否未注册（referrer 为零地址）
-    if (!user.referrer || user.referrer === '0x0000000000000000000000000000000000000000') {
-      return null;
-    }
+    const [referrer, directCount, level, totalInvest, teamInvest, energy, lpShares, dLevel] =
+      await contract.getUser(userAddress);
+
+    const owner = await contract.owner();
+
+    // 未注册判定：referrer=0 且 不是 owner
+    const isRegistered =
+      referrer !== ethers.ZeroAddress || userAddress.toLowerCase() === owner.toLowerCase();
+
+    if (!isRegistered) return null;
 
     return {
-      referrer: user.referrer,
-      directCount: Number(user.directCount),
-      level: Number(user.level),
-      totalInvest: ethers.formatEther(user.totalInvest),
-      teamInvest: ethers.formatEther(user.teamInvest),
+      referrer,
+      directCount: Number(directCount),
+      level: Number(level),
+      totalInvest: ethers.formatEther(totalInvest),
+      teamInvest: ethers.formatEther(teamInvest),
+      energy: ethers.formatEther(energy),
+      lpShares: ethers.formatEther(lpShares),
+      dLevel: Number(dLevel),
     };
-  } catch (error: any) {
-    // 如果是 require(false) 错误，认为用户未注册
-    if (error.code === 'CALL_EXCEPTION' || error.message?.includes('require')) {
-      console.log('[Web3] 用户未注册或数据不存在');
-      return null;
-    }
-    console.error('[Web3] 获取用户信息失败:', error);
+  } catch (e) {
+    // 如果调用本身 revert / ABI 不匹配，也返回 null（但建议日志打出来）
+    console.error("[Web3] getUser 调用失败(可能 ABI/地址不匹配):", e);
     return null;
   }
 };
@@ -203,14 +201,8 @@ export const getUserFromChain = async (userAddress: string): Promise<{
  * 检查用户是否已注册（链上）
  */
 export const isUserRegisteredOnChain = async (userAddress: string): Promise<boolean> => {
-  try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
-    const result = await contract.isRegistered(userAddress);
-    return result === true;
-  } catch (error) {
-    console.error('[Web3] 检查注册状态失败:', error);
-    return false;
-  }
+  const user = await getUserFromChain(userAddress);
+  return user !== null;
 };
 
 /**
