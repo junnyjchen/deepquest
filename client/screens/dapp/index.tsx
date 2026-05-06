@@ -418,13 +418,18 @@ export default function DappIndex() {
       // 监听交易确认
       await tx.wait();
       
-      // 交易确认后，同步状态到后端
+      // 交易确认后，调用后端激活接口
       setTimeout(async () => {
         try {
-          await dappApi.register(walletAddress, activationReferrer, tx.hash);
-          console.log('[DApp] 激活成功，同步后端成功');
+          // 调用后端激活接口，后端会去链上查询注册交易 hash
+          const result = await dappApi.activate(walletAddress);
+          console.log('[DApp] 激活成功:', result);
+          
+          if (result.is_activated) {
+            setIsOnChainRegistered(true);
+          }
         } catch (err) {
-          console.log('[DApp] 同步后端跳过（可能已注册）:', err);
+          console.log('[DApp] 激活同步失败:', err);
         }
         
         // 重新检查注册状态

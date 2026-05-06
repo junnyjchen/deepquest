@@ -419,6 +419,13 @@ export const dappApi = {
       body: JSON.stringify({ wallet_address, referrer_address, tx_hash }),
     }),
   
+  // 激活用户 - 后端会去链上查询注册交易 hash
+  activate: (wallet_address: string) =>
+    request<any>('/api/v1/dapp/activate', {
+      method: 'POST',
+      body: JSON.stringify({ wallet_address }),
+    }),
+  
   // 入金
   deposit: (wallet_address: string, amount: string, tx_hash: string) =>
     request<any>('/api/v1/dapp/deposit', {

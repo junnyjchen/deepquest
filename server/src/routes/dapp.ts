@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getSupabaseClient } from '../storage/database/supabase-client';
+import { getUserRegisterTxHash, isUserRegisteredOnChain, getUserInfoFromChain } from '../utils/bsc-web3';
 
 const supabase = getSupabaseClient();
 const router = Router();
@@ -1004,6 +1005,63 @@ router.post('/register', async (req, res) => {
       });
     }
 
+    // 检查用户是否已存在
+    const { data: existing, error: existingError } = await supabase
+      .from('users')
+      .select('wallet_address, is_activated, activation_tx_hash')
+      .eq('wallet_address', wallet_address.toLowerCase())
+      .single();
+
+    if (existing) {
+      // 用户已存在，检查是否需要激活
+      if (!existing.is_activated || !existing.activation_tx_hash) {
+        // 用户存在但未激活，尝试从链上查询注册交易
+        console.log(`[DApp] 用户 ${wallet_address} 存在但未激活，尝试从链上查询注册交易...`);
+        
+        // 从链上查询注册交易 hash
+        const chainTxHash = await getUserRegisterTxHash(wallet_address);
+        
+        if (chainTxHash) {
+          // 找到了链上注册交易，更新用户状态
+          const { error: updateError } = await supabase
+            .from('users')
+            .update({
+              is_activated: true,
+              activation_tx_hash: chainTxHash,
+              activated_at: new Date().toISOString()
+            })
+            .eq('wallet_address', wallet_address.toLowerCase());
+
+          if (updateError) {
+            console.error('[DApp] 更新激活状态失败:', updateError);
+          } else {
+            console.log(`[DApp] 用户 ${wallet_address} 激活成功，tx: ${chainTxHash}`);
+            return res.json({
+              code: 0,
+              message: '用户已激活',
+              data: { 
+                wallet_address: existing.wallet_address,
+                is_activated: true,
+                activation_tx_hash: chainTxHash
+              }
+            });
+          }
+        } else {
+          console.log(`[DApp] 未找到用户 ${wallet_address} 的链上注册交易`);
+        }
+      }
+      
+      return res.json({
+        code: 0,
+        message: '用户已注册',
+        data: { 
+          wallet_address: existing.wallet_address,
+          is_activated: existing.is_activated,
+          activation_tx_hash: existing.activation_tx_hash
+        }
+      });
+    }
+
     // 如果有推荐人，验证推荐人是否存在
     let validReferrer = null;
     if (referrer_address) {
@@ -1018,22 +1076,7 @@ router.post('/register', async (req, res) => {
       }
     }
 
-    // 检查用户是否已注册
-    const { data: existing, error: existingError } = await supabase
-      .from('users')
-      .select('wallet_address')
-      .eq('wallet_address', wallet_address.toLowerCase())
-      .single();
-
-    if (existing) {
-      return res.json({
-        code: 0,
-        message: '用户已注册',
-        data: { wallet_address: existing.wallet_address }
-      });
-    }
-
-    // 创建用户
+    // 创建新用户
     const { data: newUser, error: insertError } = await supabase
       .from('users')
       .insert({
@@ -1075,6 +1118,94 @@ router.post('/register', async (req, res) => {
     });
   } catch (error) {
     console.error('注册失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 激活用户 - 前端激活成功后调用此接口
+router.post('/activate', async (req, res) => {
+  try {
+    const { wallet_address } = req.body;
+
+    if (!wallet_address) {
+      return res.status(400).json({
+        code: 400,
+        message: '缺少必要参数：wallet_address'
+      });
+    }
+
+    console.log(`[DApp] 激活用户: ${wallet_address}`);
+
+    // 检查用户是否存在
+    const { data: existing, error: existingError } = await supabase
+      .from('users')
+      .select('wallet_address, is_activated')
+      .eq('wallet_address', wallet_address.toLowerCase())
+      .single();
+
+    if (existingError || !existing) {
+      return res.status(404).json({
+        code: 404,
+        message: '用户不存在，请先注册'
+      });
+    }
+
+    // 如果已经激活，直接返回
+    if (existing.is_activated) {
+      return res.json({
+        code: 0,
+        message: '用户已激活',
+        data: { 
+          wallet_address: existing.wallet_address,
+          is_activated: true
+        }
+      });
+    }
+
+    // 从链上查询注册交易 hash
+    const chainTxHash = await getUserRegisterTxHash(wallet_address);
+    
+    if (!chainTxHash) {
+      return res.status(400).json({
+        code: 400,
+        message: '未找到链上注册交易，请确认已完成链上激活'
+      });
+    }
+
+    // 更新用户激活状态
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({
+        is_activated: true,
+        activation_tx_hash: chainTxHash,
+        activated_at: new Date().toISOString()
+      })
+      .eq('wallet_address', wallet_address.toLowerCase());
+
+    if (updateError) {
+      console.error('[DApp] 更新激活状态失败:', updateError);
+      return res.status(500).json({
+        code: 500,
+        message: '激活状态更新失败'
+      });
+    }
+
+    console.log(`[DApp] 用户 ${wallet_address} 激活成功，tx: ${chainTxHash}`);
+
+    res.json({
+      code: 0,
+      message: '激活成功',
+      data: {
+        wallet_address: wallet_address,
+        is_activated: true,
+        activation_tx_hash: chainTxHash
+      }
+    });
+  } catch (error) {
+    console.error('激活失败:', error);
     res.status(500).json({
       code: 500,
       message: '服务器错误'
