@@ -3,206 +3,151 @@
  * 合约地址（主网）
  */
 
-// 主合约 ABI
+// 主合约地址
+export const CONTRACT_ADDRESSES = {
+  DQPROJECT: {
+    address: '0xD6C7f9a6460034317294c52FDc056C548fbd0040',
+    name: 'DQProject'
+  },
+  DQTOKEN: {
+    address: '0x0000000000000000000000000000000000000000', // 待确认
+    name: 'DQToken'
+  },
+  DQCARD: {
+    address: '0x0000000000000000000000000000000000000000', // 待确认
+    name: 'DQCard'
+  }
+};
+
+// 主合约 ABI (完整版)
 export const DQPROJECT_ABI = [
-  // ============ View Functions: 基础信息 ============
-  "function dqToken() view returns (address)",
-  "function dqCard() view returns (address)",
-  "function USDT_ADDRESS() view returns (address)",
-  "function dqPrice() view returns (uint256)",
-  
-  // ============ View Functions: 用户信息 ============
-  "function users(address) view returns (address referrer, uint256 directCount, uint8 level, uint256 totalInvest, uint256 teamInvest, uint256 energy, uint256 lpShares, uint256 lpRewardDebt, uint256 pendingRewards, uint256 totalMgmtClaimed, uint256 totalDaoClaimed, uint8 dLevel, uint256 dRewardDebt)",
-  "function isRegistered(address) view returns (bool)",
-  "function isNode(address) view returns (bool)",
-  
-  // ============ View Functions: 节点系统 ============
-  "function getNodeInfo(address _user) view returns (uint256 cardCount, uint256 highestType, uint256 qualifiedLines, uint256 requiredLines, bool isQualified)",
-  "function checkNodeQualified(address _user) view returns (bool qualified, uint256 currentLines, uint256 requiredLines)",
-  
-  // ============ View Functions: 合伙人系统 ============
-  "function isPartner(address) view returns (bool)",
-  "function partnerCount() view returns (uint256)",
-  "function partnerList(uint256) view returns (address)",
-  "function getPartnerPendingDQ(address) view returns (uint256)",
-  "function getPartnerPendingUSDT(address) view returns (uint256)",
-  
-  // ============ View Functions: LP质押 ============
-  "function totalLPShares() view returns (uint256)",
-  "function lpAccPerShare() view returns (uint256)",
-  "function getPendingLp(address) view returns (uint256)",
-  
-  // ============ View Functions: NFT分红 ============
-  "function nftAccPerShare(uint256) view returns (uint256)",
-  "function nftRewardDebt(address, uint256) view returns (uint256)",
-  "function getPendingNft(address) view returns (uint256)",
-  
-  // ============ View Functions: 团队奖励 ============
-  "function dAccPerShare(uint256) view returns (uint256)",
-  "function getDLevel(address) view returns (uint8)",
-  "function getPendingDTeam(address) view returns (uint256)",
-  
-  // ============ View Functions: 单币质押 ============
-  "function stakes(address, uint256) view returns (uint256 amount, uint256 rewardDebt)",
-  "function stakePeriods(uint256) view returns (uint256)",
-  "function stakeRates(uint256) view returns (uint256)",
-  "function stakeAccPerShare(uint256) view returns (uint256)",
-  "function getStakeInfo(address, uint256) view returns (uint256, uint256)",
-  
-  // ============ View Functions: 入金限制 ============
-  "function getCurrentMaxInvest() view returns (uint256)",
-  "function getUserInvestedAmount(address) view returns (uint256)",
-  "function isInvestRestricted(address) view returns (bool)",
-  
-  // ============ View Functions: 地址限制 ============
-  "function isRestricted(address) view returns (bool)",
-  "function restrictedDebt(address) view returns (uint256)",
-  
-  // ============ View Functions: 通用 ============
-  "function getSwapQuote(uint256) view returns (uint256)",
-  "function getReverseSwapQuote(uint256) view returns (uint256)",
-  "function getCardPrice(uint256) view returns (uint256)",
-  "function getUserInfo(address) view returns (uint256, uint256, uint8, uint256, uint256, uint8, uint256, uint256, bool)",
-
-  // ============ User Functions: 注册与入金 ============
-  "function register(address _referrer)",
-  "function deposit(uint256 amount)",
-  
-  // ============ User Functions: 出金 ============
-  "function withdraw()",
-  
-  // ============ User Functions: 节点操作 ============
-  "function buyNode(uint256 _type)",
-  
-  // ============ User Functions: LP质押 ============
-  "function claimLp()",
-  
-  // ============ User Functions: NFT分红 ============
-  "function claimNft()",
-  
-  // ============ User Functions: 团队奖励 ============
-  "function claimDTeam()",
-  
-  // ============ User Functions: 合伙人 ============
-  "function claimPartnerDQ()",
-  "function claimPartnerUSDT()",
-  
-  // ============ User Functions: 单币质押 ============
-  "function stakeDQ(uint256 _amount, uint256 _periodIndex)",
-  "function unstakeDQ(uint256 _periodIndex)",
-  
-  // ============ User Functions: 代币交换 ============
-  "function swapDQForUSDT(uint256 _dqAmount)",
-  
-  // ============ Admin Functions: 爆块 ============
-  "function blockMining()",
-  
-  // ============ Admin Functions: 合伙人管理 ============
-  "function addPartners(address[] _partners)",
-  "function removePartner(address _partner)",
-  
-  // ============ Admin Functions: 地址限制 ============
-  "function restrictAddress(address _user)",
-  "function unrestrictAddress(address _user)",
-  
-  // ============ Admin Functions: 初始节点 ============
-  "function addInitialNodes(address[] _users, uint8[] _cardTypes)",
-  
-  // ============ Admin Functions: 配置 ============
-  "function setDQPrice(uint256 _newPrice)",
-  
-  // ============ Admin Functions: 紧急 ============
-  "function emergencyWithdrawUSDT(uint256 amount)",
-  "function emergencyWithdrawETH()",
-
-  // ============ Events ============
-  "event Register(address indexed user, address indexed referrer)",
-  "event Deposit(address indexed user, uint256 amount, uint256 lpAmount, uint256 dynamicAmount)",
-  "event BuyNode(address indexed user, uint256 cardType, uint256 amount)",
-  "event StakeDQ(address indexed user, uint256 amount, uint256 period)",
-  "event UnstakeDQ(address indexed user, uint256 amount, uint256 period)",
-  "event ClaimLp(address indexed user, uint256 amount)",
-  "event ClaimNft(address indexed user, uint256 amount)",
-  "event ClaimDTeam(address indexed user, uint256 amount)",
-  "event ClaimPartnerDQ(address indexed user, uint256 amount)",
-  "event ClaimPartnerSol(address indexed user, uint256 amount)",
-  "event Withdraw(address indexed user, uint256 amount, uint256 fee)",
-  "event SwapDQForUSDT(address indexed user, uint256 dqAmount, uint256 usdtAmount)",
-  "event BlockMining(uint256 release, uint256 burn, uint256 lpShare, uint256 nftShare, uint256 fundShare, uint256 partnerShare, uint256 teamShare, uint256 timestamp)",
-  "event PartnerAdded(address indexed user, uint256 order)",
-  "event PartnerRemoved(address indexed user)",
-  "event AddressRestricted(address indexed user)",
-  "event AddressUnrestricted(address indexed user)",
-  "event LevelUp(address indexed user, uint8 newLevel)",
-  "event LineQualified(address indexed user, uint256 qualifiedLines)",
-  "event EnergyConsumed(address indexed user, uint256 amount, string reason)"
+  {"inputs":[],"stateMutability":"nonpayable","type":"constructor"},
+  {"anonymous":false,"inputs":[{"indexed":false,"internalType":"uint256","name":"release","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"burn","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"timestamp","type":"uint256"}],"name":"BlockMining","type":"event"},
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"cardType","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"BuyNode","type":"event"},
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"ClaimDTeam","type":"event"},
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"ClaimFee","type":"event"},
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"ClaimLp","type":"event"},
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"ClaimNft","type":"event"},
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"ClaimPartnerBNB","type":"event"},
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"ClaimPartnerDQ","type":"event"},
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint8","name":"newDLevel","type":"uint8"}],"name":"DLevelUp","type":"event"},
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"Deposit","type":"event"},
+  {"anonymous":false,"inputs":[{"indexed":false,"internalType":"address[]","name":"users","type":"address[]"},{"indexed":false,"internalType":"uint8[]","name":"cardTypes","type":"uint8[]"}],"name":"InitialNodesAdded","type":"event"},
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint8","name":"newLevel","type":"uint8"}],"name":"LevelUp","type":"event"},
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"previousOwner","type":"address"},{"indexed":true,"internalType":"address","name":"newOwner","type":"address"}],"name":"OwnershipTransferred","type":"event"},
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"pair","type":"address"}],"name":"PairSet","type":"event"},
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"order","type":"uint256"}],"name":"PartnerAdded","type":"event"},
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"from","type":"address"},{"indexed":true,"internalType":"address","name":"to","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"ReferralReward","type":"event"},
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":true,"internalType":"address","name":"referrer","type":"address"}],"name":"Register","type":"event"},
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"period","type":"uint256"}],"name":"StakeDQ","type":"event"},
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"dqAmount","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"solAmount","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"fee","type":"uint256"}],"name":"SwapDQForSOL","type":"event"},
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"solAmount","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"dqAmount","type":"uint256"}],"name":"SwapSOLForDQ","type":"event"},
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"period","type":"uint256"}],"name":"UnstakeDQ","type":"event"},
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"fee","type":"uint256"}],"name":"Withdraw","type":"event"},
+  {"inputs":[],"name":"BURN_DECREMENT","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"BUY_FEE_ADDRESS","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"EARLY_DAY10_LIMIT","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"EARLY_DAY20_LIMIT","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"EARLY_DAY30_LIMIT","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"EARLY_PHASE_END","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"INVEST_MAX_FINAL","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"INVEST_MAX_START","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"INVEST_MAX_STEP","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"INVEST_MIN","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"MIN_BURN_RATE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"PANCAKE_ROUTER","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"PHASE_DURATION","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"SOL_TOKEN","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"USDT_TOKEN","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"address[]","name":"_usersArr","type":"address[]"},{"internalType":"uint8[]","name":"_cardTypes","type":"uint8[]"}],"name":"addInitialNodes","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[{"internalType":"address","name":"_partner","type":"address"}],"name":"addPartner","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[{"internalType":"address","name":"_user","type":"address"}],"name":"addToBlacklist","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"adminWithdrawDQ","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"amount","type":"uint256"}],"name":"adminWithdrawSOL","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"allUsers","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"approveRouter","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[],"name":"burnRate","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"_type","type":"uint256"}],"name":"buyNode","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[],"name":"claimDTeam","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[],"name":"claimFee","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[],"name":"claimLp","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[],"name":"claimNft","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[],"name":"claimPartnerBNB","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[],"name":"claimPartnerDQ","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"dAccPerShare","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"dThresholds","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"dTotalUsers","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"dailyDepositCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"dailyReleaseRate","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"daoAddress","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"_solAmount","type":"uint256"}],"name":"depositSOL","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[],"name":"dqCard","outputs":[{"internalType":"contract IDQCard","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"dqSolPair","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"dqToken","outputs":[{"internalType":"contract IDQToken","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"feeAccPerShare","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"feePool","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"foundationAddress","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"getCurrentMaxInvest","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"address","name":"user","type":"address"}],"name":"getTeamInvest","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"address","name":"user","type":"address"}],"name":"getTeamSize","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"address","name":"_user","type":"address"}],"name":"getUser","outputs":[{"internalType":"address","name":"referrer","type":"address"},{"internalType":"uint256","name":"directCount","type":"uint256"},{"internalType":"uint8","name":"level","type":"uint8"},{"internalType":"uint256","name":"totalInvest","type":"uint256"},{"internalType":"uint256","name":"teamInvest","type":"uint256"},{"internalType":"uint256","name":"energy","type":"uint256"},{"internalType":"uint256","name":"lpShares","type":"uint256"},{"internalType":"uint8","name":"dLevel","type":"uint8"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"insuranceAddress","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"isBlacklisted","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"isPartner","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"lastBlockTime","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"lastFeePerShare","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"levelRates","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"lpAccPerShare","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"lpPool","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"mineBlock","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"nftAccPerShare","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"operationAddress","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"operationPool","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"owner","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"partnerBNBAccPerShare","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"partnerBNBDebt","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"partnerCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[],"name":"partnerDQAccPerShare","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"partnerDQDebt","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"partnerList","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"address","name":"_referrer","type":"address"}],"name":"register","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[{"internalType":"address","name":"_user","type":"address"}],"name":"removeFromBlacklist","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[],"name":"removeLP","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[],"name":"renounceOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"_amount","type":"uint256"},{"internalType":"uint256","name":"_periodIndex","type":"uint256"}],"name":"stakeDQ","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"stakeFeeAccPerShare","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"stakePeriods","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"stakeRates","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"totalStaked","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"address","name":"newOwner","type":"address"}],"name":"transferOwnership","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"_periodIndex","type":"uint256"}],"name":"unstakeDQ","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[{"internalType":"address","name":"","type":"address"},{"internalType":"uint256","name":"","type":"uint256"}],"name":"userLPRecords","outputs":[{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"uint256","name":"depositTime","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"address","name":"","type":"address"},{"internalType":"uint256","name":"","type":"uint256"}],"name":"stakes","outputs":[{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"uint256","name":"rewardDebt","type":"uint256"}],"stateMutability":"view","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"_amount","type":"uint256"}],"name":"withdraw","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"stateMutability":"payable","type":"receive"}
 ];
 
-// DQ Token ABI
+// Token ABI
 export const DQTOKEN_ABI = [
   "function name() view returns (string)",
   "function symbol() view returns (string)",
   "function totalSupply() view returns (uint256)",
   "function balanceOf(address) view returns (uint256)",
   "function transfer(address to, uint256 amount) returns (bool)",
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function approve(address spender, uint256 amount) returns (bool)",
+  "function transferFrom(address from, address to, uint256 amount) returns (bool)",
   "function burn(uint256 amount)",
-  "function burnToBlackhole(uint256 amount)",
+  "function burnFrom(address account, uint256 amount)",
   "function mint(address to, uint256 amount)"
 ];
 
-// DQ Card ABI
+// Card NFT ABI  
 export const DQCARD_ABI = [
   "function name() view returns (string)",
   "function symbol() view returns (string)",
-  "function totalSupply() view returns (uint256)",
-  "function totalA() view returns (uint256)",
-  "function totalB() view returns (uint256)",
-  "function totalC() view returns (uint256)",
-  "function CARD_A() view returns (uint256)",
-  "function CARD_B() view returns (uint256)",
-  "function CARD_C() view returns (uint256)",
-  "function PRICE_A() view returns (uint256)",
-  "function PRICE_B() view returns (uint256)",
-  "function PRICE_C() view returns (uint256)",
-  "function WEIGHT_A() view returns (uint256)",
-  "function WEIGHT_B() view returns (uint256)",
-  "function WEIGHT_C() view returns (uint256)",
-  "function LINE_A() view returns (uint256)",
-  "function LINE_B() view returns (uint256)",
-  "function LINE_C() view returns (uint256)",
   "function balanceOf(address owner) view returns (uint256)",
   "function tokenOfOwnerByIndex(address owner, uint256 index) view returns (uint256)",
-  "function cardType(uint256 tokenId) view returns (uint256)",
-  "function getCardPrice(uint256 _type) view returns (uint256)",
-  "function getCardWeight(uint256 _type) view returns (uint256)",
-  "function getRequiredLines(uint256 _type) view returns (uint256)"
+  "function cardType(uint256 tokenId) view returns (uint8)",
+  "function safeTransferFrom(address from, address to, uint256 tokenId)"
 ];
-
-export const CONTRACTS = {
-  // DQ 主合约
-  DQPROJECT: {
-    address: '0xD6C7f9a6460034317294c52FDc056C548fbd0040',
-    name: 'DQProject'
-  },
-  
-  // DQ Card NFT 合约
-  DQCARD: {
-    address: '0x1857aCeDf9b73163D791eb2F0374a328416291a1',
-    name: 'DQCard'
-  },
-  
-  // DQ Token 合约
-  DQTOKEN: {
-    address: '0x96e5B90115d41849F8F558Ef3A2eB627C6DF734B',
-    name: 'DQToken'
-  }
-};
-
-// 兼容别名
-export const CONTRACT_ADDRESSES = CONTRACTS;
-
-// BSC 链 ID
-export const BSC_CHAIN_ID = 56;
-
-// BSC 主网 RPC
-export const BSC_RPC_URL = 'https://bsc-dataseed.binance.org/';
