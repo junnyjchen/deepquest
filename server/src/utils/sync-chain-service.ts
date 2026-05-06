@@ -92,17 +92,24 @@ export async function getChainUserInfo(userAddress: string): Promise<{
 
 /**
  * 同步单个用户数据到数据库
+ * @param userAddress 用户钱包地址
+ * @param userInfo 用户链上信息
+ * @param fields 要同步的字段数组，null 或空数组表示全部字段
  */
-async function syncUserToDatabase(userAddress: string, userInfo: {
-  referrer: string;
-  directCount: number;
-  level: number;
-  totalInvest: string;
-  teamInvest: string;
-  energy: string;
-  lpShares: string;
-  dLevel: number;
-}): Promise<boolean> {
+async function syncUserToDatabase(
+  userAddress: string, 
+  userInfo: {
+    referrer: string;
+    directCount: number;
+    level: number;
+    totalInvest: string;
+    teamInvest: string;
+    energy: string;
+    lpShares: string;
+    dLevel: number;
+  },
+  fields?: string[]
+): Promise<boolean> {
   try {
     // 检查用户是否已存在
     const { data: existingUser } = await supabase
@@ -111,22 +118,39 @@ async function syncUserToDatabase(userAddress: string, userInfo: {
       .eq('wallet_address', userAddress.toLowerCase())
       .single();
 
+    // 定义可同步的字段映射
+    const fieldMap: Record<string, { chainKey: string; dbKey: string }> = {
+      direct_count: { chainKey: 'directCount', dbKey: 'direct_count' },
+      level: { chainKey: 'level', dbKey: 'level' },
+      total_invest: { chainKey: 'totalInvest', dbKey: 'total_invest' },
+      team_invest: { chainKey: 'teamInvest', dbKey: 'team_invest' },
+      energy: { chainKey: 'energy', dbKey: 'energy' },
+      lp_shares: { chainKey: 'lpShares', dbKey: 'lp_shares' },
+      d_level: { chainKey: 'dLevel', dbKey: 'd_level' },
+      referrer_address: { chainKey: 'referrer', dbKey: 'referrer_address' },
+    };
+
     if (existingUser) {
       // 更新现有用户
       const updateData: Record<string, any> = {
         updated_at: new Date().toISOString(),
-        direct_count: userInfo.directCount,
-        level: userInfo.level,
-        total_invest: userInfo.totalInvest,
-        team_invest: userInfo.teamInvest,
-        energy: userInfo.energy,
-        lp_shares: userInfo.lpShares,
-        d_level: userInfo.dLevel,
       };
+
+      // 根据 fields 参数决定同步哪些字段
+      const fieldsToSync = fields && fields.length > 0 ? fields : Object.keys(fieldMap);
+
+      for (const field of fieldsToSync) {
+        if (fieldMap[field]) {
+          updateData[fieldMap[field].dbKey] = userInfo[fieldMap[field].chainKey as keyof typeof userInfo];
+        }
+      }
 
       // 如果推荐人有效，更新推荐人关系
       if (userInfo.referrer && userInfo.referrer !== '0x0000000000000000000000000000000000000000') {
-        updateData.referrer_address = userInfo.referrer.toLowerCase();
+        // 只有在同步 referrer_address 或同步全部字段时才更新推荐人
+        if (!fields || fields.length === 0 || fields.includes('referrer_address')) {
+          updateData.referrer_address = userInfo.referrer.toLowerCase();
+        }
         
         // 如果用户未激活但有推荐人，标记为已激活
         if (!existingUser.is_activated) {
@@ -147,18 +171,22 @@ async function syncUserToDatabase(userAddress: string, userInfo: {
         wallet_address: userAddress.toLowerCase(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        direct_count: userInfo.directCount,
-        level: userInfo.level,
-        total_invest: userInfo.totalInvest,
-        team_invest: userInfo.teamInvest,
-        energy: userInfo.energy,
-        lp_shares: userInfo.lpShares,
-        d_level: userInfo.dLevel,
       };
+
+      // 根据 fields 参数决定同步哪些字段
+      const fieldsToSync = fields && fields.length > 0 ? fields : Object.keys(fieldMap);
+
+      for (const field of fieldsToSync) {
+        if (fieldMap[field]) {
+          insertData[fieldMap[field].dbKey] = userInfo[fieldMap[field].chainKey as keyof typeof userInfo];
+        }
+      }
 
       // 如果推荐人有效，添加推荐人关系
       if (userInfo.referrer && userInfo.referrer !== '0x0000000000000000000000000000000000000000') {
-        insertData.referrer_address = userInfo.referrer.toLowerCase();
+        if (!fields || fields.length === 0 || fields.includes('referrer_address')) {
+          insertData.referrer_address = userInfo.referrer.toLowerCase();
+        }
         insertData.is_activated = true;
         insertData.activated_at = new Date().toISOString();
       }
@@ -185,8 +213,9 @@ export async function syncSingleUser(userAddress: string): Promise<boolean> {
 
 /**
  * 执行一次完整同步
+ * @param fields 要同步的字段数组，null 或空数组表示全部字段
  */
-export async function syncChainData(): Promise<{
+export async function syncChainData(fields?: string[]): Promise<{
   success: boolean;
   totalUsers: number;
   syncedUsers: number;
@@ -246,7 +275,7 @@ export async function syncChainData(): Promise<{
           try {
             const userInfo = await getChainUserInfo(userAddress);
             if (userInfo) {
-              const success = await syncUserToDatabase(userAddress, userInfo);
+              const success = await syncUserToDatabase(userAddress, userInfo, fields);
               if (success) {
                 syncedUsers++;
               } else {

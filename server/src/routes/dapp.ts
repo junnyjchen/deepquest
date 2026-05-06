@@ -1958,17 +1958,27 @@ router.post('/swap-dq', async (req, res) => {
 /**
  * 手动触发链上数据同步
  * POST /api/v1/dapp/sync
+ * Body: { fields?: string[] } - 要同步的字段数组，不传则全量同步
+ * 
+ * 可选字段:
+ * - direct_count: 直推人数
+ * - level: 节点等级
+ * - total_invest: 总投资额
+ * - team_invest: 团队投资额
+ * - energy: 能量值
+ * - lp_shares: LP份额
+ * - d_level: D等级
+ * - referrer_address: 推荐人地址
  */
 router.post('/sync', async (req, res) => {
   try {
+    const { fields } = req.body;
+    
     // 动态导入避免循环依赖
-    const { syncChainData, getSyncStatus, startSyncTask, stopSyncTask } = await import('../utils/sync-chain-service');
+    const { syncChainData, getSyncStatus } = await import('../utils/sync-chain-service');
     
-    // 启动定时任务
-    startSyncTask();
-    
-    // 立即执行一次同步
-    const result = await syncChainData();
+    // 执行同步，传入 fields 参数
+    const result = await syncChainData(fields);
     
     res.json({
       code: 0,
