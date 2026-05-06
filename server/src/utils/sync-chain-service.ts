@@ -33,22 +33,28 @@ function getContract() {
 
 /**
  * 从链上获取所有用户地址
+ * 通过 Register 事件获取所有注册用户
  */
 export async function getAllUsersFromChain(): Promise<string[]> {
   const contract = getContract();
   try {
-    const totalUsers = await contract.allUsersLength();
-    console.log(`[ChainSync] 链上总用户数: ${totalUsers}`);
+    // 使用 Register 事件获取所有注册用户
+    // 从区块 1 开始查询（可以根据需要调整起始区块）
+    const filter = contract.filters.Register();
+    const events = await contract.queryFilter(filter, 1, 'latest');
     
-    const users: string[] = [];
-    for (let i = 0; i < Number(totalUsers); i++) {
-      try {
-        const user = await contract.allUsers(i);
-        users.push(user);
-      } catch (err) {
-        console.log(`[ChainSync] 获取用户 ${i} 失败:`, err);
+    console.log(`[ChainSync] 链上 Register 事件数: ${events.length}`);
+    
+    // 从事件中提取用户地址
+    const usersSet = new Set<string>();
+    for (const event of events) {
+      if (event.args && event.args[0]) {
+        usersSet.add(event.args[0]);
       }
     }
+    
+    const users = Array.from(usersSet);
+    console.log(`[ChainSync] 链上唯一用户数: ${users.length}`);
     
     return users;
   } catch (error) {
