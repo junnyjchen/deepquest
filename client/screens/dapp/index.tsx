@@ -502,7 +502,7 @@ export default function DappIndex() {
         
         Alert.alert(
           '交易已提交',
-          `质押 ${stakeAmount} BNB 成功！\n交易哈希: ${txHash.slice(0, 20)}...`,
+          `质押 ${stakeAmount} SOL 成功！\n交易哈希: ${txHash.slice(0, 20)}...`,
           [
             { text: '确定' },
             { text: '查看详情', onPress: () => Linking.openURL(`https://bscscan.com/tx/${txHash}`) }
@@ -515,7 +515,7 @@ export default function DappIndex() {
         const response = await dappApi.stake(walletAddress, stakeAmount, txHash);
         
         if (response.code === 0) {
-          Alert.alert('成功', `质押 ${stakeAmount} BNB 成功！\n交易哈希: ${txHash.slice(0, 20)}...`);
+          Alert.alert('成功', `质押 ${stakeAmount} SOL 成功！\n交易哈希: ${txHash.slice(0, 20)}...`);
           setStakeAmount('');
         } else {
           Alert.alert('失败', response.message || '质押失败');

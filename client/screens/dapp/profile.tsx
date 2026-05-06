@@ -325,7 +325,7 @@ export default function DappProfile() {
 
             <View className="grid grid-cols-2 gap-x-4 gap-y-4">
               <View>
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>BNB余额</Text>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>SOL余额</Text>
                 <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>
                   {userLoading ? '...' : userData.bnbBalance}
                 </Text>
@@ -339,7 +339,7 @@ export default function DappProfile() {
               <View>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>质押数量</Text>
                 <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>
-                  {userLoading ? '...' : userData.stakedAmount} BNB
+                  {userLoading ? '...' : userData.stakedAmount} SOL
                 </Text>
               </View>
               <View>
@@ -415,14 +415,14 @@ export default function DappProfile() {
                 <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>
                   {userLoading ? '...' : userData.totalInvest}
                 </Text>
-                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>BNB</Text>
+                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>SOL</Text>
               </View>
               <View>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>团队业绩</Text>
                 <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>
                   {userLoading ? '...' : userData.teamInvest}
                 </Text>
-                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>BNB</Text>
+                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>SOL</Text>
               </View>
             </View>
           </View>

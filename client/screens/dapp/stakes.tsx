@@ -162,7 +162,7 @@ export default function DappStakes() {
           </View>
         </View>
         <View className="items-end">
-          <Text className="text-base font-bold" style={{ color: YELLOW }}>{item.amount} BNB</Text>
+          <Text className="text-base font-bold" style={{ color: YELLOW }}>{item.amount} SOL</Text>
           <View className="px-2 py-0.5 rounded-full mt-1" style={{ backgroundColor: `${getStatusColor(item.status)}20` }}>
             <Text className="text-xs" style={{ color: getStatusColor(item.status) }}>{getStatusText(item.status)}</Text>
           </View>

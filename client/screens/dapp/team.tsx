@@ -242,7 +242,7 @@ export default function DappTeam() {
                 <Text className="text-xl font-bold" style={{ color: YELLOW }}>
                   {teamLoading ? '...' : teamData.teamInvest}
                 </Text>
-                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>BNB</Text>
+                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>SOL</Text>
               </View>
               <View>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>团队奖励</Text>
@@ -368,7 +368,7 @@ export default function DappTeam() {
                     </View>
                   </View>
                   <View className="items-end">
-                    <Text className="text-sm font-medium" style={{ color: YELLOW }}>{member.staked} BNB</Text>
+                    <Text className="text-sm font-medium" style={{ color: YELLOW }}>{member.staked} SOL</Text>
                     <Text className="text-xs mt-0.5" style={{ color: TEXT_MUTED }}>Lv.{member.level}</Text>
                   </View>
                 </View>
