@@ -2292,8 +2292,7 @@ router.post('/team/stats', async (req, res) => {
       return res.status(500).json({ code: 500, message: 'Failed to get team stats' });
     }
 
-    // 自己算一个，加上闭包表中的后代
-    // depth=0 是自己，depth=1 到 15 是团队成员
+    // depth=1 到 15 是团队成员（不含自己）
     const { count: descendantCount } = await supabase
       .from('team_closure')
       .select('*', { count: 'exact', head: true })
@@ -2301,14 +2300,11 @@ router.post('/team/stats', async (req, res) => {
       .gte('depth', 1)
       .lte('depth', 15);
 
-    // 团队总人数 = 自己(1) + 所有后代
-    const totalTeam = (descendantCount || 0) + 1;
-
     res.json({
       code: 0,
       message: 'success',
       data: {
-        team_count: totalTeam,  // 团队总人数（包含自己）
+        team_count: descendantCount || 0,  // 团队总人数（不含自己，15代以内）
         direct_count: descendantCount || 0  // 直接下级（1代）
       }
     });
