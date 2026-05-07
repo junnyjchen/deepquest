@@ -18,6 +18,7 @@ import {
   getFullSyncState,
   initSyncStateFile,
 } from './sync-state';
+import { getUserRegisterTxHash } from './bsc-web3';
 
 const supabase = getSupabaseClient();
 
@@ -291,9 +292,16 @@ async function syncUserToDatabase(
     // 检查用户是否已存在
     const { data: existingUser } = await supabase
       .from('users')
-      .select('id, wallet_address, is_activated')
+      .select('id, wallet_address, is_activated, activation_tx_hash')
       .eq('wallet_address', userAddress.toLowerCase())
       .single();
+
+    const hasValidReferrer =
+      userInfo.referrer && userInfo.referrer !== '0x0000000000000000000000000000000000000000';
+
+    const activationTxHash = hasValidReferrer && !existingUser?.activation_tx_hash
+      ? await getUserRegisterTxHash(userAddress)
+      : existingUser?.activation_tx_hash ?? null;
 
     // 定义可同步的字段映射
     const fieldMap: Record<string, { chainKey: string; dbKey: string }> = {
@@ -323,10 +331,14 @@ async function syncUserToDatabase(
       }
 
       // 如果推荐人有效，更新推荐人关系
-      if (userInfo.referrer && userInfo.referrer !== '0x0000000000000000000000000000000000000000') {
+      if (hasValidReferrer) {
         // 只有在同步 referrer_address 或同步全部字段时才更新推荐人
         if (!fields || fields.length === 0 || fields.includes('referrer_address')) {
           updateData.referrer_address = userInfo.referrer.toLowerCase();
+        }
+
+        if (activationTxHash) {
+          updateData.activation_tx_hash = activationTxHash;
         }
         
         // 如果用户未激活但有推荐人，标记为已激活
@@ -360,12 +372,16 @@ async function syncUserToDatabase(
       }
 
       // 如果推荐人有效，添加推荐人关系
-      if (userInfo.referrer && userInfo.referrer !== '0x0000000000000000000000000000000000000000') {
+      if (hasValidReferrer) {
         if (!fields || fields.length === 0 || fields.includes('referrer_address')) {
           insertData.referrer_address = userInfo.referrer.toLowerCase();
         }
         insertData.is_activated = true;
         insertData.activated_at = new Date().toISOString();
+
+        if (activationTxHash) {
+          insertData.activation_tx_hash = activationTxHash;
+        }
       }
 
       await supabase.from('users').insert(insertData);

@@ -1023,14 +1023,16 @@ router.post('/register', async (req, res) => {
         
         // 从链上查询注册交易 hash
         const chainTxHash = await getUserRegisterTxHash(wallet_address);
-        
-        if (chainTxHash) {
+        const registeredOnChain = chainTxHash ? true : await isUserRegisteredOnChain(wallet_address);
+        const activationTxHash = chainTxHash || tx_hash || existing.activation_tx_hash || null;
+
+        if (registeredOnChain) {
           // 找到了链上注册交易，更新用户状态
           const { error: updateError } = await supabase
             .from('users')
             .update({
               is_activated: true,
-              activation_tx_hash: chainTxHash,
+              activation_tx_hash: activationTxHash,
               activated_at: new Date().toISOString()
             })
             .eq('wallet_address', wallet_address.toLowerCase());
@@ -1038,14 +1040,14 @@ router.post('/register', async (req, res) => {
           if (updateError) {
             console.error('[DApp] 更新激活状态失败:', updateError);
           } else {
-            console.log(`[DApp] 用户 ${wallet_address} 激活成功，tx: ${chainTxHash}`);
+            console.log(`[DApp] 用户 ${wallet_address} 激活成功，tx: ${activationTxHash ?? 'N/A'}`);
             return res.json({
               code: 0,
               message: '用户已激活',
               data: { 
                 wallet_address: existing.wallet_address,
                 is_activated: true,
-                activation_tx_hash: chainTxHash
+                activation_tx_hash: activationTxHash
               }
             });
           }
@@ -1145,7 +1147,7 @@ router.post('/activate', async (req, res) => {
     // 检查用户是否存在
     const { data: existing, error: existingError } = await supabase
       .from('users')
-      .select('wallet_address, is_activated')
+      .select('wallet_address, is_activated, activation_tx_hash')
       .eq('wallet_address', wallet_address.toLowerCase())
       .single();
 
@@ -1173,8 +1175,10 @@ router.post('/activate', async (req, res) => {
 
     // 从链上查询注册交易 hash
     const chainTxHash = await getUserRegisterTxHash(wallet_address);
-    
-    if (!chainTxHash) {
+    const registeredOnChain = chainTxHash ? true : await isUserRegisteredOnChain(wallet_address);
+    const activationTxHash = chainTxHash || existing.activation_tx_hash || null;
+
+    if (!registeredOnChain) {
       return res.status(400).json({
         code: 400,
         message: '未找到链上注册交易，请确认已完成链上激活'
@@ -1186,7 +1190,7 @@ router.post('/activate', async (req, res) => {
       .from('users')
       .update({
         is_activated: true,
-        activation_tx_hash: chainTxHash,
+        activation_tx_hash: activationTxHash,
         activated_at: new Date().toISOString()
       })
       .eq('wallet_address', wallet_address.toLowerCase());
@@ -1199,7 +1203,7 @@ router.post('/activate', async (req, res) => {
       });
     }
 
-    console.log(`[DApp] 用户 ${wallet_address} 激活成功，tx: ${chainTxHash}`);
+    console.log(`[DApp] 用户 ${wallet_address} 激活成功，tx: ${activationTxHash ?? 'N/A'}`);
 
     res.json({
       code: 0,
@@ -1207,7 +1211,7 @@ router.post('/activate', async (req, res) => {
       data: {
         wallet_address: wallet_address,
         is_activated: true,
-        activation_tx_hash: chainTxHash
+        activation_tx_hash: activationTxHash
       }
     });
   } catch (error) {
