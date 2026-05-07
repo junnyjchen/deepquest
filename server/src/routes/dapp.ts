@@ -2250,4 +2250,152 @@ export async function syncTeamClosureRelations(walletAddresses: string[], maxDep
   return totalRelations;
 }
 
+/**
+ * 获取团队统计信息
+ * 统计用户在团队闭包表中的团队总人数（15代，自己算一代）
+ */
+router.post('/team/stats', async (req, res) => {
+  try {
+    const { wallet_address } = req.body;
+
+    if (!wallet_address) {
+      return res.status(400).json({ code: 400, message: 'wallet_address is required' });
+    }
+
+    // 获取用户ID
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('wallet_address', wallet_address.toLowerCase())
+      .single();
+
+    if (userError || !userData) {
+      return res.status(404).json({ code: 404, message: 'User not found' });
+    }
+
+    const userId = userData.id;
+
+    // 统计团队总人数（15代 + 自己 = 16层）
+    // 自己算一代（depth=0），往上15代（depth=1 到 depth=15）
+    const { count: teamCount, error: countError } = await supabase
+      .from('team_closure')
+      .select('*', { count: 'exact', head: true })
+      .eq('ancestor_id', userId)
+      .lte('depth', 15);  // 包含自己（depth=0）到 depth=15
+
+    if (countError) {
+      console.error('[DApp] 统计团队人数失败:', countError);
+      return res.status(500).json({ code: 500, message: 'Failed to get team stats' });
+    }
+
+    // 自己算一个，加上闭包表中的后代
+    // depth=0 是自己，depth=1 到 15 是团队成员
+    const { count: descendantCount } = await supabase
+      .from('team_closure')
+      .select('*', { count: 'exact', head: true })
+      .eq('ancestor_id', userId)
+      .gte('depth', 1)
+      .lte('depth', 15);
+
+    // 团队总人数 = 自己(1) + 所有后代
+    const totalTeam = (descendantCount || 0) + 1;
+
+    res.json({
+      code: 0,
+      message: 'success',
+      data: {
+        team_count: totalTeam,  // 团队总人数（包含自己）
+        direct_count: descendantCount || 0  // 直接下级（1代）
+      }
+    });
+  } catch (error: any) {
+    console.error('[DApp] 获取团队统计失败:', error);
+    res.status(500).json({ code: 500, message: error.message || 'Failed to get team stats' });
+  }
+});
+
+/**
+ * 获取团队所有地址列表
+ * 返回用户在团队闭包表中所有后代地址
+ */
+router.post('/team/direct', async (req, res) => {
+  try {
+    const { wallet_address, depth } = req.body;
+
+    if (!wallet_address) {
+      return res.status(400).json({ code: 400, message: 'wallet_address is required' });
+    }
+
+    // 获取用户ID
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('wallet_address', wallet_address.toLowerCase())
+      .single();
+
+    if (userError || !userData) {
+      return res.status(404).json({ code: 404, message: 'User not found' });
+    }
+
+    const userId = userData.id;
+
+    // 构建查询
+    let query = supabase
+      .from('team_closure')
+      .select(`
+        depth,
+        users:descendant_id (
+          wallet_address,
+          level,
+          total_invest,
+          team_invest,
+          direct_count,
+          is_activated,
+          activated_at
+        )
+      `)
+      .eq('ancestor_id', userId)
+      .neq('depth', 0);  // 排除自己
+
+    // 如果指定了深度限制
+    if (depth && depth > 0) {
+      query = query.lte('depth', depth);
+    } else {
+      // 默认15代
+      query = query.lte('depth', 15);
+    }
+
+    const { data: teamData, error: teamError } = await query;
+
+    if (teamError) {
+      console.error('[DApp] 获取团队列表失败:', teamError);
+      return res.status(500).json({ code: 500, message: 'Failed to get team list' });
+    }
+
+    // 格式化返回数据
+    const teamList = (teamData || []).map((item: any) => ({
+      depth: item.depth,
+      wallet_address: item.users?.wallet_address || '',
+      level: item.users?.level || 0,
+      total_invest: item.users?.total_invest || '0',
+      team_invest: item.users?.team_invest || '0',
+      direct_count: item.users?.direct_count || 0,
+      is_activated: item.users?.is_activated || false,
+      activated_at: item.users?.activated_at || null
+    }));
+
+    res.json({
+      code: 0,
+      message: 'success',
+      data: {
+        total: teamList.length,
+        list: teamList
+      }
+    });
+  } catch (error: any) {
+    console.error('[DApp] 获取团队列表失败:', error);
+    res.status(500).json({ code: 500, message: error.message || 'Failed to get team list' });
+  }
+});
+
 export default router;
