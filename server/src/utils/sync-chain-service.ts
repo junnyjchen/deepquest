@@ -416,18 +416,58 @@ export async function syncSingleUser(userAddress: string): Promise<boolean> {
 }
 
 /**
+ * 从数据库获取用户的推荐链路（祖先）
+ * 优先使用数据库已有的推荐关系，避免依赖链上查询
+ */
+async function getReferralLineageFromDB(
+  userAddress: string, 
+  maxDepth: number = 15
+): Promise<Array<{ address: string; depth: number }>> {
+  const lineage: Array<{ address: string; depth: number }> = [];
+  let currentAddress = userAddress.toLowerCase();
+  const visited = new Set<string>();
+
+  for (let depth = 1; depth <= maxDepth; depth++) {
+    if (visited.has(currentAddress)) {
+      console.warn(`[ChainSync] 检测到循环引用，停止追溯 depth=${depth}`);
+      break;
+    }
+    visited.add(currentAddress);
+
+    // 从数据库查询推荐人
+    const { data: userData, error } = await supabase
+      .from('users')
+      .select('referrer_address')
+      .eq('wallet_address', currentAddress)
+      .single();
+
+    if (error || !userData || !userData.referrer_address) {
+      break;
+    }
+
+    const referrer = userData.referrer_address.toLowerCase();
+    lineage.push({ address: referrer, depth });
+    currentAddress = referrer;
+  }
+
+  return lineage;
+}
+
+/**
  * 同步用户团队闭包关系
  * 为用户及其所有祖先（15代以内）建立闭包表关系
  */
 async function syncUserTeamClosure(userAddress: string, maxDepth: number = 15): Promise<void> {
   try {
-    // 获取用户的推荐链路（所有祖先）
-    const lineage = await getReferralLineage(userAddress, maxDepth);
+    // 从数据库获取推荐链路（不访问链上）
+    const lineage = await getReferralLineageFromDB(userAddress, maxDepth);
     
     if (lineage.length === 0) {
-      console.log(`[ChainSync] 用户 ${userAddress} 无推荐链路，跳过闭包关系创建`);
+      console.log(`[ChainSync] 用户 ${userAddress} 无推荐链路（数据库），跳过闭包关系创建`);
       return;
     }
+
+    console.log(`[ChainSync] 用户 ${userAddress} 找到 ${lineage.length} 个祖先（数据库）`);
 
     // 获取用户ID
     const { data: userData, error: userError } = await supabase
