@@ -2403,7 +2403,7 @@ router.post('/team/direct', async (req, res) => {
  * 全量重建团队闭包关系
  * 清空所有闭包关系，然后为所有已激活用户重新建立闭包关系
  */
-dappRouter.post('/team/rebuild-closure', async (req: express.Request, res: express.Response) => {
+router.post('/team/rebuild-closure', async (req: express.Request, res: express.Response) => {
   try {
     console.log('[DApp] 收到全量重建团队闭包关系请求');
 
