@@ -268,3 +268,85 @@ export async function getUserInfoFromChain(walletAddress: string) {
     return null;
   }
 }
+
+/**
+ * 获取用户的推荐链路（所有祖先）
+ * 返回每个祖先及其代数深度
+ * 最多追溯15代
+ */
+export async function getReferralLineage(
+  walletAddress: string,
+  maxDepth: number = 15
+): Promise<Array<{ address: string; depth: number }>> {
+  const MAX_LOOKUP_ADDRESSES = 100; // 每次最多查询多少个地址
+
+  try {
+    const contract = getContract();
+    const lineage: Array<{ address: string; depth: number }> = [];
+    let currentAddress = walletAddress.toLowerCase();
+    let visited = new Set<string>();
+
+    for (let depth = 1; depth <= maxDepth; depth++) {
+      if (visited.has(currentAddress)) {
+        console.warn(`[BSC] 检测到循环引用，停止追溯 depth=${depth}`);
+        break;
+      }
+
+      try {
+        const userInfo = await withRpcRetry(
+          () => contract.users(currentAddress),
+          `users(${currentAddress})`
+        );
+
+        // 检查是否有效用户
+        if (userInfo.referrer === ethers.ZeroAddress || userInfo.referrer === '0x0000000000000000000000000000000000000000') {
+          console.log(`[BSC] 用户 ${currentAddress} 无推荐人，停止追溯`);
+          break;
+        }
+
+        const referrer = userInfo.referrer.toLowerCase();
+        lineage.push({ address: referrer, depth });
+
+        currentAddress = referrer;
+        visited.add(currentAddress);
+      } catch (error: any) {
+        // 如果查询失败（用户不存在），停止追溯
+        if (error?.reason?.includes('require') || error?.message?.includes('require(false)')) {
+          console.log(`[BSC] 用户 ${currentAddress} 查询失败，停止追溯`);
+          break;
+        }
+        throw error;
+      }
+    }
+
+    console.log(`[BSC] 获取推荐链路 ${walletAddress}: ${lineage.length} 个祖先`);
+    return lineage;
+  } catch (error) {
+    console.error(`[BSC] 获取推荐链路失败:`, error);
+    return [];
+  }
+}
+
+/**
+ * 批量获取用户推荐链路（更高效的方式）
+ */
+export async function getReferralLineagesBatch(
+  walletAddresses: string[],
+  maxDepth: number = 15
+): Promise<Map<string, Array<{ address: string; depth: number }>>> {
+  const results = new Map<string, Array<{ address: string; depth: number }>>();
+
+  // 并发查询，但限制并发数
+  const batchSize = 10;
+  for (let i = 0; i < walletAddresses.length; i += batchSize) {
+    const batch = walletAddresses.slice(i, i + batchSize);
+    const batchResults = await Promise.all(
+      batch.map(addr => getReferralLineage(addr, maxDepth))
+    );
+    batch.forEach((addr, idx) => {
+      results.set(addr.toLowerCase(), batchResults[idx]);
+    });
+  }
+
+  return results;
+}

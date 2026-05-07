@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getSupabaseClient } from '../storage/database/supabase-client';
-import { getUserRegisterTxHash, isUserRegisteredOnChain, getUserInfoFromChain } from '../utils/bsc-web3';
+import { getUserRegisterTxHash, isUserRegisteredOnChain, getUserInfoFromChain, getReferralLineage } from '../utils/bsc-web3';
 
 const supabase = getSupabaseClient();
 const router = Router();
@@ -1203,6 +1203,9 @@ router.post('/activate', async (req, res) => {
       });
     }
 
+    // 添加团队关系（为当前用户及其祖先建立闭包表关系）
+    await addTeamClosureRelations(wallet_address.toLowerCase());
+
     console.log(`[DApp] 用户 ${wallet_address} 激活成功，tx: ${activationTxHash ?? 'N/A'}`);
 
     res.json({
@@ -2115,6 +2118,327 @@ router.delete('/sync/index', async (req, res) => {
     res.status(500).json({
       code: 500,
       message: error.message || '重置失败'
+    });
+  }
+});
+
+/**
+ * 添加团队闭包关系
+ * 为用户及其所有祖先（15代以内）建立闭包表关系
+ */
+async function addTeamClosureRelations(walletAddress: string, maxDepth: number = 15): Promise<void> {
+  try {
+    // 获取用户的推荐链路（所有祖先）
+    const lineage = await getReferralLineage(walletAddress, maxDepth);
+    
+    if (lineage.length === 0) {
+      console.log(`[DApp] 用户 ${walletAddress} 无推荐链路，跳过闭包关系创建`);
+      return;
+    }
+
+    // 获取用户ID
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('wallet_address', walletAddress.toLowerCase())
+      .single();
+
+    if (userError || !userData) {
+      console.error(`[DApp] 获取用户ID失败: ${walletAddress}`, userError);
+      return;
+    }
+
+    const descendantId = userData.id;
+    const closureRecords: Array<{ ancestor_id: number; descendant_id: number; depth: number }> = [];
+
+    // 为每个祖先创建闭包记录
+    for (const ancestor of lineage) {
+      // 获取祖先用户ID
+      const { data: ancestorData, error: ancestorError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('wallet_address', ancestor.address.toLowerCase())
+        .single();
+
+      if (ancestorError || !ancestorData) {
+        console.warn(`[DApp] 祖先用户不存在: ${ancestor.address}，depth: ${ancestor.depth}`);
+        continue;
+      }
+
+      closureRecords.push({
+        ancestor_id: ancestorData.id,
+        descendant_id: descendantId,
+        depth: ancestor.depth
+      });
+    }
+
+    if (closureRecords.length === 0) {
+      console.log(`[DApp] 未找到有效的祖先用户，跳过闭包关系创建`);
+      return;
+    }
+
+    // 批量插入闭包记录（使用 upsert 避免重复）
+    const { error: insertError } = await supabase
+      .from('team_closure')
+      .upsert(closureRecords, { 
+        onConflict: 'ancestor_id,descendant_id',
+        ignoreDuplicates: true 
+      });
+
+    if (insertError) {
+      console.error(`[DApp] 创建团队闭包关系失败:`, insertError);
+    } else {
+      console.log(`[DApp] 为用户 ${walletAddress} 创建 ${closureRecords.length} 条团队闭包关系`);
+    }
+  } catch (error) {
+    console.error(`[DApp] 添加团队闭包关系失败:`, error);
+  }
+}
+
+/**
+ * 批量同步团队闭包关系
+ * 用于同步服务调用
+ */
+export async function syncTeamClosureRelations(walletAddresses: string[], maxDepth: number = 15): Promise<number> {
+  let totalRelations = 0;
+
+  for (const walletAddress of walletAddresses) {
+    try {
+      // 获取用户的推荐链路
+      const lineage = await getReferralLineage(walletAddress, maxDepth);
+      
+      if (lineage.length === 0) continue;
+
+      // 获取用户ID
+      const { data: userData } = await supabase
+        .from('users')
+        .select('id')
+        .eq('wallet_address', walletAddress.toLowerCase())
+        .single();
+
+      if (!userData) continue;
+
+      const descendantId = userData.id;
+      const closureRecords: Array<{ ancestor_id: number; descendant_id: number; depth: number }> = [];
+
+      for (const ancestor of lineage) {
+        const { data: ancestorData } = await supabase
+          .from('users')
+          .select('id')
+          .eq('wallet_address', ancestor.address.toLowerCase())
+          .single();
+
+        if (ancestorData) {
+          closureRecords.push({
+            ancestor_id: ancestorData.id,
+            descendant_id: descendantId,
+            depth: ancestor.depth
+          });
+        }
+      }
+
+      if (closureRecords.length > 0) {
+        await supabase
+          .from('team_closure')
+          .upsert(closureRecords, { 
+            onConflict: 'ancestor_id,descendant_id',
+            ignoreDuplicates: true 
+          });
+        totalRelations += closureRecords.length;
+      }
+    } catch (error) {
+      console.error(`[DApp] 同步用户 ${walletAddress} 闭包关系失败:`, error);
+    }
+  }
+
+  return totalRelations;
+}
+
+/**
+ * 获取团队统计信息
+ * 统计用户在团队闭包表中的团队总人数（15代，自己算一代）
+ */
+router.post('/team/stats', async (req, res) => {
+  try {
+    const { wallet_address } = req.body;
+
+    if (!wallet_address) {
+      return res.status(400).json({ code: 400, message: 'wallet_address is required' });
+    }
+
+    // 获取用户ID
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('wallet_address', wallet_address.toLowerCase())
+      .single();
+
+    if (userError || !userData) {
+      return res.status(404).json({ code: 404, message: 'User not found' });
+    }
+
+    const userId = userData.id;
+
+    // 统计团队总人数（15代 + 自己 = 16层）
+    // 自己算一代（depth=0），往上15代（depth=1 到 depth=15）
+    const { count: teamCount, error: countError } = await supabase
+      .from('team_closure')
+      .select('*', { count: 'exact', head: true })
+      .eq('ancestor_id', userId)
+      .lte('depth', 15);  // 包含自己（depth=0）到 depth=15
+
+    if (countError) {
+      console.error('[DApp] 统计团队人数失败:', countError);
+      return res.status(500).json({ code: 500, message: 'Failed to get team stats' });
+    }
+
+    // 自己算一个，加上闭包表中的后代
+    // depth=0 是自己，depth=1 到 15 是团队成员
+    const { count: descendantCount } = await supabase
+      .from('team_closure')
+      .select('*', { count: 'exact', head: true })
+      .eq('ancestor_id', userId)
+      .gte('depth', 1)
+      .lte('depth', 15);
+
+    // 团队总人数 = 自己(1) + 所有后代
+    const totalTeam = (descendantCount || 0) + 1;
+
+    res.json({
+      code: 0,
+      message: 'success',
+      data: {
+        team_count: totalTeam,  // 团队总人数（包含自己）
+        direct_count: descendantCount || 0  // 直接下级（1代）
+      }
+    });
+  } catch (error: any) {
+    console.error('[DApp] 获取团队统计失败:', error);
+    res.status(500).json({ code: 500, message: error.message || 'Failed to get team stats' });
+  }
+});
+
+/**
+ * 获取团队所有地址列表
+ * 返回用户在团队闭包表中所有后代地址
+ */
+router.post('/team/direct', async (req, res) => {
+  try {
+    const { wallet_address, depth } = req.body;
+
+    if (!wallet_address) {
+      return res.status(400).json({ code: 400, message: 'wallet_address is required' });
+    }
+
+    // 获取用户ID
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('wallet_address', wallet_address.toLowerCase())
+      .single();
+
+    if (userError || !userData) {
+      return res.status(404).json({ code: 404, message: 'User not found' });
+    }
+
+    const userId = userData.id;
+
+    // 构建查询
+    let query = supabase
+      .from('team_closure')
+      .select(`
+        depth,
+        users:descendant_id (
+          wallet_address,
+          level,
+          total_invest,
+          team_invest,
+          direct_count,
+          is_activated,
+          activated_at
+        )
+      `)
+      .eq('ancestor_id', userId)
+      .neq('depth', 0);  // 排除自己
+
+    // 如果指定了深度限制
+    if (depth && depth > 0) {
+      query = query.lte('depth', depth);
+    } else {
+      // 默认15代
+      query = query.lte('depth', 15);
+    }
+
+    const { data: teamData, error: teamError } = await query;
+
+    if (teamError) {
+      console.error('[DApp] 获取团队列表失败:', teamError);
+      return res.status(500).json({ code: 500, message: 'Failed to get team list' });
+    }
+
+    // 格式化返回数据
+    const teamList = (teamData || []).map((item: any) => ({
+      depth: item.depth,
+      wallet_address: item.users?.wallet_address || '',
+      level: item.users?.level || 0,
+      total_invest: item.users?.total_invest || '0',
+      team_invest: item.users?.team_invest || '0',
+      direct_count: item.users?.direct_count || 0,
+      is_activated: item.users?.is_activated || false,
+      activated_at: item.users?.activated_at || null
+    }));
+
+    res.json({
+      code: 0,
+      message: 'success',
+      data: {
+        total: teamList.length,
+        list: teamList
+      }
+    });
+  } catch (error: any) {
+    console.error('[DApp] 获取团队列表失败:', error);
+    res.status(500).json({ code: 500, message: error.message || 'Failed to get team list' });
+  }
+});
+
+/**
+ * POST /api/v1/dapp/team/rebuild-closure
+ * 全量重建团队闭包关系
+ * 清空所有闭包关系，然后为所有已激活用户重新建立闭包关系
+ */
+router.post('/team/rebuild-closure', async (req: express.Request, res: express.Response) => {
+  try {
+    console.log('[DApp] 收到全量重建团队闭包关系请求');
+
+    // 动态导入避免循环依赖
+    const { rebuildAllTeamClosure } = await import('../utils/sync-chain-service');
+
+    // 执行全量重建
+    const result = await rebuildAllTeamClosure();
+
+    if (result.success) {
+      res.json({
+        code: 0,
+        message: 'success',
+        data: {
+          totalUsers: result.totalUsers,
+          rebuiltUsers: result.rebuiltUsers,
+          failedUsers: result.failedUsers,
+          duration: `${result.duration}ms`
+        }
+      });
+    } else {
+      res.status(500).json({
+        code: 500,
+        message: result.error || '全量重建失败'
+      });
+    }
+  } catch (error: any) {
+    console.error('[DApp] 全量重建团队闭包关系失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: error.message || 'Failed to rebuild team closure'
     });
   }
 });
