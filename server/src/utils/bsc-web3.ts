@@ -1,7 +1,15 @@
 import { ethers } from 'ethers';
+import fs from 'fs';
+import path from 'path';
 
 // BSC 主网 RPC
 const BSC_RPC_URL = process.env.BSC_RPC_URL || 'https://bsc-dataseed.binance.org/';
+const BSC_EVENT_BLOCK_STEP = Number(process.env.BSC_EVENT_BLOCK_STEP || 50000);
+const BSC_START_BLOCK = Number(process.env.BSC_START_BLOCK || 0);
+const BSC_REGISTER_TX_CACHE_DIR = process.env.BSC_REGISTER_TX_CACHE_DIR || path.join(process.cwd(), 'server', 'cache', 'register-tx');
+
+const RPC_RETRY_MAX = Number(process.env.BSC_RPC_RETRY_MAX || 3);
+const RPC_RETRY_BASE_DELAY_MS = Number(process.env.BSC_RPC_RETRY_BASE_DELAY_MS || 300);
 
 // 合约地址
 const DQ_CONTRACT = '0xD6C7f9a6460034317294c52FDc056C548fbd0040';
@@ -16,14 +24,125 @@ const DQ_ABI = [
   "function users(address) view returns (address referrer, uint256 directCount, uint8 level, uint256 totalInvest, uint256 teamInvest, uint256 energy, uint256 lpShares, uint8 dLevel)"
 ];
 
-// 获取 BSC Provider
-function getBSCProvider() {
-  return new ethers.JsonRpcProvider(BSC_RPC_URL);
+// 复用 Provider，避免重复创建连接
+const provider = new ethers.JsonRpcProvider(BSC_RPC_URL, undefined, {
+  batchMaxCount: 1,
+});
+
+type RegisterTxCachePayload = {
+  walletAddress: string;
+  txHash: string;
+  cachedAt: string;
+};
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normalizeRpcError(error: unknown): { code?: string; reason: string } {
+  const err = error as any;
+  const code = err?.code as string | undefined;
+  const reason =
+    err?.shortMessage ||
+    err?.reason ||
+    err?.message ||
+    (typeof error === 'string' ? error : 'Unknown error');
+
+  return { code, reason: String(reason) };
+}
+
+function isRetryableError(error: unknown): boolean {
+  const { code, reason } = normalizeRpcError(error);
+  const text = `${code ?? ''} ${reason} ${JSON.stringify(error)}`.toLowerCase();
+
+  return (
+    text.includes('rate limit') ||
+    text.includes('too many requests') ||
+    text.includes('429') ||
+    text.includes('-32005') ||
+    text.includes('missing response for request') ||
+    text.includes('socket disconnected') ||
+    text.includes('tls connection') ||
+    text.includes('network socket') ||
+    text.includes('network error') ||
+    text.includes('econnreset') ||
+    text.includes('etimedout') ||
+    text.includes('econnrefused') ||
+    code === 'ECONNRESET' ||
+    code === 'ETIMEDOUT' ||
+    code === 'ECONNREFUSED'
+  );
+}
+
+async function withRpcRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= RPC_RETRY_MAX; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      const shouldRetry = isRetryableError(error) && attempt < RPC_RETRY_MAX;
+      if (!shouldRetry) {
+        throw error;
+      }
+
+      const delay = RPC_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+      const { code, reason } = normalizeRpcError(error);
+      console.warn(
+        `[BSC] RPC 重试 ${attempt}/${RPC_RETRY_MAX} - ${label}（code=${code ?? 'N/A'} reason=${reason}）等待 ${delay}ms`
+      );
+      await sleep(delay);
+    }
+  }
+
+  throw lastError;
+}
+
+function getRegisterTxCacheFilePath(walletAddress: string): string {
+  return path.join(BSC_REGISTER_TX_CACHE_DIR, `${walletAddress.toLowerCase()}.json`);
+}
+
+function readRegisterTxCache(walletAddress: string): string | null {
+  try {
+    const filePath = getRegisterTxCacheFilePath(walletAddress);
+    if (!fs.existsSync(filePath)) {
+      return null;
+    }
+
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const payload = JSON.parse(raw) as Partial<RegisterTxCachePayload>;
+    if (typeof payload.txHash === 'string' && payload.txHash.length > 0) {
+      return payload.txHash;
+    }
+
+    return null;
+  } catch (error) {
+    const { reason } = normalizeRpcError(error);
+    console.warn(`[BSC] 读取注册交易缓存失败: ${reason}`);
+    return null;
+  }
+}
+
+function writeRegisterTxCache(walletAddress: string, txHash: string): void {
+  try {
+    fs.mkdirSync(BSC_REGISTER_TX_CACHE_DIR, { recursive: true });
+    const filePath = getRegisterTxCacheFilePath(walletAddress);
+    const payload: RegisterTxCachePayload = {
+      walletAddress: walletAddress.toLowerCase(),
+      txHash,
+      cachedAt: new Date().toISOString(),
+    };
+
+    fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf-8');
+  } catch (error) {
+    const { reason } = normalizeRpcError(error);
+    console.warn(`[BSC] 写入注册交易缓存失败: ${reason}`);
+  }
 }
 
 // 获取合约实例
 function getContract() {
-  const provider = getBSCProvider();
   return new ethers.Contract(DQ_CONTRACT, DQ_ABI, provider);
 }
 
@@ -33,23 +152,51 @@ function getContract() {
  */
 export async function getUserRegisterTxHash(walletAddress: string): Promise<string | null> {
   try {
+    if (!ethers.isAddress(walletAddress)) {
+      console.warn(`[BSC] 非法地址，跳过注册交易查询: ${walletAddress}`);
+      return null;
+    }
+
+    const normalizedAddress = walletAddress.toLowerCase();
+    const cachedTxHash = readRegisterTxCache(normalizedAddress);
+    if (cachedTxHash) {
+      console.log(`[BSC] 命中注册交易缓存 ${normalizedAddress}: ${cachedTxHash}`);
+      return cachedTxHash;
+    }
+
     const contract = getContract();
-    const filter = contract.filters.Register(null, null);
-    
-    // 获取该用户的所有 Register 事件（取第一条，即首次注册）
-    const events = await contract.getFilterLogs(filter);
-    
-    // 找到该用户的注册事件
-    const userEvents = events.filter(e => {
-      const user = e.args?.[0];
-      return user?.toLowerCase() === walletAddress.toLowerCase();
-    });
-    
-    if (userEvents.length > 0) {
-      // 返回首次注册的交易 hash
-      const txHash = userEvents[0].transactionHash;
-      console.log(`[BSC] 找到用户 ${walletAddress} 的注册交易: ${txHash}`);
-      return txHash;
+    const filter = contract.filters.Register(normalizedAddress, null);
+
+    // 分段区块查询，避免一次扫全链导致超时/限流
+    const latestBlock = await withRpcRetry(
+      () => provider.getBlockNumber(),
+      `getBlockNumber()`
+    );
+
+    const fromStart = Number.isFinite(BSC_START_BLOCK) && BSC_START_BLOCK >= 0 ? BSC_START_BLOCK : 0;
+    const step = Number.isFinite(BSC_EVENT_BLOCK_STEP) && BSC_EVENT_BLOCK_STEP > 0 ? BSC_EVENT_BLOCK_STEP : 50000;
+
+    for (let fromBlock = fromStart; fromBlock <= latestBlock; fromBlock += step) {
+      const toBlock = Math.min(fromBlock + step - 1, latestBlock);
+
+      const events = await withRpcRetry(
+        () => contract.queryFilter(filter, fromBlock, toBlock),
+        `queryFilter(Register, ${fromBlock}-${toBlock})`
+      );
+
+      if (events.length > 0) {
+        const sortedEvents = [...events].sort((a, b) => {
+          if (a.blockNumber !== b.blockNumber) return a.blockNumber - b.blockNumber;
+          return (a.index ?? 0) - (b.index ?? 0);
+        });
+
+        const txHash = sortedEvents[0].transactionHash;
+        writeRegisterTxCache(normalizedAddress, txHash);
+        console.log(
+          `[BSC] 找到用户 ${walletAddress} 的注册交易: ${txHash}（区块范围 ${fromBlock}-${toBlock}）`
+        );
+        return txHash;
+      }
     }
     
     console.log(`[BSC] 未找到用户 ${walletAddress} 的注册交易`);
@@ -65,10 +212,17 @@ export async function getUserRegisterTxHash(walletAddress: string): Promise<stri
  */
 export async function isUserRegisteredOnChain(walletAddress: string): Promise<boolean> {
   try {
+    if (!ethers.isAddress(walletAddress)) {
+      return false;
+    }
+
     const contract = getContract();
     
     // 尝试获取用户信息
-    const userInfo = await contract.users(walletAddress);
+    const userInfo = await withRpcRetry(
+      () => contract.users(walletAddress),
+      `users(${walletAddress})`
+    );
     
     // 如果 referrer 不为 0x0...0，则认为已注册
     if (userInfo && userInfo.referrer !== ethers.ZeroAddress) {
@@ -88,8 +242,16 @@ export async function isUserRegisteredOnChain(walletAddress: string): Promise<bo
  */
 export async function getUserInfoFromChain(walletAddress: string) {
   try {
+    if (!ethers.isAddress(walletAddress)) {
+      console.warn(`[BSC] 非法地址，跳过用户信息查询: ${walletAddress}`);
+      return null;
+    }
+
     const contract = getContract();
-    const userInfo = await contract.users(walletAddress);
+    const userInfo = await withRpcRetry(
+      () => contract.users(walletAddress),
+      `users(${walletAddress})`
+    );
     
     return {
       referrer: userInfo.referrer,
