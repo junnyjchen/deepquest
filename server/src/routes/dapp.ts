@@ -2016,4 +2016,103 @@ router.get('/sync/status', async (req, res) => {
   }
 });
 
+/**
+ * 触发增量同步（仅同步新增用户）
+ * POST /api/v1/dapp/sync/incremental
+ * Header: X-API-Key (可选的 API 密钥验证)
+ * Body: { fields?: string[] } - 要同步的字段数组
+ * 
+ * 返回: { success, newUsers, syncedUsers, failedUsers, duration, error? }
+ * 
+ * 适合外部定时任务调用 (推荐每 1-2 小时执行一次)
+ * 
+ * 使用示例:
+ * curl -X POST http://localhost:5000/api/v1/dapp/sync/incremental \
+ *   -H "Content-Type: application/json" \
+ *   -H "X-API-Key: your-secret-key" \
+ *   -d '{ "fields": ["level", "total_invest"] }'
+ */
+router.post('/sync/incremental', async (req, res) => {
+  try {
+    // 可选的 API Key 验证
+    const apiKey = req.headers['x-api-key'];
+    const expectedApiKey = process.env.SYNC_API_KEY;
+    
+    // 如果配置了 SYNC_API_KEY，则进行验证
+    if (expectedApiKey && apiKey !== expectedApiKey) {
+      return res.status(401).json({
+        code: 401,
+        message: '无效的 API Key'
+      });
+    }
+    
+    const { fields } = req.body;
+    
+    // 动态导入避免循环依赖
+    const { syncChainDataIncremental } = await import('../utils/sync-chain-service');
+    
+    // 执行增量同步
+    const result = await syncChainDataIncremental(fields);
+    
+    res.json({
+      code: 0,
+      message: '增量同步完成',
+      data: result
+    });
+  } catch (error: any) {
+    console.error('增量同步失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: error.message || '增量同步失败'
+    });
+  }
+});
+
+/**
+ * 重置同步索引（重新开始完整同步）
+ * DELETE /api/v1/dapp/sync/index
+ * Header: X-API-Key (可选的 API 密钥验证)
+ * 
+ * 返回: { code: 0, message: '同步索引已重置' }
+ * 
+ * 警告: 执行此操作后，下次增量同步会从头开始
+ * 使用场景: 链上数据异常、需要重新初始化
+ * 
+ * 使用示例:
+ * curl -X DELETE http://localhost:5000/api/v1/dapp/sync/index \
+ *   -H "X-API-Key: your-secret-key"
+ */
+router.delete('/sync/index', async (req, res) => {
+  try {
+    // 可选的 API Key 验证
+    const apiKey = req.headers['x-api-key'];
+    const expectedApiKey = process.env.SYNC_API_KEY;
+    
+    // 如果配置了 SYNC_API_KEY，则进行验证
+    if (expectedApiKey && apiKey !== expectedApiKey) {
+      return res.status(401).json({
+        code: 401,
+        message: '无效的 API Key'
+      });
+    }
+    
+    // 动态导入避免循环依赖
+    const { resetSyncIndex } = await import('../utils/sync-chain-service');
+    
+    // 重置同步索引
+    resetSyncIndex();
+    
+    res.json({
+      code: 0,
+      message: '同步索引已重置，下次增量同步将从头开始'
+    });
+  } catch (error: any) {
+    console.error('重置同步索引失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: error.message || '重置失败'
+    });
+  }
+});
+
 export default router;

@@ -8,21 +8,46 @@
 import { getSupabaseClient } from '../storage/database/supabase-client';
 import { DQ_CONTRACT_ADDRESS, DQ_ABI } from '../config/contracts';
 import { ethers } from 'ethers';
+import {
+  loadSyncState,
+  saveSyncState,
+  getLastSyncedIndex,
+  updateLastSyncedIndex,
+  updateSyncError,
+  resetSyncState,
+  getFullSyncState,
+  initSyncStateFile,
+} from './sync-state';
 
 const supabase = getSupabaseClient();
 
+// 初始化同步状态文件
+initSyncStateFile();
+
 // BSC RPC
 const BSC_RPC_URL = process.env.BSC_RPC_URL || 'https://bsc-dataseed.binance.org/';
-const provider = new ethers.JsonRpcProvider(BSC_RPC_URL);
+// 关闭 ethers 内部 JSON-RPC 批量请求，避免节点将 eth_call 批请求整体限流（-32005）
+const provider = new ethers.JsonRpcProvider(BSC_RPC_URL, undefined, {
+  batchMaxCount: 1,
+});
 
 // 单次同步最大用户数（防止 Gas 限制）
 const BATCH_SIZE = 50;
+
+// RPC 限流保护参数
+const RPC_CALL_CONCURRENCY = 10;         // 每轮并发 eth_call 数
+const RPC_CHUNK_DELAY_MS = 120;          // 每轮并发后的短暂间隔
+const RPC_RETRY_MAX = 3;                 // 限流后最大重试次数
+const RPC_RETRY_BASE_DELAY_MS = 300;     // 指数退避基准延迟
 
 // 记录同步状态
 let syncInProgress = false;
 let lastSyncTime: Date | null = null;
 let lastError: string | null = null;
 let lastSyncResult: { totalUsers: number; syncedUsers: number; failedUsers: number } | null = null;
+
+// 注意: lastSyncedIndex 现在从文件加载，不再存储在内存中
+// 使用 getLastSyncedIndex() 获取，使用 updateLastSyncedIndex() 更新
 
 /**
  * 获取合约实例
@@ -31,33 +56,175 @@ function getContract() {
   return new ethers.Contract(DQ_CONTRACT_ADDRESS, DQ_ABI, provider);
 }
 
+type AllUsersQueryResult =
+  | { success: true; address: string; index: number }
+  | { success: false; index: number; code?: string; reason: string };
+
+/**
+ * 标准化链上读取错误，便于日志排查
+ */
+function normalizeChainReadError(error: unknown): { code?: string; reason: string } {
+  const err = error as any;
+  const code = err?.code as string | undefined;
+  const reason =
+    err?.shortMessage ||
+    err?.reason ||
+    err?.message ||
+    (typeof error === 'string' ? error : 'Unknown error');
+
+  return { code, reason: String(reason) };
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableError(error: unknown): boolean {
+  const { code, reason } = normalizeChainReadError(error);
+  const text = `${code ?? ''} ${reason} ${JSON.stringify(error)}`.toLowerCase();
+
+  return (
+    // RPC 限流
+    text.includes('rate limit') ||
+    text.includes('too many requests') ||
+    text.includes('429') ||
+    text.includes('-32005') ||
+    text.includes('missing response for request') ||
+    // 网络层断连（TLS/TCP 握手失败、连接被重置等）
+    text.includes('socket disconnected') ||
+    text.includes('tls connection') ||
+    text.includes('econnreset') ||
+    text.includes('econnrefused') ||
+    text.includes('etimedout') ||
+    text.includes('network error') ||
+    text.includes('network socket') ||
+    code === 'ECONNRESET' ||
+    code === 'ETIMEDOUT' ||
+    code === 'ECONNREFUSED'
+  );
+}
+
+async function withRpcRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= RPC_RETRY_MAX; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      const shouldRetry = isRetryableError(error) && attempt < RPC_RETRY_MAX;
+
+      if (!shouldRetry) {
+        throw error;
+      }
+
+      const delay = RPC_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+      const { code, reason } = normalizeChainReadError(error);
+      console.warn(
+        `[ChainSync] RPC 限流重试 ${attempt}/${RPC_RETRY_MAX} - ${label}（code=${code ?? 'N/A'} reason=${reason}）等待 ${delay}ms`
+      );
+      await sleep(delay);
+    }
+  }
+
+  throw lastError;
+}
+
 /**
  * 从链上获取所有用户地址
- * 通过 Register 事件获取所有注册用户
+ * 通过 allUsers 数组直接查询（比事件扫描更稳定高效）
+ * 采用增量查询：逐个尝试查询索引，直到出错
  */
 export async function getAllUsersFromChain(): Promise<string[]> {
   const contract = getContract();
   try {
-    // 使用 Register 事件获取所有注册用户
-    // 从区块 1 开始查询（可以根据需要调整起始区块）
-    const filter = contract.filters.Register();
-    const events = await contract.queryFilter(filter, 1, 'latest');
+    const users: string[] = [];
+    let index = 0;
+    const batchSize = 100; // 每批查询数量
+    const maxTries = 10000; // 最多尝试查询的索引数
     
-    console.log(`[ChainSync] 链上 Register 事件数: ${events.length}`);
+    console.log('[ChainSync] 开始从链上获取用户列表...');
     
-    // 从事件中提取用户地址
-    const usersSet = new Set<string>();
-    for (const event of events) {
-      const user = 'args' in event ? event.args?.[0] : undefined;
-      if (typeof user === 'string') {
-        usersSet.add(user);
+    while (index < maxTries) {
+      try {
+        // 批量查询用户地址（分块并发，避免瞬时触发 RPC 限流）
+        const tasks: Array<() => Promise<AllUsersQueryResult>> = [];
+        for (let i = 0; i < batchSize && index + i < maxTries; i++) {
+          const currentIndex = index + i;
+          tasks.push(async () => {
+            try {
+              const addr = await withRpcRetry(
+                () => contract.allUsers(currentIndex),
+                `allUsers(${currentIndex})`
+              );
+              return { success: true as const, address: addr, index: currentIndex };
+            } catch (error) {
+              const { code, reason } = normalizeChainReadError(error);
+              return { success: false as const, index: currentIndex, code, reason };
+            }
+          });
+        }
+
+        const results: AllUsersQueryResult[] = [];
+        for (let i = 0; i < tasks.length; i += RPC_CALL_CONCURRENCY) {
+          const chunk = tasks.slice(i, i + RPC_CALL_CONCURRENCY);
+          const chunkResults = await Promise.all(chunk.map((task) => task()));
+          results.push(...chunkResults);
+
+          if (i + RPC_CALL_CONCURRENCY < tasks.length) {
+            await sleep(RPC_CHUNK_DELAY_MS);
+          }
+        }
+        let foundAny = false;
+        const failedResults: Array<Extract<AllUsersQueryResult, { success: false }>> = [];
+        
+        for (const result of results) {
+          if (result.success) {
+            users.push(result.address.toLowerCase());
+            foundAny = true;
+          } else {
+            failedResults.push(result);
+          }
+        }
+
+        if (failedResults.length > 0) {
+          const sample = failedResults
+            .slice(0, 3)
+            .map((r) => `idx=${r.index}, code=${r.code ?? 'N/A'}, reason=${r.reason}`)
+            .join(' | ');
+          console.warn(
+            `[ChainSync] allUsers 批次存在失败: ${failedResults.length}/${results.length}（范围 ${index}-${Math.min(index + batchSize - 1, maxTries - 1)}），示例: ${sample}`
+          );
+        }
+        
+        // 如果这一批都查不到，说明已经到头了
+        if (!foundAny) {
+          if (failedResults.length > 0) {
+            const boundaryError = failedResults[0];
+            console.log(
+              `[ChainSync] allUsers 到达边界或读取失败，停止于索引 ${boundaryError.index}（code=${boundaryError.code ?? 'N/A'} reason=${boundaryError.reason}）`
+            );
+          }
+          break;
+        }
+        
+        index += batchSize;
+        
+        // 进度日志
+        if (index % 500 === 0 || index === batchSize) {
+          console.log(`[ChainSync] 已获取 ${users.length} 个用户...`);
+        }
+      } catch (error) {
+        console.log(`[ChainSync] 在索引 ${index} 处停止查询`);
+        break;
       }
     }
     
-    const users = Array.from(usersSet);
-    console.log(`[ChainSync] 链上唯一用户数: ${users.length}`);
+    // 去重（虽然不太可能有重复，但以防万一）
+    const uniqueUsers = Array.from(new Set(users));
+    console.log(`[ChainSync] 成功获取 ${uniqueUsers.length} 个唯一用户地址`);
     
-    return users;
+    return uniqueUsers;
   } catch (error) {
     console.error('[ChainSync] 获取所有用户失败:', error);
     return [];
@@ -79,7 +246,10 @@ export async function getChainUserInfo(userAddress: string): Promise<{
 } | null> {
   try {
     const contract = getContract();
-    const userInfo = await contract.getUser(userAddress);
+    const userInfo = await withRpcRetry(
+      () => contract.getUser(userAddress),
+      `getUser(${userAddress})`
+    );
     
     return {
       referrer: userInfo[0],
@@ -259,6 +429,7 @@ export async function syncChainData(fields?: string[]): Promise<{
       console.log('[ChainSync] 链上无用户数据');
       lastSyncTime = new Date();
       lastError = null;
+      updateSyncError(null);
       lastSyncResult = { totalUsers: 0, syncedUsers: 0, failedUsers: 0 };
       syncInProgress = false;
       return {
@@ -307,6 +478,7 @@ export async function syncChainData(fields?: string[]): Promise<{
     const duration = Date.now() - startTime;
     lastSyncTime = new Date();
     lastError = null;
+    updateSyncError(null);
     lastSyncResult = { totalUsers, syncedUsers, failedUsers };
 
     console.log(`[ChainSync] ========== 同步完成 ==========`);
@@ -323,12 +495,233 @@ export async function syncChainData(fields?: string[]): Promise<{
   } catch (error: any) {
     const duration = Date.now() - startTime;
     lastError = error.message;
+    updateSyncError(error.message);
     lastSyncResult = { totalUsers, syncedUsers, failedUsers };
     console.error('[ChainSync] 同步失败:', error);
 
     return {
       success: false,
       totalUsers,
+      syncedUsers,
+      failedUsers,
+      duration,
+      error: error.message,
+    };
+  } finally {
+    syncInProgress = false;
+  }
+}
+
+/**
+ * 获取链上新增用户（增量同步）
+ * 只查询从上次同步索引之后的用户
+ */
+async function getNewUsersFromChain(startIndex: number): Promise<string[]> {
+  const contract = getContract();
+  try {
+    const newUsers: string[] = [];
+    let index = startIndex;
+    const batchSize = 100;
+    const maxTries = 10000;
+    
+    console.log(`[ChainSync] 开始增量查询新用户（从索引 ${startIndex} 开始）...`);
+    
+    while (index < maxTries) {
+      try {
+        const tasks: Array<() => Promise<AllUsersQueryResult>> = [];
+        for (let i = 0; i < batchSize && index + i < maxTries; i++) {
+          const currentIndex = index + i;
+          tasks.push(async () => {
+            try {
+              const addr = await withRpcRetry(
+                () => contract.allUsers(currentIndex),
+                `allUsers(${currentIndex})`
+              );
+              return { success: true as const, address: addr, index: currentIndex };
+            } catch (error) {
+              const { code, reason } = normalizeChainReadError(error);
+              return { success: false as const, index: currentIndex, code, reason };
+            }
+          });
+        }
+
+        const results: AllUsersQueryResult[] = [];
+        for (let i = 0; i < tasks.length; i += RPC_CALL_CONCURRENCY) {
+          const chunk = tasks.slice(i, i + RPC_CALL_CONCURRENCY);
+          const chunkResults = await Promise.all(chunk.map((task) => task()));
+          results.push(...chunkResults);
+
+          if (i + RPC_CALL_CONCURRENCY < tasks.length) {
+            await sleep(RPC_CHUNK_DELAY_MS);
+          }
+        }
+        let foundAny = false;
+        const failedResults: Array<Extract<AllUsersQueryResult, { success: false }>> = [];
+        
+        for (const result of results) {
+          if (result.success) {
+            newUsers.push(result.address.toLowerCase());
+            foundAny = true;
+          } else {
+            failedResults.push(result);
+          }
+        }
+
+        if (failedResults.length > 0) {
+          const sample = failedResults
+            .slice(0, 3)
+            .map((r) => `idx=${r.index}, code=${r.code ?? 'N/A'}, reason=${r.reason}`)
+            .join(' | ');
+          console.warn(
+            `[ChainSync] 增量 allUsers 批次存在失败: ${failedResults.length}/${results.length}（范围 ${index}-${Math.min(index + batchSize - 1, maxTries - 1)}），示例: ${sample}`
+          );
+        }
+        
+        if (!foundAny) {
+          if (failedResults.length > 0) {
+            const boundaryError = failedResults[0];
+            console.log(
+              `[ChainSync] 增量查询到达边界或读取失败，停止于索引 ${boundaryError.index}（code=${boundaryError.code ?? 'N/A'} reason=${boundaryError.reason}）`
+            );
+          }
+          break;
+        }
+        
+        index += batchSize;
+        
+        if (newUsers.length % 500 === 0) {
+          console.log(`[ChainSync] 增量查询已获取 ${newUsers.length} 个新用户...`);
+        }
+      } catch (error) {
+        break;
+      }
+    }
+    
+    console.log(`[ChainSync] 增量查询完成，找到 ${newUsers.length} 个新用户`);
+    return newUsers;
+  } catch (error) {
+    console.error('[ChainSync] 获取新用户失败:', error);
+    return [];
+  }
+}
+
+/**
+ * 执行增量同步（仅同步新增用户）
+ * 比完整同步更快，适合定时任务
+ */
+export async function syncChainDataIncremental(fields?: string[]): Promise<{
+  success: boolean;
+  newUsers: number;
+  syncedUsers: number;
+  failedUsers: number;
+  duration: number;
+  error?: string;
+}> {
+  if (syncInProgress) {
+    console.log('[ChainSync] 同步任务正在执行中，跳过本次');
+    return {
+      success: false,
+      newUsers: 0,
+      syncedUsers: 0,
+      failedUsers: 0,
+      duration: 0,
+      error: 'Sync already in progress',
+    };
+  }
+
+  syncInProgress = true;
+  const startTime = Date.now();
+  let newUsers = 0;
+  let syncedUsers = 0;
+  let failedUsers = 0;
+
+  console.log('[ChainSync] ========== 开始增量同步 ==========');
+
+  try {
+    // 获取新增用户
+    const users = await getNewUsersFromChain(getLastSyncedIndex());
+    newUsers = users.length;
+
+    if (newUsers === 0) {
+      console.log('[ChainSync] 无新增用户');
+      lastSyncTime = new Date();
+      lastError = null;
+      updateSyncError(null);
+      const state = getFullSyncState();
+      lastSyncResult = { totalUsers: state.lastSyncedIndex + newUsers, syncedUsers: 0, failedUsers: 0 };
+      syncInProgress = false;
+      return {
+        success: true,
+        newUsers: 0,
+        syncedUsers: 0,
+        failedUsers: 0,
+        duration: Date.now() - startTime,
+      };
+    }
+
+    console.log(`[ChainSync] 开始同步 ${newUsers} 个新用户...`);
+
+    // 分批处理新用户
+    for (let i = 0; i < users.length; i += BATCH_SIZE) {
+      const batch = users.slice(i, i + BATCH_SIZE);
+      const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+      const totalBatches = Math.ceil(newUsers / BATCH_SIZE);
+      console.log(`[ChainSync] 增量同步批次 ${batchNum}/${totalBatches}`);
+
+      await Promise.all(
+        batch.map(async (userAddress) => {
+          try {
+            const userInfo = await getChainUserInfo(userAddress);
+            if (userInfo) {
+              const success = await syncUserToDatabase(userAddress, userInfo, fields);
+              if (success) {
+                syncedUsers++;
+              } else {
+                failedUsers++;
+              }
+            } else {
+              failedUsers++;
+            }
+          } catch (error) {
+            console.error(`[ChainSync] 处理用户 ${userAddress} 失败:`, error);
+            failedUsers++;
+          }
+        })
+      );
+
+      if (i + BATCH_SIZE < users.length) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    const newLastSyncedIndex = getLastSyncedIndex() + newUsers;
+    updateLastSyncedIndex(newLastSyncedIndex, syncedUsers, null);
+    lastSyncTime = new Date();
+    lastError = null;
+    lastSyncResult = { totalUsers: newLastSyncedIndex, syncedUsers, failedUsers };
+
+    console.log(`[ChainSync] ========== 增量同步完成 ==========`);
+    console.log(`[ChainSync] 新增用户: ${newUsers}, 成功: ${syncedUsers}, 失败: ${failedUsers}`);
+    console.log(`[ChainSync] 耗时: ${duration}ms`);
+    console.log(`[ChainSync] 下次同步索引: ${newLastSyncedIndex}`);
+
+    return {
+      success: true,
+      newUsers,
+      syncedUsers,
+      failedUsers,
+      duration,
+    };
+  } catch (error: any) {
+    const duration = Date.now() - startTime;
+    lastError = error.message;
+    updateSyncError(error.message);
+    console.error('[ChainSync] 增量同步失败:', error);
+
+    return {
+      success: false,
+      newUsers,
       syncedUsers,
       failedUsers,
       duration,
@@ -347,11 +740,28 @@ export function getSyncStatus(): {
   lastSyncTime: Date | null;
   lastError: string | null;
   lastResult: { totalUsers: number; syncedUsers: number; failedUsers: number } | null;
+  lastSyncedIndex: number;
+  totalSyncedCount: number;
 } {
+  const state = getFullSyncState();
   return {
     inProgress: syncInProgress,
-    lastSyncTime,
+    lastSyncTime: lastSyncTime,
     lastError,
     lastResult: lastSyncResult,
+    lastSyncedIndex: state.lastSyncedIndex,
+    totalSyncedCount: state.totalSyncedCount,
   };
+}
+
+/**
+ * 重置同步索引
+ * 用于需要重新完整同步的场景，清除所有同步进度
+ */
+export function resetSyncIndex(): void {
+  console.log('[ChainSync] 重置同步索引');
+  resetSyncState();
+  lastSyncTime = null;
+  lastError = null;
+  lastSyncResult = null;
 }

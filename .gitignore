@@ -15,3 +15,5 @@ node-compile-cache/
 .env
 client/.env
 server/.env
+.sync-state.json
+.sync-state.backup.*.json
