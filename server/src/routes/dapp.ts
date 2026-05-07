@@ -2398,4 +2398,45 @@ router.post('/team/direct', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/v1/dapp/team/rebuild-closure
+ * 全量重建团队闭包关系
+ * 清空所有闭包关系，然后为所有已激活用户重新建立闭包关系
+ */
+dappRouter.post('/team/rebuild-closure', async (req: express.Request, res: express.Response) => {
+  try {
+    console.log('[DApp] 收到全量重建团队闭包关系请求');
+
+    // 动态导入避免循环依赖
+    const { rebuildAllTeamClosure } = await import('../utils/sync-chain-service');
+
+    // 执行全量重建
+    const result = await rebuildAllTeamClosure();
+
+    if (result.success) {
+      res.json({
+        code: 0,
+        message: 'success',
+        data: {
+          totalUsers: result.totalUsers,
+          rebuiltUsers: result.rebuiltUsers,
+          failedUsers: result.failedUsers,
+          duration: `${result.duration}ms`
+        }
+      });
+    } else {
+      res.status(500).json({
+        code: 500,
+        message: result.error || '全量重建失败'
+      });
+    }
+  } catch (error: any) {
+    console.error('[DApp] 全量重建团队闭包关系失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: error.message || 'Failed to rebuild team closure'
+    });
+  }
+});
+
 export default router;

@@ -850,3 +850,103 @@ export function resetSyncIndex(): void {
   lastError = null;
   lastSyncResult = null;
 }
+
+/**
+ * 全量重建团队闭包关系
+ * 清空所有闭包关系，然后为所有已激活用户重新建立闭包关系
+ */
+export async function rebuildAllTeamClosure(): Promise<{
+  success: boolean;
+  totalUsers: number;
+  rebuiltUsers: number;
+  failedUsers: number;
+  duration: number;
+  error?: string;
+}> {
+  const startTime = Date.now();
+  let totalUsers = 0;
+  let rebuiltUsers = 0;
+  let failedUsers = 0;
+
+  console.log('[ChainSync] ========== 开始全量重建团队闭包关系 ==========');
+
+  try {
+    // 1. 获取所有已激活用户
+    const { data: activatedUsers, error: queryError } = await supabase
+      .from('users')
+      .select('wallet_address, is_activated')
+      .eq('is_activated', true);
+
+    if (queryError) {
+      throw new Error(`查询已激活用户失败: ${queryError.message}`);
+    }
+
+    totalUsers = activatedUsers?.length || 0;
+
+    if (totalUsers === 0) {
+      console.log('[ChainSync] 无已激活用户');
+      return {
+        success: true,
+        totalUsers: 0,
+        rebuiltUsers: 0,
+        failedUsers: 0,
+        duration: Date.now() - startTime,
+      };
+    }
+
+    console.log(`[ChainSync] 找到 ${totalUsers} 个已激活用户，开始重建闭包关系...`);
+
+    // 2. 清空所有闭包关系
+    const { error: deleteError } = await supabase
+      .from('team_closure')
+      .delete()
+      .neq('id', 0); // 删除所有记录
+
+    if (deleteError) {
+      throw new Error(`清空闭包表失败: ${deleteError.message}`);
+    }
+
+    console.log('[ChainSync] 已清空 team_closure 表');
+
+    // 3. 逐个用户重建闭包关系
+    for (let i = 0; i < activatedUsers.length; i++) {
+      const user = activatedUsers[i];
+      try {
+        await syncUserTeamClosure(user.wallet_address);
+        rebuiltUsers++;
+        
+        if ((i + 1) % 10 === 0 || i === activatedUsers.length - 1) {
+          console.log(`[ChainSync] 已重建 ${i + 1}/${totalUsers} 个用户的闭包关系`);
+        }
+      } catch (error) {
+        console.error(`[ChainSync] 重建用户 ${user.wallet_address} 闭包关系失败:`, error);
+        failedUsers++;
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    console.log(`[ChainSync] ========== 全量重建完成 ==========`);
+    console.log(`[ChainSync] 总用户: ${totalUsers}, 成功: ${rebuiltUsers}, 失败: ${failedUsers}`);
+    console.log(`[ChainSync] 耗时: ${duration}ms`);
+
+    return {
+      success: true,
+      totalUsers,
+      rebuiltUsers,
+      failedUsers,
+      duration,
+    };
+  } catch (error: any) {
+    const duration = Date.now() - startTime;
+    console.error('[ChainSync] 全量重建失败:', error);
+
+    return {
+      success: false,
+      totalUsers,
+      rebuiltUsers,
+      failedUsers,
+      duration,
+      error: error.message,
+    };
+  }
+}
