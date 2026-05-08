@@ -27,13 +27,8 @@ router.get('/profile/:wallet_address', async (req, res) => {
       });
     }
 
-    // 计算团队数据
-    const { count: directCount } = await supabase
-      .from('users')
-      .select('*', { count: 'exact', head: true })
-      .eq('referrer_address', wallet_address.toLowerCase());
-
-    // 计算个人投资额
+    // 计算团队数据（从 team_closure 表查询，与团队页面一致）
+    // 获取用户 ID
     const { data: deposits } = await supabase
       .from('deposits')
       .select('amount, created_at')
