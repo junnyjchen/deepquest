@@ -927,19 +927,18 @@ export async function rebuildAllTeamClosure(): Promise<{
 
   try {
     // 1. 获取所有已激活用户
-    const { data: activatedUsers, error: queryError } = await supabase
+    const { data: allUsers, error: queryError } = await supabase
       .from('users')
-      .select('wallet_address, is_activated')
-      .eq('is_activated', true);
+      .select('wallet_address, is_activated');
 
     if (queryError) {
-      throw new Error(`查询已激活用户失败: ${queryError.message}`);
+      throw new Error(`查询用户失败: ${queryError.message}`);
     }
 
-    totalUsers = activatedUsers?.length || 0;
+    totalUsers = allUsers?.length || 0;
 
     if (totalUsers === 0) {
-      console.log('[ChainSync] 无已激活用户');
+      console.log('[ChainSync] 无用户');
       return {
         success: true,
         totalUsers: 0,
@@ -949,7 +948,7 @@ export async function rebuildAllTeamClosure(): Promise<{
       };
     }
 
-    console.log(`[ChainSync] 找到 ${totalUsers} 个已激活用户，开始重建闭包关系...`);
+    console.log(`[ChainSync] 找到 ${totalUsers} 个用户，开始重建闭包关系...`);
 
     // 2. 清空所有闭包关系
     const { error: deleteError } = await supabase
@@ -1047,32 +1046,17 @@ export async function incrementalRebuildTeamClosure(): Promise<{
   let skippedUsers = 0;
 
   try {
-    // 1. 获取 users 表中存在但 team_closure 中没有记录的用户（增量用户）
-    const { data: newUsers, error: queryError } = await supabase
+    // 获取所有用户（不限制激活状态）
+    const { data: allUsers, error: allUsersError } = await supabase
       .from('users')
-      .select('wallet_address, is_activated')
-      .eq('is_activated', true)
-      .not('wallet_address', 'in', 
-        supabase.from('team_closure')
-          .select('users!inner(wallet_address)')
-          .eq('users.is_activated', true)
-          .limit(10000)
-          .single()
-          ? '(-1)' : '(invalid)'
-      );
-
-    // 简化查询：获取所有已激活用户，然后在代码中过滤
-    const { data: allActivatedUsers, error: allUsersError } = await supabase
-      .from('users')
-      .select('wallet_address, is_activated')
-      .eq('is_activated', true);
+      .select('wallet_address, is_activated');
 
     if (allUsersError) {
-      throw new Error(`查询已激活用户失败: ${allUsersError.message}`);
+      throw new Error(`查询用户失败: ${allUsersError.message}`);
     }
 
     // 过滤出还没有闭包关系的用户
-    const usersWithoutClosure: typeof allActivatedUsers = [];
+    const usersWithoutClosure: typeof allUsers = [];
     const usersWithClosureSet = new Set<string>();
 
     // 批量获取已有闭包关系的用户地址
@@ -1089,7 +1073,7 @@ export async function incrementalRebuildTeamClosure(): Promise<{
     }
 
     // 过滤出没有闭包关系的用户
-    allActivatedUsers?.forEach((user: any) => {
+    allUsers?.forEach((user: any) => {
       if (!usersWithClosureSet.has(user.wallet_address.toLowerCase())) {
         usersWithoutClosure.push(user);
       }
@@ -1148,17 +1132,6 @@ export async function incrementalRebuildTeamClosure(): Promise<{
     return {
       success: false,
       totalUsers,
-      rebuiltUsers,
-      failedUsers,
-      skippedUsers,
-      duration,
-      error: error.message,
-    };
-  } finally {
-    // 释放进程锁
-    isIncrementalRebuildRunning = false;
-  }
-}
       rebuiltUsers,
       failedUsers,
       skippedUsers,
