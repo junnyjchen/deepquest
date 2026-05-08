@@ -99,12 +99,16 @@ export default function DappProfile() {
     try {
       setUserLoading(true);
       
-      // 先获取后端数据
-      const response = await dappUserApi.getProfile(address);
-      
       // 优先使用本地激活状态
       const localActivated = await loadLocalActivation(address);
+      console.log('[Profile] address:', address);
+      console.log('[Profile] localActivated:', localActivated);
+      
+      const response = await dappUserApi.getProfile(address);
+      console.log('[Profile] response:', JSON.stringify(response));
+      
       const isActivated = localActivated || response?.data?.is_activated || parseFloat(response?.data?.total_invest || '0') > 0;
+      console.log('[Profile] final isActivated:', isActivated);
       
       if (response.code === 0 && response.data) {
         setUserData({
