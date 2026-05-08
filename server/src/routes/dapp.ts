@@ -2279,20 +2279,7 @@ router.post('/team/stats', async (req, res) => {
 
     const userId = userData.id;
 
-    // 统计团队总人数（15代 + 自己 = 16层）
-    // 自己算一代（depth=0），往上15代（depth=1 到 depth=15）
-    const { count: teamCount, error: countError } = await supabase
-      .from('team_closure')
-      .select('*', { count: 'exact', head: true })
-      .eq('ancestor_id', userId)
-      .lte('depth', 15);  // 包含自己（depth=0）到 depth=15
-
-    if (countError) {
-      console.error('[DApp] 统计团队人数失败:', countError);
-      return res.status(500).json({ code: 500, message: 'Failed to get team stats' });
-    }
-
-    // depth=1 到 15 是团队成员（不含自己）
+    // 统计团队总人数（不含自己，depth=1 到 15）
     const { count: teamCount } = await supabase
       .from('team_closure')
       .select('*', { count: 'exact', head: true })
