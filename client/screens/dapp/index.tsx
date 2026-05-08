@@ -61,6 +61,34 @@ const CYAN = '#00F0FF';
 const PURPLE = '#D020FF';
 
 const WALLET_STORAGE_KEY = '@deepquest_wallet';
+const ACTIVATION_STORAGE_KEY = '@deepquest_activation';
+
+// 加载本地激活状态
+const loadLocalActivation = async (walletAddress: string): Promise<boolean> => {
+  try {
+    const activationData = await AsyncStorage.getItem(ACTIVATION_STORAGE_KEY);
+    if (activationData) {
+      const data = JSON.parse(activationData);
+      return data.address?.toLowerCase() === walletAddress?.toLowerCase() && data.activated === true;
+    }
+  } catch (error) {
+    console.error('加载激活状态失败:', error);
+  }
+  return false;
+};
+
+// 保存本地激活状态
+const saveLocalActivation = async (walletAddress: string, activated: boolean): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(ACTIVATION_STORAGE_KEY, JSON.stringify({
+      address: walletAddress,
+      activated: activated,
+      timestamp: new Date().toISOString()
+    }));
+  } catch (error) {
+    console.error('保存激活状态失败:', error);
+  }
+};
 
 export default function DappIndex() {
   const router = useSafeRouter();
@@ -128,6 +156,11 @@ export default function DappIndex() {
           const savedWallet = await AsyncStorage.getItem(WALLET_STORAGE_KEY);
           if (savedWallet) {
             setWalletAddress(savedWallet);
+            // 加载本地激活状态
+            const localActivated = await loadLocalActivation(savedWallet);
+            if (localActivated) {
+              setIsOnChainRegistered(true);
+            }
             // 检查是否已绑定推荐人
             await checkInviteBinding(savedWallet);
           }
@@ -258,19 +291,31 @@ export default function DappIndex() {
         }
       }
       
-      // 3. 检查后端返回的激活状态
-      if (userData?.data?.is_activated) {
-        // 后端已激活，前端直接认为已激活
-        console.log('[DApp] 后端已激活，直接设置已激活');
+      // 3. 先检查本地激活状态（优先使用本地状态）
+      const localActivated = await loadLocalActivation(address);
+      if (localActivated) {
+        console.log('[DApp] 本地已激活，使用本地激活状态');
         setIsOnChainRegistered(true);
+        // 显示成功提示
+        Alert.alert('成功', `钱包已连接: ${address.slice(0, 10)}...`);
+        return;
+      }
+      
+      // 4. 检查后端返回的激活状态
+      if (userData?.data?.is_activated) {
+        // 后端已激活，同步到本地并设置已激活
+        console.log('[DApp] 后端已激活，同步激活状态到本地');
+        setIsOnChainRegistered(true);
+        await saveLocalActivation(address, true);
       } else {
         // 后端未激活，再查询链上状态
         const registered = await isUserRegisteredOnChain(address);
         console.log('[DApp] 链上激活状态:', registered);
         
         if (registered) {
-          // 链上已激活，同步状态到后端
+          // 链上已激活，同步状态到后端和本地
           setIsOnChainRegistered(true);
+          await saveLocalActivation(address, true);
           try {
             await dappApi.register(address, '', '');
             console.log('[DApp] 激活状态同步到后端成功');
@@ -293,8 +338,6 @@ export default function DappIndex() {
           );
         }
       }
-      
-      Alert.alert('成功', `钱包已连接: ${address.slice(0, 10)}...`);
     } catch (error: any) {
       console.error('连接钱包失败:', error);
       
@@ -441,6 +484,8 @@ export default function DappIndex() {
           
           if (result.is_activated) {
             setIsOnChainRegistered(true);
+            // 保存激活状态到本地
+            await saveLocalActivation(walletAddress, true);
           }
         } catch (err) {
           console.log('[DApp] 激活同步失败:', err);
