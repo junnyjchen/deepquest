@@ -104,11 +104,13 @@ export default function DappTeam() {
         });
       }
 
-      // 获取直接推荐列表
+      // 获取团队成员列表
       if (directListRes.code === 0 && directListRes.data?.list) {
         setMembers(directListRes.data.list.map((item: any) => ({
           address: item.wallet_address,
-          level: item.level || 1,
+          level: item.level || 0,
+          depth: item.depth || 0,
+          is_activated: item.is_activated || false,
           staked: item.total_invest || '0.0',
           name: `用户 ${item.wallet_address?.slice(2, 6) || 'XXXX'}`,
         })));
@@ -369,7 +371,20 @@ export default function DappTeam() {
                   </View>
                   <View className="items-end">
                     <Text className="text-sm font-medium" style={{ color: YELLOW }}>{member.staked} SOL</Text>
-                    <Text className="text-xs mt-0.5" style={{ color: TEXT_MUTED }}>Lv.{member.level}</Text>
+                    <View className="flex-row items-center mt-0.5 gap-1">
+                      <Text className="text-xs" style={{ color: TEXT_MUTED }}>Lv.{member.level}</Text>
+                      <Text className="text-xs" style={{ color: TEXT_MUTED }}>|</Text>
+                      <Text className="text-xs" style={{ color: CYAN }}>第{member.depth}代</Text>
+                    </View>
+                    <Text 
+                      className="text-xs mt-0.5 px-1.5 py-0.5 rounded"
+                      style={{ 
+                        color: member.is_activated ? '#10B981' : '#EF4444',
+                        backgroundColor: member.is_activated ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'
+                      }}
+                    >
+                      {member.is_activated ? '已激活' : '未激活'}
+                    </Text>
                   </View>
                 </View>
               ))}
