@@ -1011,7 +1011,7 @@ let isIncrementalRebuildRunning = false;
 
 /**
  * 增量重建团队闭包关系
- * 只处理新增用户或关系可能变化的用户，不清空现有关系
+ * 只处理 users 表中存在但 team_closure 中没有记录的用户
  * 使用进程锁防止并发执行
  */
 export async function incrementalRebuildTeamClosure(): Promise<{
@@ -1047,20 +1047,59 @@ export async function incrementalRebuildTeamClosure(): Promise<{
   let skippedUsers = 0;
 
   try {
-    // 1. 获取所有已激活用户
-    const { data: activatedUsers, error: queryError } = await supabase
+    // 1. 获取 users 表中存在但 team_closure 中没有记录的用户（增量用户）
+    const { data: newUsers, error: queryError } = await supabase
+      .from('users')
+      .select('wallet_address, is_activated')
+      .eq('is_activated', true)
+      .not('wallet_address', 'in', 
+        supabase.from('team_closure')
+          .select('users!inner(wallet_address)')
+          .eq('users.is_activated', true)
+          .limit(10000)
+          .single()
+          ? '(-1)' : '(invalid)'
+      );
+
+    // 简化查询：获取所有已激活用户，然后在代码中过滤
+    const { data: allActivatedUsers, error: allUsersError } = await supabase
       .from('users')
       .select('wallet_address, is_activated')
       .eq('is_activated', true);
 
-    if (queryError) {
-      throw new Error(`查询已激活用户失败: ${queryError.message}`);
+    if (allUsersError) {
+      throw new Error(`查询已激活用户失败: ${allUsersError.message}`);
     }
 
-    totalUsers = activatedUsers?.length || 0;
+    // 过滤出还没有闭包关系的用户
+    const usersWithoutClosure: typeof allActivatedUsers = [];
+    const usersWithClosureSet = new Set<string>();
+
+    // 批量获取已有闭包关系的用户地址
+    const { data: existingClosures } = await supabase
+      .from('team_closure')
+      .select('descendant_id, users(wallet_address)');
+
+    if (existingClosures) {
+      existingClosures.forEach((closure: any) => {
+        if (closure.users?.wallet_address) {
+          usersWithClosureSet.add(closure.users.wallet_address.toLowerCase());
+        }
+      });
+    }
+
+    // 过滤出没有闭包关系的用户
+    allActivatedUsers?.forEach((user: any) => {
+      if (!usersWithClosureSet.has(user.wallet_address.toLowerCase())) {
+        usersWithoutClosure.push(user);
+      }
+    });
+
+    const usersToSync = usersWithoutClosure;
+    totalUsers = usersToSync.length;
 
     if (totalUsers === 0) {
-      console.log('[ChainSync] 无已激活用户');
+      console.log('[ChainSync] 无新增用户需要同步');
       return {
         success: true,
         totalUsers: 0,
@@ -1071,35 +1110,17 @@ export async function incrementalRebuildTeamClosure(): Promise<{
       };
     }
 
-    console.log(`[ChainSync] 找到 ${totalUsers} 个已激活用户，开始增量重建闭包关系...`);
+    console.log(`[ChainSync] 找到 ${totalUsers} 个新增用户，开始增量重建闭包关系...`);
 
-    // 2. 逐个用户处理
-    for (let i = 0; i < activatedUsers.length; i++) {
-      const user = activatedUsers[i];
+    // 3. 逐个用户建立闭包关系
+    for (let i = 0; i < usersToSync.length; i++) {
+      const user = usersToSync[i];
       try {
-        // 检查用户是否已有闭包关系
-        const { data: existingClosure } = await supabase
-          .from('team_closure')
-          .select('id')
-          .eq('descendant_id', (await supabase
-            .from('users')
-            .select('id')
-            .eq('wallet_address', user.wallet_address.toLowerCase())
-            .single()
-          )?.data?.id)
-          .limit(1);
-
-        if (existingClosure && existingClosure.length > 0) {
-          // 用户已有闭包关系，跳过
-          skippedUsers++;
-        } else {
-          // 用户没有闭包关系，需要建立
-          await syncUserTeamClosure(user.wallet_address);
-          rebuiltUsers++;
-        }
+        await syncUserTeamClosure(user.wallet_address);
+        rebuiltUsers++;
         
-        if ((i + 1) % 10 === 0 || i === activatedUsers.length - 1) {
-          console.log(`[ChainSync] 已处理 ${i + 1}/${totalUsers} 个用户 (重建: ${rebuiltUsers}, 跳过: ${skippedUsers})`);
+        if ((i + 1) % 10 === 0 || i === usersToSync.length - 1) {
+          console.log(`[ChainSync] 已处理 ${i + 1}/${totalUsers} 个新增用户`);
         }
       } catch (error) {
         console.error(`[ChainSync] 处理用户 ${user.wallet_address} 闭包关系失败:`, error);
@@ -1127,6 +1148,17 @@ export async function incrementalRebuildTeamClosure(): Promise<{
     return {
       success: false,
       totalUsers,
+      rebuiltUsers,
+      failedUsers,
+      skippedUsers,
+      duration,
+      error: error.message,
+    };
+  } finally {
+    // 释放进程锁
+    isIncrementalRebuildRunning = false;
+  }
+}
       rebuiltUsers,
       failedUsers,
       skippedUsers,
