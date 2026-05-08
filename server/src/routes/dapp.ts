@@ -2433,4 +2433,47 @@ router.post('/team/rebuild-closure', async (req: express.Request, res: express.R
   }
 });
 
+/**
+ * POST /api/v1/dapp/team/incremental-rebuild-closure
+ * 增量重建团队闭包关系
+ * 只处理新增用户（还没有闭包关系的用户），不清空现有关系
+ * 使用进程锁防止并发执行
+ */
+router.post('/team/incremental-rebuild-closure', async (req: express.Request, res: express.Response) => {
+  try {
+    console.log('[DApp] 收到增量重建团队闭包关系请求');
+
+    // 动态导入避免循环依赖
+    const { incrementalRebuildTeamClosure } = await import('../utils/sync-chain-service');
+
+    // 执行增量重建
+    const result = await incrementalRebuildTeamClosure();
+
+    if (result.success) {
+      res.json({
+        code: 0,
+        message: 'success',
+        data: {
+          totalUsers: result.totalUsers,
+          rebuiltUsers: result.rebuiltUsers,
+          skippedUsers: result.skippedUsers,
+          failedUsers: result.failedUsers,
+          duration: `${result.duration}ms`
+        }
+      });
+    } else {
+      res.status(409).json({
+        code: 409,
+        message: result.error || '增量重建失败'
+      });
+    }
+  } catch (error: any) {
+    console.error('[DApp] 增量重建团队闭包关系失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: error.message || 'Failed to incremental rebuild team closure'
+    });
+  }
+});
+
 export default router;

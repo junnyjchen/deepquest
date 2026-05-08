@@ -1005,3 +1005,136 @@ export async function rebuildAllTeamClosure(): Promise<{
     };
   }
 }
+
+// 增量重建进程锁
+let isIncrementalRebuildRunning = false;
+
+/**
+ * 增量重建团队闭包关系
+ * 只处理新增用户或关系可能变化的用户，不清空现有关系
+ * 使用进程锁防止并发执行
+ */
+export async function incrementalRebuildTeamClosure(): Promise<{
+  success: boolean;
+  totalUsers: number;
+  rebuiltUsers: number;
+  failedUsers: number;
+  skippedUsers: number;
+  duration: number;
+  error?: string;
+}> {
+  const startTime = Date.now();
+  
+  // 检查进程锁
+  if (isIncrementalRebuildRunning) {
+    return {
+      success: false,
+      totalUsers: 0,
+      rebuiltUsers: 0,
+      failedUsers: 0,
+      skippedUsers: 0,
+      duration: Date.now() - startTime,
+      error: '增量重建任务正在执行中，请稍后重试',
+    };
+  }
+  
+  isIncrementalRebuildRunning = true;
+  console.log('[ChainSync] ========== 开始增量重建团队闭包关系 ==========');
+  
+  let totalUsers = 0;
+  let rebuiltUsers = 0;
+  let failedUsers = 0;
+  let skippedUsers = 0;
+
+  try {
+    // 1. 获取所有已激活用户
+    const { data: activatedUsers, error: queryError } = await supabase
+      .from('users')
+      .select('wallet_address, is_activated')
+      .eq('is_activated', true);
+
+    if (queryError) {
+      throw new Error(`查询已激活用户失败: ${queryError.message}`);
+    }
+
+    totalUsers = activatedUsers?.length || 0;
+
+    if (totalUsers === 0) {
+      console.log('[ChainSync] 无已激活用户');
+      return {
+        success: true,
+        totalUsers: 0,
+        rebuiltUsers: 0,
+        failedUsers: 0,
+        skippedUsers: 0,
+        duration: Date.now() - startTime,
+      };
+    }
+
+    console.log(`[ChainSync] 找到 ${totalUsers} 个已激活用户，开始增量重建闭包关系...`);
+
+    // 2. 逐个用户处理
+    for (let i = 0; i < activatedUsers.length; i++) {
+      const user = activatedUsers[i];
+      try {
+        // 检查用户是否已有闭包关系
+        const { data: existingClosure } = await supabase
+          .from('team_closure')
+          .select('id')
+          .eq('descendant_id', (await supabase
+            .from('users')
+            .select('id')
+            .eq('wallet_address', user.wallet_address.toLowerCase())
+            .single()
+          )?.data?.id)
+          .limit(1);
+
+        if (existingClosure && existingClosure.length > 0) {
+          // 用户已有闭包关系，跳过
+          skippedUsers++;
+        } else {
+          // 用户没有闭包关系，需要建立
+          await syncUserTeamClosure(user.wallet_address);
+          rebuiltUsers++;
+        }
+        
+        if ((i + 1) % 10 === 0 || i === activatedUsers.length - 1) {
+          console.log(`[ChainSync] 已处理 ${i + 1}/${totalUsers} 个用户 (重建: ${rebuiltUsers}, 跳过: ${skippedUsers})`);
+        }
+      } catch (error) {
+        console.error(`[ChainSync] 处理用户 ${user.wallet_address} 闭包关系失败:`, error);
+        failedUsers++;
+      }
+    }
+
+    const duration = Date.now() - startTime;
+    console.log(`[ChainSync] ========== 增量重建完成 ==========`);
+    console.log(`[ChainSync] 总用户: ${totalUsers}, 新建: ${rebuiltUsers}, 跳过: ${skippedUsers}, 失败: ${failedUsers}`);
+    console.log(`[ChainSync] 耗时: ${duration}ms`);
+
+    return {
+      success: true,
+      totalUsers,
+      rebuiltUsers,
+      failedUsers,
+      skippedUsers,
+      duration,
+    };
+  } catch (error: any) {
+    const duration = Date.now() - startTime;
+    console.error('[ChainSync] 增量重建失败:', error);
+
+    return {
+      success: false,
+      totalUsers,
+      rebuiltUsers,
+      failedUsers,
+      skippedUsers,
+      duration,
+      error: error.message,
+    };
+  } finally {
+    // 释放进程锁
+    isIncrementalRebuildRunning = false;
+  }
+}
