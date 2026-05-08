@@ -324,7 +324,7 @@ export default function DappTeam() {
               <View className="w-1 h-5 rounded-full" style={{ backgroundColor: YELLOW }} />
               <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>团队成员</Text>
             </View>
-            <Text className="text-sm" style={{ color: TEXT_MUTED }}>{members.length} 人</Text>
+            <Text className="text-sm" style={{ color: TEXT_MUTED }}>{teamData.teamCount} 人</Text>
           </View>
 
           {teamLoading ? (

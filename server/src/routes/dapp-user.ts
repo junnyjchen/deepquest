@@ -60,11 +60,35 @@ router.get('/profile/:wallet_address', async (req, res) => {
 
     const pendingReward = pendingRewards?.reduce((sum: number, r: { amount?: string }) => sum + parseFloat(r.amount || '0'), 0) || 0;
 
-    // 计算团队人数
-    const { data: teamMembers } = await supabase
+    // 计算团队人数（从 team_closure 表查询，与团队页面一致）
+    // 获取用户 ID
+    const { data: userData } = await supabase
       .from('users')
-      .select('wallet_address')
-      .eq('referrer_address', wallet_address.toLowerCase());
+      .select('id')
+      .eq('wallet_address', wallet_address.toLowerCase())
+      .single();
+    
+    let directCount = 0;
+    let teamCount = 0;
+    
+    if (userData) {
+      // 从 team_closure 查询，team_count = depth=1 到 15，direct_count = depth=1
+      const { count: directResult } = await supabase
+        .from('team_closure')
+        .select('*', { count: 'exact', head: true })
+        .eq('ancestor_id', userData.id)
+        .eq('depth', 1);
+      
+      const { count: teamResult } = await supabase
+        .from('team_closure')
+        .select('*', { count: 'exact', head: true })
+        .eq('ancestor_id', userData.id)
+        .gte('depth', 1)
+        .lte('depth', 15);
+      
+      directCount = directResult || 0;
+      teamCount = teamResult || 0;
+    }
 
     res.json({
       code: 0,
@@ -77,8 +101,8 @@ router.get('/profile/:wallet_address', async (req, res) => {
         activated_at: user.activated_at || null,
         total_invest: totalInvest.toFixed(2),
         team_invest: user.team_invest || 0,
-        direct_count: directCount || 0,
-        team_count: teamMembers?.length || 0,
+        direct_count: directCount,
+        team_count: teamCount,
         total_reward: totalReward.toFixed(2),
         pending_reward: pendingReward.toFixed(2),
         created_at: user.created_at
