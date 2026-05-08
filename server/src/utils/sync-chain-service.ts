@@ -40,6 +40,7 @@ const RPC_CALL_CONCURRENCY = 10;         // 每轮并发 eth_call 数
 const RPC_CHUNK_DELAY_MS = 120;          // 每轮并发后的短暂间隔
 const RPC_RETRY_MAX = 3;                 // 限流后最大重试次数
 const RPC_RETRY_BASE_DELAY_MS = 300;     // 指数退避基准延迟
+const INCREMENTAL_REBUILD_MAX_USERS = Number(process.env.INCREMENTAL_REBUILD_MAX_USERS || 100); // 每次增量重建最多处理用户数
 
 // 记录同步状态
 let syncInProgress = false;
@@ -353,10 +354,8 @@ async function syncUserToDatabase(
         .update(updateData)
         .eq('wallet_address', userAddress.toLowerCase());
 
-      // 如果用户激活了，同步团队闭包关系
-      if (updateData.is_activated) {
-        await syncUserTeamClosure(userAddress);
-      }
+      // 同步团队闭包关系（不依赖激活状态）
+      await syncUserTeamClosure(userAddress);
 
       return true;
     } else {
@@ -391,10 +390,8 @@ async function syncUserToDatabase(
 
       await supabase.from('users').insert(insertData);
       
-      // 同步成功后，添加团队闭包关系（15代以内）
-      if (insertData.is_activated) {
-        await syncUserTeamClosure(userAddress);
-      }
+      // 同步成功后，添加团队闭包关系（15代以内，不依赖激活状态）
+      await syncUserTeamClosure(userAddress);
       
       return true;
     }
@@ -457,75 +454,102 @@ async function getReferralLineageFromDB(
  * 同步用户团队闭包关系
  * 为用户及其所有祖先（15代以内）建立闭包表关系
  */
-async function syncUserTeamClosure(userAddress: string, maxDepth: number = 15): Promise<void> {
-  try {
-    // 从数据库获取推荐链路（不访问链上）
-    const lineage = await getReferralLineageFromDB(userAddress, maxDepth);
-    
-    if (lineage.length === 0) {
-      console.log(`[ChainSync] 用户 ${userAddress} 无推荐链路（数据库），跳过闭包关系创建`);
-      return;
-    }
+type TeamClosureSyncResult = {
+  insertedRows: number;
+  skipped: boolean;
+  reason?: string;
+};
 
-    console.log(`[ChainSync] 用户 ${userAddress} 找到 ${lineage.length} 个祖先（数据库）`);
+async function syncUserTeamClosure(userAddress: string, maxDepth: number = 15): Promise<TeamClosureSyncResult> {
+  // 从数据库获取推荐链路（不访问链上）
+  const lineage = await getReferralLineageFromDB(userAddress, maxDepth);
+  
+  if (lineage.length === 0) {
+    console.log(`[ChainSync] 用户 ${userAddress} 无推荐链路（数据库），跳过闭包关系创建`);
+    return { insertedRows: 0, skipped: true, reason: 'NO_LINEAGE' };
+  }
 
-    // 获取用户ID
-    const { data: userData, error: userError } = await supabase
+  console.log(`[ChainSync] 用户 ${userAddress} 找到 ${lineage.length} 个祖先（数据库）`);
+
+  // 获取用户ID
+  const { data: userData, error: userError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('wallet_address', userAddress.toLowerCase())
+    .single();
+
+  if (userError || !userData) {
+    throw new Error(`[ChainSync] 获取用户ID失败: ${userAddress} - ${userError?.message || 'NOT_FOUND'}`);
+  }
+
+  const descendantId = userData.id;
+  const closureRecords: Array<{ ancestor_id: number; descendant_id: number; depth: number }> = [];
+
+  // 为每个祖先创建闭包记录
+  for (const ancestor of lineage) {
+    // 获取祖先用户ID
+    const { data: ancestorData, error: ancestorError } = await supabase
       .from('users')
       .select('id')
-      .eq('wallet_address', userAddress.toLowerCase())
+      .eq('wallet_address', ancestor.address.toLowerCase())
       .single();
 
-    if (userError || !userData) {
-      console.error(`[ChainSync] 获取用户ID失败: ${userAddress}`, userError);
-      return;
+    if (ancestorError || !ancestorData) {
+      console.warn(`[ChainSync] 祖先用户不存在: ${ancestor.address}，depth: ${ancestor.depth}`);
+      continue;
     }
 
-    const descendantId = userData.id;
-    const closureRecords: Array<{ ancestor_id: number; descendant_id: number; depth: number }> = [];
-
-    // 为每个祖先创建闭包记录
-    for (const ancestor of lineage) {
-      // 获取祖先用户ID
-      const { data: ancestorData, error: ancestorError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('wallet_address', ancestor.address.toLowerCase())
-        .single();
-
-      if (ancestorError || !ancestorData) {
-        console.warn(`[ChainSync] 祖先用户不存在: ${ancestor.address}，depth: ${ancestor.depth}`);
-        continue;
-      }
-
-      closureRecords.push({
-        ancestor_id: ancestorData.id,
-        descendant_id: descendantId,
-        depth: ancestor.depth
-      });
-    }
-
-    if (closureRecords.length === 0) {
-      console.log(`[ChainSync] 未找到有效的祖先用户，跳过闭包关系创建`);
-      return;
-    }
-
-    // 批量插入闭包记录（使用 upsert 避免重复）
-    const { error: insertError } = await supabase
-      .from('team_closure')
-      .upsert(closureRecords, { 
-        onConflict: 'ancestor_id,descendant_id',
-        ignoreDuplicates: true 
-      });
-
-    if (insertError) {
-      console.error(`[ChainSync] 创建团队闭包关系失败:`, insertError);
-    } else {
-      console.log(`[ChainSync] 为用户 ${userAddress} 创建 ${closureRecords.length} 条团队闭包关系`);
-    }
-  } catch (error) {
-    console.error(`[ChainSync] 同步团队闭包关系失败:`, error);
+    closureRecords.push({
+      ancestor_id: ancestorData.id,
+      descendant_id: descendantId,
+      depth: ancestor.depth
+    });
   }
+
+  if (closureRecords.length === 0) {
+    console.log(`[ChainSync] 未找到有效的祖先用户，跳过闭包关系创建`);
+    return { insertedRows: 0, skipped: true, reason: 'NO_VALID_ANCESTOR' };
+  }
+
+  const { count: beforeCount, error: beforeCountError } = await supabase
+    .from('team_closure')
+    .select('*', { count: 'exact', head: true })
+    .eq('descendant_id', descendantId);
+
+  if (beforeCountError) {
+    throw new Error(`[ChainSync] 查询闭包关系前计数失败: ${beforeCountError.message}`);
+  }
+
+  // 批量插入闭包记录（使用 upsert 避免重复）
+  const { error: insertError } = await supabase
+    .from('team_closure')
+    .upsert(closureRecords, { 
+      onConflict: 'ancestor_id,descendant_id',
+      ignoreDuplicates: true 
+    });
+
+  if (insertError) {
+    throw new Error(`[ChainSync] 创建团队闭包关系失败: ${insertError.message}`);
+  }
+
+  const { count: afterCount, error: afterCountError } = await supabase
+    .from('team_closure')
+    .select('*', { count: 'exact', head: true })
+    .eq('descendant_id', descendantId);
+
+  if (afterCountError) {
+    throw new Error(`[ChainSync] 查询闭包关系后计数失败: ${afterCountError.message}`);
+  }
+
+  const insertedRows = Math.max(0, (afterCount || 0) - (beforeCount || 0));
+
+  if (insertedRows > 0) {
+    console.log(`[ChainSync] 为用户 ${userAddress} 实际新增 ${insertedRows} 条团队闭包关系`);
+    return { insertedRows, skipped: false };
+  }
+
+  console.log(`[ChainSync] 用户 ${userAddress} 闭包关系无新增（可能已存在）`);
+  return { insertedRows: 0, skipped: true, reason: 'NO_NEW_ROWS' };
 }
 
 /**
@@ -908,7 +932,7 @@ export function resetSyncIndex(): void {
 
 /**
  * 全量重建团队闭包关系
- * 清空所有闭包关系，然后为所有已激活用户重新建立闭包关系
+ * 清空所有闭包关系，然后为所有用户重新建立闭包关系
  */
 export async function rebuildAllTeamClosure(): Promise<{
   success: boolean;
@@ -926,7 +950,7 @@ export async function rebuildAllTeamClosure(): Promise<{
   console.log('[ChainSync] ========== 开始全量重建团队闭包关系 ==========');
 
   try {
-    // 1. 获取所有已激活用户
+    // 1. 获取所有用户（不限制激活状态）
     const { data: allUsers, error: queryError } = await supabase
       .from('users')
       .select('wallet_address, is_activated');
@@ -963,14 +987,16 @@ export async function rebuildAllTeamClosure(): Promise<{
     console.log('[ChainSync] 已清空 team_closure 表');
 
     // 3. 逐个用户重建闭包关系
-    for (let i = 0; i < activatedUsers.length; i++) {
-      const user = activatedUsers[i];
+    for (let i = 0; i < allUsers.length; i++) {
+      const user = allUsers[i];
       try {
-        await syncUserTeamClosure(user.wallet_address);
-        rebuiltUsers++;
+        const result = await syncUserTeamClosure(user.wallet_address);
+        if (result.insertedRows > 0) {
+          rebuiltUsers++;
+        }
         
-        if ((i + 1) % 10 === 0 || i === activatedUsers.length - 1) {
-          console.log(`[ChainSync] 已重建 ${i + 1}/${totalUsers} 个用户的闭包关系`);
+        if ((i + 1) % 10 === 0 || i === allUsers.length - 1) {
+          console.log(`[ChainSync] 已处理 ${i + 1}/${totalUsers} 个用户（有新增闭包: ${rebuiltUsers}）`);
         }
       } catch (error) {
         console.error(`[ChainSync] 重建用户 ${user.wallet_address} 闭包关系失败:`, error);
@@ -1079,7 +1105,11 @@ export async function incrementalRebuildTeamClosure(): Promise<{
       }
     });
 
-    const usersToSync = usersWithoutClosure;
+    const pendingUsers = usersWithoutClosure;
+    const maxUsersPerRun = Number.isFinite(INCREMENTAL_REBUILD_MAX_USERS) && INCREMENTAL_REBUILD_MAX_USERS > 0
+      ? Math.floor(INCREMENTAL_REBUILD_MAX_USERS)
+      : 100;
+    const usersToSync = pendingUsers.slice(0, maxUsersPerRun);
     totalUsers = usersToSync.length;
 
     if (totalUsers === 0) {
@@ -1094,17 +1124,23 @@ export async function incrementalRebuildTeamClosure(): Promise<{
       };
     }
 
-    console.log(`[ChainSync] 找到 ${totalUsers} 个新增用户，开始增量重建闭包关系...`);
+    console.log(
+      `[ChainSync] 找到 ${pendingUsers.length} 个待重建用户，本次最多处理 ${maxUsersPerRun} 个，实际处理 ${totalUsers} 个...`
+    );
 
     // 3. 逐个用户建立闭包关系
     for (let i = 0; i < usersToSync.length; i++) {
       const user = usersToSync[i];
       try {
-        await syncUserTeamClosure(user.wallet_address);
-        rebuiltUsers++;
+        const result = await syncUserTeamClosure(user.wallet_address);
+        if (result.insertedRows > 0) {
+          rebuiltUsers++;
+        } else {
+          skippedUsers++;
+        }
         
         if ((i + 1) % 10 === 0 || i === usersToSync.length - 1) {
-          console.log(`[ChainSync] 已处理 ${i + 1}/${totalUsers} 个新增用户`);
+          console.log(`[ChainSync] 已处理 ${i + 1}/${totalUsers} 个新增用户（新增闭包用户: ${rebuiltUsers}，跳过: ${skippedUsers}）`);
         }
       } catch (error) {
         console.error(`[ChainSync] 处理用户 ${user.wallet_address} 闭包关系失败:`, error);
