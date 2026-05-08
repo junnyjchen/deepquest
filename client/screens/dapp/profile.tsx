@@ -31,6 +31,21 @@ const CYAN = '#00F0FF';
 const PURPLE = '#D020FF';
 
 const WALLET_STORAGE_KEY = '@deepquest_wallet';
+const ACTIVATION_STORAGE_KEY = '@deepquest_activation';
+
+// 加载本地激活状态
+const loadLocalActivation = async (address: string): Promise<boolean> => {
+  try {
+    const data = await AsyncStorage.getItem(ACTIVATION_STORAGE_KEY);
+    if (data) {
+      const parsed = JSON.parse(data);
+      return parsed.address?.toLowerCase() === address?.toLowerCase() && parsed.activated === true;
+    }
+  } catch (error) {
+    console.error('加载本地激活状态失败:', error);
+  }
+  return false;
+};
 
 export default function DappProfile() {
   const router = useSafeRouter();
@@ -83,6 +98,11 @@ export default function DappProfile() {
   const fetchUserData = async (address: string) => {
     try {
       setUserLoading(true);
+      
+      // 优先使用本地激活状态
+      const localActivated = await loadLocalActivation(address);
+      const isActivated = localActivated || parseFloat(response?.data?.total_invest || '0') > 0;
+      
       const response = await dappUserApi.getProfile(address);
       if (response.code === 0 && response.data) {
         setUserData({
@@ -94,7 +114,7 @@ export default function DappProfile() {
           teamSize: response.data.team_count || 0,
           directCount: response.data.direct_count || 0,
           level: response.data.level || 1,
-          isActivated: parseFloat(response.data.total_invest || '0') > 0,
+          isActivated: isActivated, // 优先使用本地激活状态
           stakeDays: 0, // 需要计算
           totalInvest: response.data.total_invest || '0.0',
           teamInvest: response.data.team_invest || '0.0',
