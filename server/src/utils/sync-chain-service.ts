@@ -1072,10 +1072,13 @@ export async function incrementalRebuildTeamClosure(): Promise<{
   let skippedUsers = 0;
 
   try {
-    // 获取所有用户（不限制激活状态）
+    // 获取有推荐人的用户（不限制激活状态）
     const { data: allUsers, error: allUsersError } = await supabase
       .from('users')
-      .select('wallet_address, is_activated');
+      .select('wallet_address, referrer_address')
+      .not('referrer_address', 'is', null)
+      .neq('referrer_address', '')
+      .neq('referrer_address', '0x0000000000000000000000000000000000000000');
 
     if (allUsersError) {
       throw new Error(`查询用户失败: ${allUsersError.message}`);
@@ -1125,7 +1128,7 @@ export async function incrementalRebuildTeamClosure(): Promise<{
     }
 
     console.log(
-      `[ChainSync] 找到 ${pendingUsers.length} 个待重建用户，本次最多处理 ${maxUsersPerRun} 个，实际处理 ${totalUsers} 个...`
+      `[ChainSync] 找到 ${pendingUsers.length} 个有推荐人且缺失闭包关系的用户，本次最多处理 ${maxUsersPerRun} 个，实际处理 ${totalUsers} 个...`
     );
 
     // 3. 逐个用户建立闭包关系
