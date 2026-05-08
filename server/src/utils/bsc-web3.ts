@@ -4,7 +4,8 @@ import path from 'path';
 
 // BSC 主网 RPC
 const BSC_RPC_URL = process.env.BSC_RPC_URL || 'https://bsc-dataseed.binance.org/';
-const BSC_EVENT_BLOCK_STEP = Number(process.env.BSC_EVENT_BLOCK_STEP || 50000);
+// BSC RPC 的 eth_getLogs 默认限制约 10000 个区块，这里设置为 5000 避免超限
+const BSC_EVENT_BLOCK_STEP = Number(process.env.BSC_EVENT_BLOCK_STEP || 5000);
 const BSC_START_BLOCK = Number(process.env.BSC_START_BLOCK || 0);
 const BSC_REGISTER_TX_CACHE_DIR = process.env.BSC_REGISTER_TX_CACHE_DIR || path.join(process.cwd(), 'server', 'cache', 'register-tx');
 
@@ -179,10 +180,28 @@ export async function getUserRegisterTxHash(walletAddress: string): Promise<stri
     for (let fromBlock = fromStart; fromBlock <= latestBlock; fromBlock += step) {
       const toBlock = Math.min(fromBlock + step - 1, latestBlock);
 
-      const events = await withRpcRetry(
+      let events = await withRpcRetry(
         () => contract.queryFilter(filter, fromBlock, toBlock),
         `queryFilter(Register, ${fromBlock}-${toBlock})`
       );
+
+      // 如果遇到 limit exceeded 错误，缩小步长重试
+      if (events.length === 0) {
+        // 如果当前区块范围太大（超过 10000），尝试缩小步长
+        if (toBlock - fromBlock > 8000) {
+          const smallStep = 2000;
+          for (let smallFrom = fromBlock; smallFrom <= toBlock; smallFrom += smallStep) {
+            const smallTo = Math.min(smallFrom + smallStep - 1, toBlock);
+            try {
+              const smallEvents = await contract.queryFilter(filter, smallFrom, smallTo);
+              events = events.concat(smallEvents);
+            } catch (err: any) {
+              // 如果还是失败，继续下一个分段
+              console.warn(`[BSC] 分段查询失败 ${smallFrom}-${smallTo}: ${err.message}`);
+            }
+          }
+        }
+      }
 
       if (events.length > 0) {
         const sortedEvents = [...events].sort((a, b) => {
