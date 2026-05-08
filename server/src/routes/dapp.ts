@@ -1,9 +1,127 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
+import fs from 'fs';
+import path from 'path';
+import { ethers } from 'ethers';
 import { getSupabaseClient } from '../storage/database/supabase-client';
 import { getUserRegisterTxHash, isUserRegisteredOnChain, getUserInfoFromChain, getReferralLineage } from '../utils/bsc-web3';
+import { AVE_PAIR_ABI, AVE_PAIR_ADDRESS, DQTOKEN_CONTRACT_ADDRESS } from '../config/contracts';
 
 const supabase = getSupabaseClient();
 const router = Router();
+
+const BSC_RPC_URL = process.env.BSC_RPC_URL || 'https://bsc-dataseed.binance.org/';
+const POOL_CACHE_FILE = process.env.POOL_CACHE_FILE || path.join(process.cwd(), 'cache', 'pool-data.json');
+const POOL_CACHE_TTL_MS = 5000;
+const ERC20_DECIMALS_ABI = [
+  {
+    "inputs": [],
+    "name": "decimals",
+    "outputs": [{ "internalType": "uint8", "name": "", "type": "uint8" }],
+    "stateMutability": "view",
+    "type": "function"
+  }
+];
+
+type PoolCacheData = {
+  usdtPoolBalance: string;
+  dqtPoolBalance: string;
+  token0?: string;
+  token1?: string;
+  updatedAt: string;
+};
+
+function formatFixed2(value: string): string {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(2) : '0.00';
+}
+
+function readPoolCache(): PoolCacheData | null {
+  try {
+    if (!fs.existsSync(POOL_CACHE_FILE)) {
+      return null;
+    }
+
+    const raw = fs.readFileSync(POOL_CACHE_FILE, 'utf-8');
+    const parsed = JSON.parse(raw) as PoolCacheData;
+    if (!parsed?.updatedAt) {
+      return null;
+    }
+
+    const age = Date.now() - new Date(parsed.updatedAt).getTime();
+    if (age <= POOL_CACHE_TTL_MS) {
+      return parsed;
+    }
+
+    return null;
+  } catch (error) {
+    console.warn('[DApp] 读取底池缓存失败，改为链上查询:', error);
+    return null;
+  }
+}
+
+function writePoolCache(data: PoolCacheData): void {
+  try {
+    fs.mkdirSync(path.dirname(POOL_CACHE_FILE), { recursive: true });
+    fs.writeFileSync(POOL_CACHE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (error) {
+    console.warn('[DApp] 写入底池缓存失败:', error);
+  }
+}
+
+async function getTokenDecimals(provider: ethers.JsonRpcProvider, tokenAddress: string): Promise<number> {
+  try {
+    const token = new ethers.Contract(tokenAddress, ERC20_DECIMALS_ABI, provider);
+    const decimals = await token.decimals();
+    return Number(decimals);
+  } catch {
+    return 18;
+  }
+}
+
+async function getPoolDataFromChain(): Promise<PoolCacheData> {
+  const provider = new ethers.JsonRpcProvider(BSC_RPC_URL, undefined, { batchMaxCount: 1 });
+  const pair = new ethers.Contract(AVE_PAIR_ADDRESS, AVE_PAIR_ABI, provider);
+
+  const [reserves, token0Raw, token1Raw] = await Promise.all([
+    pair.getReserves(),
+    pair.token0(),
+    pair.token1(),
+  ]);
+
+  const token0 = String(token0Raw).toLowerCase();
+  const token1 = String(token1Raw).toLowerCase();
+  const [dec0, dec1] = await Promise.all([
+    getTokenDecimals(provider, token0),
+    getTokenDecimals(provider, token1),
+  ]);
+
+  const reserve0 = ethers.formatUnits(reserves._reserve0 ?? reserves[0], dec0);
+  const reserve1 = ethers.formatUnits(reserves._reserve1 ?? reserves[1], dec1);
+
+  const dqtToken = DQTOKEN_CONTRACT_ADDRESS.toLowerCase();
+  const dqtBalance = token0 === dqtToken ? reserve0 : reserve1;
+  const usdtBalance = token0 === dqtToken ? reserve1 : reserve0;
+
+  const data: PoolCacheData = {
+    usdtPoolBalance: formatFixed2(usdtBalance),
+    dqtPoolBalance: formatFixed2(dqtBalance),
+    token0,
+    token1,
+    updatedAt: new Date().toISOString(),
+  };
+
+  writePoolCache(data);
+  return data;
+}
+
+async function getPoolDataWithCache(): Promise<PoolCacheData> {
+  const cached = readPoolCache();
+  if (cached) {
+    return cached;
+  }
+
+  return getPoolDataFromChain();
+}
 
 /**
  * DAPP前端API - 平台数据
@@ -14,22 +132,17 @@ const router = Router();
 router.get('/stats', async (req, res) => {
   try {
     // 从数据库获取真实数据
-    const [usersResult, depositsResult, poolsResult, rewardsResult] = await Promise.all([
+    const [usersResult, depositsResult, rewardsResult, poolData] = await Promise.all([
       supabase.from('users').select('count', { count: 'exact' }),
-      supabase.from('deposits').select('amount').eq('status', 'completed'),
-      supabase.from('pools').select('name, balance'),
+      supabase.from('deposits').select('amount, created_at').eq('status', 'completed'),
       supabase.from('rewards').select('amount').eq('status', 'completed'),
+      getPoolDataWithCache(),
     ]);
 
     // 计算统计数据
     const totalUsers = usersResult.count || 0;
     const totalDeposit = depositsResult.data?.reduce((sum: number, d: { amount?: string }) => sum + parseFloat(d.amount || '0'), 0) || 0;
     
-    // 获取底池数据
-    const pools = poolsResult.data || [];
-    const usdtPool = pools.find((p: { name?: string }) => p.name === 'usdt') || { balance: '0' };
-    const dqtPool = pools.find((p: { name?: string }) => p.name === 'dqt') || { balance: '0' };
-
     // 计算今日新增
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -50,8 +163,8 @@ router.get('/stats', async (req, res) => {
       networkPower: '63,497,422',      // 全网算力 T/H
       
       // 底池数据
-      usdtPoolBalance: parseFloat(usdtPool.balance || '0').toFixed(2),
-      dqtPoolBalance: parseFloat(dqtPool.balance || '0').toFixed(2),
+      usdtPoolBalance: poolData.usdtPoolBalance,
+      dqtPoolBalance: poolData.dqtPoolBalance,
       
       // 全网数据
       totalUsers: totalUsers,
@@ -2397,7 +2510,7 @@ router.post('/team/direct', async (req, res) => {
  * 全量重建团队闭包关系
  * 清空所有闭包关系，然后为所有已激活用户重新建立闭包关系
  */
-router.post('/team/rebuild-closure', async (req: express.Request, res: express.Response) => {
+router.post('/team/rebuild-closure', async (req: Request, res: Response) => {
   try {
     console.log('[DApp] 收到全量重建团队闭包关系请求');
 
@@ -2439,7 +2552,7 @@ router.post('/team/rebuild-closure', async (req: express.Request, res: express.R
  * 只处理新增用户（还没有闭包关系的用户），不清空现有关系
  * 使用进程锁防止并发执行
  */
-router.post('/team/incremental-rebuild-closure', async (req: express.Request, res: express.Response) => {
+router.post('/team/incremental-rebuild-closure', async (req: Request, res: Response) => {
   try {
     console.log('[DApp] 收到增量重建团队闭包关系请求');
 
