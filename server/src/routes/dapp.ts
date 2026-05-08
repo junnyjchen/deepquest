@@ -2293,19 +2293,26 @@ router.post('/team/stats', async (req, res) => {
     }
 
     // depth=1 到 15 是团队成员（不含自己）
-    const { count: descendantCount } = await supabase
+    const { count: teamCount } = await supabase
       .from('team_closure')
       .select('*', { count: 'exact', head: true })
       .eq('ancestor_id', userId)
       .gte('depth', 1)
       .lte('depth', 15);
 
+    // 直接下级（depth=1）
+    const { count: directCount } = await supabase
+      .from('team_closure')
+      .select('*', { count: 'exact', head: true })
+      .eq('ancestor_id', userId)
+      .eq('depth', 1);
+
     res.json({
       code: 0,
       message: 'success',
       data: {
-        team_count: descendantCount || 0,  // 团队总人数（不含自己，15代以内）
-        direct_count: descendantCount || 0  // 直接下级（1代）
+        team_count: teamCount || 0,    // 团队总人数（不含自己，15代以内）
+        direct_count: directCount || 0 // 直接下级人数（depth=1）
       }
     });
   } catch (error: any) {
