@@ -41,6 +41,60 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS users_wallet_idx ON users(wallet_address);
 CREATE INDEX IF NOT EXISTS users_referrer_idx ON users(referrer_address);
 
+-- 3. 团队闭包表
+CREATE TABLE IF NOT EXISTS team_closure (
+    id BIGSERIAL PRIMARY KEY,
+    ancestor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    descendant_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    depth INTEGER NOT NULL CHECK (depth >= 1),
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    UNIQUE (ancestor_id, descendant_id)
+);
+
+CREATE INDEX IF NOT EXISTS team_closure_ancestor_idx ON team_closure(ancestor_id);
+CREATE INDEX IF NOT EXISTS team_closure_descendant_idx ON team_closure(descendant_id);
+CREATE INDEX IF NOT EXISTS team_closure_depth_idx ON team_closure(depth);
+
+-- RPC: 获取待重建团队闭包关系的用户
+CREATE OR REPLACE FUNCTION get_pending_team_closure_users(
+    p_limit integer DEFAULT 100,
+    p_offset integer DEFAULT 0
+)
+RETURNS TABLE (
+    id integer,
+    wallet_address varchar,
+    referrer_address varchar,
+    total_pending bigint
+)
+LANGUAGE sql
+STABLE
+AS $$
+WITH pending AS (
+    SELECT
+        u.id,
+        u.wallet_address,
+        u.referrer_address
+    FROM users u
+    WHERE u.referrer_address IS NOT NULL
+      AND u.referrer_address <> ''
+      AND u.referrer_address <> '0x0000000000000000000000000000000000000000'
+      AND NOT EXISTS (
+          SELECT 1
+          FROM team_closure tc
+          WHERE tc.descendant_id = u.id
+      )
+    ORDER BY u.id
+)
+SELECT
+    id,
+    wallet_address,
+    referrer_address,
+    COUNT(*) OVER() AS total_pending
+FROM pending
+OFFSET GREATEST(p_offset, 0)
+LIMIT GREATEST(p_limit, 0);
+$$;
+
 -- 3. 入金记录表
 CREATE TABLE IF NOT EXISTS deposits (
     id SERIAL PRIMARY KEY,

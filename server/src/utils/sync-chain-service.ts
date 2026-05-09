@@ -943,6 +943,7 @@ export async function rebuildAllTeamClosure(): Promise<{
   error?: string;
 }> {
   const startTime = Date.now();
+  const pageSize = 1000;
   let totalUsers = 0;
   let rebuiltUsers = 0;
   let failedUsers = 0;
@@ -951,15 +952,31 @@ export async function rebuildAllTeamClosure(): Promise<{
 
   try {
     // 1. 获取所有用户（不限制激活状态）
-    const { data: allUsers, error: queryError } = await supabase
-      .from('users')
-      .select('wallet_address, is_activated');
+    const allUsers: Array<{ wallet_address: string; is_activated: boolean | null }> = [];
 
-    if (queryError) {
-      throw new Error(`查询用户失败: ${queryError.message}`);
+    for (let from = 0; ; from += pageSize) {
+      const to = from + pageSize - 1;
+      const { data, error } = await supabase
+        .from('users')
+        .select('wallet_address, is_activated')
+        .range(from, to);
+
+      if (error) {
+        throw new Error(`查询用户失败: ${error.message}`);
+      }
+
+      if (!data || data.length === 0) {
+        break;
+      }
+
+      allUsers.push(...(data as Array<{ wallet_address: string; is_activated: boolean | null }>));
+
+      if (data.length < pageSize) {
+        break;
+      }
     }
 
-    totalUsers = allUsers?.length || 0;
+    totalUsers = allUsers.length;
 
     if (totalUsers === 0) {
       console.log('[ChainSync] 无用户');
@@ -1049,6 +1066,90 @@ export async function incrementalRebuildTeamClosure(): Promise<{
   error?: string;
 }> {
   const startTime = Date.now();
+  const pageSize = 1000;
+
+  type CandidateUser = { id: number; wallet_address: string; referrer_address: string | null };
+
+  type RpcPendingUserRow = CandidateUser & { total_pending: number | null };
+
+  const fetchPendingUsersViaRpc = async (limit: number): Promise<{ pendingUsers: CandidateUser[]; totalPending: number }> => {
+    const { data, error } = await supabase.rpc('get_pending_team_closure_users', {
+      p_limit: limit,
+      p_offset: 0,
+    });
+
+    if (error) {
+      throw new Error(`RPC 查询待重建用户失败: ${error.message}`);
+    }
+
+    const rows = (data || []) as RpcPendingUserRow[];
+    const totalPending = rows.length > 0 ? Number(rows[0].total_pending || 0) : 0;
+
+    return {
+      pendingUsers: rows.map(({ id, wallet_address, referrer_address }) => ({
+        id,
+        wallet_address,
+        referrer_address,
+      })),
+      totalPending,
+    };
+  };
+
+  const fetchPendingUsersFallback = async (): Promise<CandidateUser[]> => {
+    // 兜底方案：分页拉有推荐人的用户 + 分块命中 descendant_id（兼容不支持子查询过滤的场景）
+    const allUsers: CandidateUser[] = [];
+
+    for (let from = 0; ; from += pageSize) {
+      const to = from + pageSize - 1;
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, wallet_address, referrer_address')
+        .not('referrer_address', 'is', null)
+        .neq('referrer_address', '')
+        .neq('referrer_address', '0x0000000000000000000000000000000000000000')
+        .range(from, to);
+
+      if (error) {
+        throw new Error(`查询用户失败: ${error.message}`);
+      }
+
+      if (!data || data.length === 0) {
+        break;
+      }
+
+      allUsers.push(...(data as CandidateUser[]));
+
+      if (data.length < pageSize) {
+        break;
+      }
+    }
+
+    const usersWithClosureSet = new Set<number>();
+    const candidateIds = allUsers.map((u) => u.id);
+    const closureLookupChunkSize = 500;
+
+    for (let i = 0; i < candidateIds.length; i += closureLookupChunkSize) {
+      const idChunk = candidateIds.slice(i, i + closureLookupChunkSize);
+      if (idChunk.length === 0) continue;
+
+      const { data: existingClosures, error: closuresError } = await supabase
+        .from('team_closure')
+        .select('descendant_id')
+        .in('descendant_id', idChunk);
+
+      if (closuresError) {
+        throw new Error(`查询已有闭包关系失败: ${closuresError.message}`);
+      }
+
+      existingClosures?.forEach((closure: { descendant_id: number | null }) => {
+        if (typeof closure.descendant_id === 'number') {
+          usersWithClosureSet.add(closure.descendant_id);
+        }
+      });
+    }
+
+    return allUsers.filter((user) => !usersWithClosureSet.has(user.id));
+  };
   
   // 检查进程锁
   if (isIncrementalRebuildRunning) {
@@ -1072,47 +1173,29 @@ export async function incrementalRebuildTeamClosure(): Promise<{
   let skippedUsers = 0;
 
   try {
-    // 获取有推荐人的用户（不限制激活状态）
-    const { data: allUsers, error: allUsersError } = await supabase
-      .from('users')
-      .select('wallet_address, referrer_address')
-      .not('referrer_address', 'is', null)
-      .neq('referrer_address', '')
-      .neq('referrer_address', '0x0000000000000000000000000000000000000000');
-
-    if (allUsersError) {
-      throw new Error(`查询用户失败: ${allUsersError.message}`);
-    }
-
-    // 过滤出还没有闭包关系的用户
-    const usersWithoutClosure: typeof allUsers = [];
-    const usersWithClosureSet = new Set<string>();
-
-    // 批量获取已有闭包关系的用户地址
-    const { data: existingClosures } = await supabase
-      .from('team_closure')
-      .select('descendant_id, users(wallet_address)');
-
-    if (existingClosures) {
-      existingClosures.forEach((closure: any) => {
-        if (closure.users?.wallet_address) {
-          usersWithClosureSet.add(closure.users.wallet_address.toLowerCase());
-        }
-      });
-    }
-
-    // 过滤出没有闭包关系的用户
-    allUsers?.forEach((user: any) => {
-      if (!usersWithClosureSet.has(user.wallet_address.toLowerCase())) {
-        usersWithoutClosure.push(user);
-      }
-    });
-
-    const pendingUsers = usersWithoutClosure;
     const maxUsersPerRun = Number.isFinite(INCREMENTAL_REBUILD_MAX_USERS) && INCREMENTAL_REBUILD_MAX_USERS > 0
       ? Math.floor(INCREMENTAL_REBUILD_MAX_USERS)
       : 100;
-    const usersToSync = pendingUsers.slice(0, maxUsersPerRun);
+
+    let pendingUsers: CandidateUser[] = [];
+    let usersToSync: CandidateUser[] = [];
+
+    try {
+      const sqlResult = await fetchPendingUsersViaRpc(maxUsersPerRun);
+      pendingUsers = sqlResult.pendingUsers;
+      usersToSync = sqlResult.pendingUsers;
+
+      console.log(
+        `[ChainSync] RPC 命中待重建用户 ${sqlResult.totalPending} 个，本次按上限处理 ${usersToSync.length} 个`
+      );
+    } catch (sqlError: any) {
+      console.warn(
+        `[ChainSync] RPC 筛选失败，回退到兼容模式: ${sqlError?.message || 'UNKNOWN_ERROR'}`
+      );
+      pendingUsers = await fetchPendingUsersFallback();
+      usersToSync = pendingUsers.slice(0, maxUsersPerRun);
+    }
+
     totalUsers = usersToSync.length;
 
     if (totalUsers === 0) {
