@@ -484,14 +484,54 @@ async function syncUserTeamClosure(userAddress: string, maxDepth: number = 15): 
   // 为每个祖先创建闭包记录
   for (const ancestor of lineage) {
     // 获取祖先用户ID
-    const { data: ancestorData, error: ancestorError } = await supabase
+    let ancestorData = await supabase
       .from('users')
       .select('id')
       .eq('wallet_address', ancestor.address.toLowerCase())
-      .single();
+      .single()
+      .then(res => res.data);
 
-    if (ancestorError || !ancestorData) {
-      console.warn(`[ChainSync] 祖先用户不存在: ${ancestor.address}，depth: ${ancestor.depth}`);
+    // 如果祖先用户不存在，先从链上获取并注册
+    if (!ancestorData) {
+      console.log(`[ChainSync] 祖先用户不存在: ${ancestor.address}，尝试从链上获取并注册...`);
+      
+      try {
+        const ancestorInfo = await getChainUserInfo(ancestor.address);
+        if (ancestorInfo) {
+          // 链上有数据，同步到数据库
+          await syncUserToDatabase(ancestor.address, ancestorInfo);
+          console.log(`[ChainSync] 成功从链上同步祖先用户: ${ancestor.address}`);
+        } else {
+          // 链上也没有，先在数据库创建基础记录
+          console.log(`[ChainSync] 链上无数据，先在数据库创建基础记录: ${ancestor.address}`);
+          const { error: insertError } = await supabase
+            .from('users')
+            .insert({
+              wallet_address: ancestor.address.toLowerCase(),
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            });
+          
+          if (insertError) {
+            console.error(`[ChainSync] 创建祖先用户基础记录失败: ${ancestor.address}`, insertError);
+          }
+        }
+        
+        // 重新查询用户ID
+        ancestorData = await supabase
+          .from('users')
+          .select('id')
+          .eq('wallet_address', ancestor.address.toLowerCase())
+          .single()
+          .then(res => res.data);
+      } catch (error) {
+        console.error(`[ChainSync] 处理祖先用户失败: ${ancestor.address}`, error);
+      }
+    }
+
+    // 如果仍然找不到，跳过
+    if (!ancestorData) {
+      console.warn(`[ChainSync] 祖先用户 ${ancestor.address} 无法获取，depth: ${ancestor.depth}，跳过此关系`);
       continue;
     }
 
