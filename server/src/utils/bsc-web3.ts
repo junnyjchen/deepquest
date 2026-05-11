@@ -1,7 +1,6 @@
 import { ethers } from 'ethers';
 import fs from 'fs';
 import path from 'path';
-import { DQ_CONTRACT_ADDRESS, DQ_CONTRACT_ABI } from '../config/contracts';
 
 // BSC 主网 RPC
 const BSC_RPC_URL = process.env.BSC_RPC_URL || 'https://bsc-dataseed.binance.org/';
@@ -13,8 +12,18 @@ const BSC_REGISTER_TX_CACHE_DIR = process.env.BSC_REGISTER_TX_CACHE_DIR || path.
 const RPC_RETRY_MAX = Number(process.env.BSC_RPC_RETRY_MAX || 3);
 const RPC_RETRY_BASE_DELAY_MS = Number(process.env.BSC_RPC_RETRY_BASE_DELAY_MS || 300);
 
-// 合约地址 - 使用配置文件中的地址
-const DQ_CONTRACT = DQ_CONTRACT_ADDRESS;
+// 合约地址
+const DQ_CONTRACT = '0xD6C7f9a6460034317294c52FDc056C548fbd0040';
+
+// DQProject ABI - 只包含 register 和 Register 事件
+const DQ_ABI = [
+  // register 函数
+  "function register(address _referrer) external",
+  // Register 事件
+  "event Register(address indexed user, address indexed referrer)",
+  // isRegistered view 函数（如果有的话）
+  "function users(address) view returns (address referrer, uint256 directCount, uint8 level, uint256 totalInvest, uint256 teamInvest, uint256 energy, uint256 lpShares, uint8 dLevel)"
+];
 
 // 复用 Provider，避免重复创建连接
 const provider = new ethers.JsonRpcProvider(BSC_RPC_URL, undefined, {
@@ -135,7 +144,7 @@ function writeRegisterTxCache(walletAddress: string, txHash: string): void {
 
 // 获取合约实例
 function getContract() {
-  return new ethers.Contract(DQ_CONTRACT, DQ_CONTRACT_ABI, provider);
+  return new ethers.Contract(DQ_CONTRACT, DQ_ABI, provider);
 }
 
 /**
