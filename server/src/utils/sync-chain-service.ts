@@ -243,7 +243,6 @@ export async function getChainUserInfo(userAddress: string): Promise<{
   totalInvest: string;
   teamInvest: string;
   energy: string;
-  lpShares: string;
   dLevel: number;
 } | null> {
   try {
@@ -260,8 +259,7 @@ export async function getChainUserInfo(userAddress: string): Promise<{
       totalInvest: userInfo[3].toString(),
       teamInvest: userInfo[4].toString(),
       energy: userInfo[5].toString(),
-      lpShares: userInfo[6].toString(),
-      dLevel: Number(userInfo[7]),
+      dLevel: Number(userInfo[6]),
     };
   } catch (error) {
     console.error(`[ChainSync] 获取用户 ${userAddress} 信息失败:`, error);
@@ -284,7 +282,6 @@ async function syncUserToDatabase(
     totalInvest: string;
     teamInvest: string;
     energy: string;
-    lpShares: string;
     dLevel: number;
   },
   fields?: string[]
@@ -304,14 +301,13 @@ async function syncUserToDatabase(
       ? await getUserRegisterTxHash(userAddress)
       : existingUser?.activation_tx_hash ?? null;
 
-    // 定义可同步的字段映射
+    // 定义可同步的字段映射（注意：合约无 lpShares 字段）
     const fieldMap: Record<string, { chainKey: string; dbKey: string }> = {
       direct_count: { chainKey: 'directCount', dbKey: 'direct_count' },
       level: { chainKey: 'level', dbKey: 'level' },
       total_invest: { chainKey: 'totalInvest', dbKey: 'total_invest' },
       team_invest: { chainKey: 'teamInvest', dbKey: 'team_invest' },
       energy: { chainKey: 'energy', dbKey: 'energy' },
-      lp_shares: { chainKey: 'lpShares', dbKey: 'lp_shares' },
       d_level: { chainKey: 'dLevel', dbKey: 'd_level' },
       referrer_address: { chainKey: 'referrer', dbKey: 'referrer_address' },
     };
