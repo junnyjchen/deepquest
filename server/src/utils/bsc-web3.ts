@@ -1,7 +1,7 @@
 import { ethers } from 'ethers';
 import fs from 'fs';
 import path from 'path';
-import { DQ_CONTRACT_ADDRESS, DQ_ABI } from '../config/contracts';
+import { DQ_CONTRACT_ADDRESS, DQ_CONTRACT_ABI } from '../config/contracts';
 
 // BSC 主网 RPC
 const BSC_RPC_URL = process.env.BSC_RPC_URL || 'https://bsc-dataseed.binance.org/';
@@ -135,7 +135,7 @@ function writeRegisterTxCache(walletAddress: string, txHash: string): void {
 
 // 获取合约实例
 function getContract() {
-  return new ethers.Contract(DQ_CONTRACT, DQ_ABI, provider);
+  return new ethers.Contract(DQ_CONTRACT, DQ_CONTRACT_ABI, provider);
 }
 
 /**

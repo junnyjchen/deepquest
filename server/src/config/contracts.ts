@@ -1,56 +1,45 @@
 /**
- * DeepQuest 合约配置
- * 
- * 主合约（DQMining）：0x2f05163B2A4db48Ac9223897b5a01aA0158F0A6E
- * 质押合约（DQMiningStake）：0x666197e39dB9bA342De02aE969Ea76EdE6709823
- * DQToken合约：0x96e5B90115d41849F8F558Ef3A2eB627C6DF734B
- * DQCard合约：0x1857aCeDf9b73163D791eb2F0374a328416291a1
- */
-
-/**
  * ========================================
- * 主合约：DQMining_v11
+ * 主合约：DQMining_v11 (Genesis)
  * 地址：0x2f05163B2A4db48Ac9223897b5a01aA0158F0A6E
+ * 链上验证：https://bscscan.com/address/0x2f05163B2A4db48Ac9223897b5a01aA0158F0A6E#code
  * ========================================
  * 
- * 主要 API：
- * - register(address _r) - 用户注册（参数：推荐人地址）
- * - depositSOL(uint256 _a) - SOL入金（参数：入金数量）
- * - getUser(address _user) - 查询用户信息
- * - getTeamSize(address _u) - 查询团队人数
- * - getTeamInvest(address _u) - 查询团队投资额
- * - allUsers() - 获取所有用户地址数组（返回 address[]）
+ * 【主要 API】
+ * - register(address _r) - 用户注册
+ * - depositSOL(uint256 _a) - SOL 入金
+ * - getUser(address _u) - 查询用户信息
+ * - getTeamSize(address _u) - 团队人数
+ * - allUsers(uint256) - 获取用户地址
  * 
- * 事件：
- * - Register(address indexed u, address indexed r) - 注册事件
- * - Deposit(address indexed u, uint256 a) - 入金事件
- * - SwapSOLForDQ(address indexed u, uint256 s, uint256 d) - SOL换DQ事件
- * - SwapAndAddLP(address indexed u, uint256 s, uint256 d, uint256 l) - Swap并添加LP事件
- * - SellDQ(address indexed u, uint256 d, uint256 s, uint256 f) - 卖出DQ事件
+ * - buyNode(uint256 _t) - 购买节点
+ * - stakeDQ(uint256 _amount, uint256 _periodIndex) - 质押 DQ
+ * - unstakeDQ(uint256 _periodIndex) - 解押 DQ
+ * - claimDTeam() - 领取团队奖励
+ * - claimFee() - 领取手续费
+ * - claimLP() - 领取 LP
+ * - claimNft() - 领取 NFT
  * 
- * 用户信息结构（getUser 返回）：
- * - referrer: 推荐人地址
- * - directCount: 直推人数
- * - level: 节点等级 (uint8)
- * - totalInvest: 总投资额
- * - teamInvest: 团队投资额
- * - energy: 能量值
- * - lpShares: LP份额
- * - dLevel: D等级 (uint8)
+ * - swapSOLForDQ(uint256 _s, uint256 _minDq) - SOL 兑换 DQ
+ * - sellDQForSOL(uint256 _d, uint256 _minSol) - DQ 卖出
+ * - withdraw(uint256 _a) - 提现
+ * - mineBlock() - 挖矿
  * 
- * 查询 API：
- * - INVEST_MIN: 最低投资额
- * - SOL: SOL代币地址
- * - OWNER: 合约所有者
- * - stakeContract: 质押合约地址
- * - startTime: 开始时间
- * - getDailyLimit: 每日限额
- * - currentPhase: 当前阶段
- * - dqToken: DQ代币地址
- * - dqCard: DQ卡牌地址
- * - isBlacklisted(address): 黑名单检查
- * - dailyDeposit(address, uint): 用户每日入金
- * - getCurrentMaxInvest: 当前最大投资额
+ * 【事件 Events】
+ * - Deposit(u, a)
+ * - Register(u, r)
+ * - SwapSOLForDQ(u, s, d)
+ * - SwapAndAddLP(u, s, d, l)
+ * - SellDQ(u, d, s, f)
+ * 
+ * 【用户信息 getUser() 返回 7 个字段】
+ * - [0] referrer: address
+ * - [1] directCount: uint256
+ * - [2] level: uint8
+ * - [3] totalInvest: uint256
+ * - [4] teamInvest: uint256
+ * - [5] energy: uint256
+ * - [6] dLevel: uint8
  */
 
 /**
@@ -59,73 +48,103 @@
  * 地址：0x666197e39dB9bA342De02aE969Ea76EdE6709823
  * ========================================
  * 
- * 主要 API：
- * - addLP(address _user, uint256 _amount) - 添加LP份额（由主合约调用）
- * - stake(uint256 _amount, uint256 _period) - 质押DQ（参数：质押数量、质押周期）
- * - unstake(uint256 _period) - 解押（参数：质押周期索引）
- * - claimLP() - 领取LP奖励
- * - claimNft() - 领取NFT奖励
- * - claimDTeam() - 领取D代币团队奖励
- * - mine() - 挖矿产出
- * 
- * 查询 API：
- * - getUserStakeInfo(address _user) - 查询用户质押信息
- * - getUserClaim(address _user) - 查询用户可领取奖励
+ * 【主要 API】
+ * - addLP(address _user, uint256 _amount) - 添加 LP（由主合约调用）
+ * - stake(uint256 _amount, uint256 _period) - 质押
+ * - unstake(uint256 _period) - 解押
+ * - claimLP() - 领取 LP
+ * - claimNft() - 领取 NFT
+ * - claimDTeam() - 领取团队奖励
+ * - mine() - 挖矿
  */
 
-// 合约地址配置
-export const DQ_CONTRACT_ADDRESS = '0x2f05163B2A4db48Ac9223897b5a01aA0158F0A6E';
-export const DQSTAKE_CONTRACT_ADDRESS = '0x666197e39dB9bA342De02aE969Ea76EdE6709823';
-export const DQTOKEN_CONTRACT_ADDRESS = '0x96e5B90115d41849F8F558Ef3A2eB627C6DF734B';
-export const DQCARD_CONTRACT_ADDRESS = '0x1857aCeDf9b73163D791eb2F0374a328416291a1';
+// 主合约地址
+export const DQ_CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS || '0x2f05163B2A4db48Ac9223897b5a01aA0158F0A6E';
 
-/**
- * DQ 主合约 ABI（DQMining_v11）
- */
-export const DQ_ABI = [
-  {"inputs":[],"stateMutability":"nonpayable","type":"constructor"},
-  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"u","type":"address"},{"indexed":true,"internalType":"address","name":"r","type":"address"}],"name":"Register","type":"event"},
-  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"u","type":"address"},{"indexed":false,"internalType":"uint256","name":"a","type":"uint256"}],"name":"Deposit","type":"event"},
-  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"u","type":"address"},{"indexed":false,"internalType":"uint256","name":"s","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"d","type":"uint256"}],"name":"SwapSOLForDQ","type":"event"},
-  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"u","type":"address"},{"indexed":false,"internalType":"uint256","name":"s","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"d","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"l","type":"uint256"}],"name":"SwapAndAddLP","type":"event"},
-  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"u","type":"address"},{"indexed":false,"internalType":"uint256","name":"d","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"s","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"f","type":"uint256"}],"name":"SellDQ","type":"event"},
-  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"u","type":"address"},{"indexed":false,"internalType":"bool","name":"s","type":"bool"}],"name":"WhiteListSet","type":"event"},
-  {"inputs":[],"name":"INVEST_MIN","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  {"inputs":[],"name":"SOL","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-  {"inputs":[],"name":"OWNER","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-  {"inputs":[],"name":"stakeContract","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-  {"inputs":[],"name":"allUsers","outputs":[{"internalType":"address[]","name":"","type":"address[]"}],"stateMutability":"view","type":"function"},
-  {"inputs":[],"name":"startTime","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  {"inputs":[],"name":"getDailyLimit","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  {"inputs":[],"name":"currentPhase","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  {"inputs":[],"name":"dqToken","outputs":[{"internalType":"contract IDQToken","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-  {"inputs":[],"name":"dqCard","outputs":[{"internalType":"contract IDQCard","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-  {"inputs":[{"internalType":"address","name":"_user","type":"address"}],"name":"getUser","outputs":[{"internalType":"address","name":"referrer","type":"address"},{"internalType":"uint256","name":"directCount","type":"uint256"},{"internalType":"uint8","name":"level","type":"uint8"},{"internalType":"uint256","name":"totalInvest","type":"uint256"},{"internalType":"uint256","name":"teamInvest","type":"uint256"},{"internalType":"uint256","name":"energy","type":"uint256"},{"internalType":"uint256","name":"lpShares","type":"uint256"},{"internalType":"uint8","name":"dLevel","type":"uint8"}],"stateMutability":"view","type":"function"},
-  {"inputs":[{"internalType":"address","name":"_r","type":"address"}],"name":"register","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  {"inputs":[{"internalType":"uint256","name":"_a","type":"uint256"}],"name":"depositSOL","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"getTeamSize","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"getTeamInvest","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"isBlacklisted","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"indexed":false,"internalType":"uint256","name":"","type":"uint256"}],"name":"dailyDeposit","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  {"inputs":[],"name":"getCurrentMaxInvest","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  {"inputs":[{"internalType":"address","name":"_a","type":"address"}],"name":"setStakeContract","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"indexed":false,"internalType":"bool","name":"_s","type":"bool"}],"name":"setDepositWhiteList","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  {"inputs":[{"internalType":"address[]","name":"_u","type":"address[]"},{"internalType":"address[]","name":"_r","type":"address[]"}],"name":"importUsers","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  {"inputs":[{"internalType":"address[]","name":"_u","type":"address[]"},{"internalType":"uint8[]","name":"_t","type":"uint8[]"}],"name":"importNodes","outputs":[],"stateMutability":"nonpayable","type":"function"}
+// 质押合约地址
+export const DQSTAKE_CONTRACT_ADDRESS = process.env.DQSTAKE_CONTRACT_ADDRESS || '0x666197e39dB9bA342De02aE969Ea76EdE6709823';
+
+// 主合约 ABI
+export const DQ_CONTRACT_ABI = [
+  "constructor()",
+  "function BUY_FEE() view returns (address)",
+  "function DAILY_LIMIT() view returns (uint256)",
+  "function DAO_RATE() view returns (uint256)",
+  "function DIRECT_RATE() view returns (uint256)",
+  "function ENERGY_MUL() view returns (uint256)",
+  "function FOUNDATION() view returns (address)",
+  "function INS() view returns (address)",
+  "function INS_RATE() view returns (uint256)",
+  "function INVEST_MIN() view returns (uint256)",
+  "function OP() view returns (address)",
+  "function OP_RATE() view returns (uint256)",
+  "function OWNER() view returns (address)",
+  "function PHASE_STEP() view returns (uint256)",
+  "function ROUTER() view returns (address)",
+  "function SEE_RATE() view returns (uint256)",
+  "function SOL() view returns (address)",
+  "function STAKE_OP() view returns (address)",
+  "function USDT() view returns (address)",
+  "function addLiquidityForUser(uint256 _s, uint256 _minLp) returns (uint256)",
+  "function addToBlacklist(address _u)",
+  "function adminWithdrawDQ(uint256 _a)",
+  "function adminWithdrawSOL(uint256 _a)",
+  "function advancePhase()",
+  "function allUsers(uint256) view returns (address)",
+  "function approveRouter()",
+  "function buyNode(uint256 _t)",
+  "function claimDTeam()",
+  "function claimFee()",
+  "function claimLP()",
+  "function claimNft()",
+  "function claimPartnerBNB()",
+  "function claimPartnerDQ()",
+  "function claimStakeReward(uint256)",
+  "function community() view returns (address)",
+  "function communityRate() view returns (uint256)",
+  "function currentPhase() view returns (uint256)",
+  "function depositSOL(uint256 _a)",
+  "function getConfig() view returns (address, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256)",
+  "function getDailyLimit() view returns (uint256)",
+  "function getRate(address) view returns (uint256)",
+  "function getReward(address _u) view returns (uint256)",
+  "function getSwapReward(address _u) view returns (uint256)",
+  "function getTeamSize(address _u) view returns (uint256)",
+  "function getUser(address _u) view returns (address, uint256, uint8, uint256, uint256, uint256, uint8)",
+  "function isBlacklist(address) view returns (bool)",
+  "function isWhitelist(address) view returns (bool)",
+  "function lastProcessedId() view returns (uint256)",
+  "function liquidity() view returns (uint256)",
+  "function liquidityRate() view returns (uint256)",
+  "function maxPhase() view returns (uint256)",
+  "function minBuySol() view returns (uint256)",
+  "function owner() view returns (address)",
+  "function processedDividend() view returns (uint256)",
+  "function register(address _r)",
+  "function removeBlacklist(address _u)",
+  "function renounceOwnership()",
+  "function sellDQForSOL(uint256 _d, uint256 _minSol)",
+  "function setCommunity(address _c)",
+  "function setWhitelist(address _u, bool _s)",
+  "function swapSOLForDQ(uint256 _s, uint256 _minDq) payable",
+  "function teamReward() view returns (uint256)",
+  "function totalDeposit() view returns (uint256)",
+  "function totalReward() view returns (uint256)",
+  "function totalSold() view returns (uint256)",
+  "function transferOwnership(address)",
+  "function withdraw(uint256 _a)",
+  "function mineBlock()",
+  "function stakeDQ(uint256 _amount, uint256 _periodIndex)",
+  "function unstakeDQ(uint256 _periodIndex)",
+  "event Deposit(address indexed u, uint256 a)",
+  "event Register(address indexed u, address indexed r)",
+  "event SellDQ(address indexed u, uint256 d, uint256 s, uint256 f)",
+  "event SwapAndAddLP(address indexed u, uint256 s, uint256 d, uint256 l)",
+  "event SwapSOLForDQ(address indexed u, uint256 s, uint256 d)",
+  "event WhiteListSet(address indexed u, bool s)"
 ];
 
-/**
- * 质押合约 ABI（DQMiningStake）
- */
-export const DQSTAKE_ABI = [
-  {"inputs":[],"stateMutability":"nonpayable","type":"constructor"},
-  {"inputs":[{"internalType":"address","name":"_user","type":"address"},{"internalType":"uint256","name":"_amount","type":"uint256"}],"name":"addLP","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  {"inputs":[{"internalType":"uint256","name":"_amount","type":"uint256"},{"internalType":"uint256","name":"_period","type":"uint256"}],"name":"stake","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  {"inputs":[{"internalType":"uint256","name":"_period","type":"uint256"}],"name":"unstake","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  {"inputs":[],"name":"claimLP","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  {"inputs":[],"name":"claimNft","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  {"inputs":[],"name":"claimDTeam","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  {"inputs":[],"name":"mine","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  {"inputs":[{"internalType":"address","name":"_user","type":"address"}],"name":"getUserStakeInfo","outputs":[{"internalType":"uint256","name":"totalStake","type":"uint256"},{"internalType":"uint256","name":"pendingLP","type":"uint256"},{"internalType":"uint256","name":"pendingNft","type":"uint256"},{"internalType":"uint256","name":"pendingDTeam","type":"uint256"}],"stateMutability":"view","type":"function"},
-  {"inputs":[{"internalType":"address","name":"_user","type":"address"}],"name":"getUserClaim","outputs":[{"internalType":"uint256","name":"lpReward","type":"uint256"},{"internalType":"uint256","name":"nftReward","type":"uint256"},{"internalType":"uint256","name":"dTeamReward","type":"uint256"}],"stateMutability":"view","type":"function"}
+// 质押合约 ABI
+export const DQSTAKE_CONTRACT_ABI = [
+  // 待补充质押合约 ABI
 ];
