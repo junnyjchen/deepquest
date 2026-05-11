@@ -65,7 +65,7 @@ export const DQ_CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS || '0x2f05163B2A
 export const DQSTAKE_CONTRACT_ADDRESS = process.env.DQSTAKE_CONTRACT_ADDRESS || '0x666197e39dB9bA342De02aE969Ea76EdE6709823';
 
 // 主合约 ABI
-export const DQ_CONTRACT_ABI = [
+export const DQ_ABI = [
   "constructor()",
   "function BUY_FEE() view returns (address)",
   "function DAILY_LIMIT() view returns (uint256)",
