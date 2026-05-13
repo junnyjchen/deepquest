@@ -8,6 +8,11 @@ const BSC_RPC_URL = process.env.BSC_RPC_URL || 'https://bsc-dataseed.binance.org
 const BSC_EVENT_BLOCK_STEP = Number(process.env.BSC_EVENT_BLOCK_STEP || 5000);
 const BSC_START_BLOCK = Number(process.env.BSC_START_BLOCK || 0);
 const BSC_REGISTER_TX_CACHE_DIR = process.env.BSC_REGISTER_TX_CACHE_DIR || path.join(process.cwd(), 'server', 'cache', 'register-tx');
+const BSC_EVENT_CACHE_DIR = process.env.BSC_EVENT_CACHE_DIR || path.join(process.cwd(), 'server', 'cache', 'events');
+const BSC_REGISTER_LOG_QUERY_CONCURRENCY = Number(process.env.BSC_REGISTER_LOG_QUERY_CONCURRENCY || 2);
+const BSC_REGISTER_LOG_MIN_STEP = Number(process.env.BSC_REGISTER_LOG_MIN_STEP || 200);
+const BSC_REGISTER_TX_NEGATIVE_CACHE_TTL_MS = Number(process.env.BSC_REGISTER_TX_NEGATIVE_CACHE_TTL_MS || 10 * 60 * 1000);
+const BSC_EVENT_CACHE_VERSION = 1;
 
 const RPC_RETRY_MAX = Number(process.env.BSC_RPC_RETRY_MAX || 3);
 const RPC_RETRY_BASE_DELAY_MS = Number(process.env.BSC_RPC_RETRY_BASE_DELAY_MS || 300);
@@ -30,10 +35,25 @@ const provider = new ethers.JsonRpcProvider(BSC_RPC_URL, undefined, {
   batchMaxCount: 1,
 });
 
+const pendingRegisterTxLookups = new Map<string, Promise<string | null>>();
+const registerTxMissCache = new Map<string, number>();
+
+let registerLogQueryInFlight = 0;
+const registerLogQueryWaiters: Array<() => void> = [];
+
 type RegisterTxCachePayload = {
   walletAddress: string;
   txHash: string;
   cachedAt: string;
+};
+
+type EventCachePayload = {
+  version: number;
+  eventKey: string;
+  fromBlock: number;
+  toBlock: number;
+  cachedAt: string;
+  events: any[];
 };
 
 function sleep(ms: number): Promise<void> {
@@ -75,6 +95,40 @@ function isRetryableError(error: unknown): boolean {
   );
 }
 
+function isLimitExceededError(error: unknown): boolean {
+  const err = error as any;
+  const innerCode = err?.error?.code;
+  const message = `${err?.error?.message || ''} ${err?.message || ''} ${err?.shortMessage || ''}`.toLowerCase();
+
+  return (
+    innerCode === -32005 ||
+    message.includes('limit exceeded') ||
+    message.includes('too many requests') ||
+    message.includes('rate limit')
+  );
+}
+
+async function withRegisterLogQueryLimit<T>(fn: () => Promise<T>): Promise<T> {
+  const concurrency = Number.isFinite(BSC_REGISTER_LOG_QUERY_CONCURRENCY) && BSC_REGISTER_LOG_QUERY_CONCURRENCY > 0
+    ? Math.floor(BSC_REGISTER_LOG_QUERY_CONCURRENCY)
+    : 2;
+
+  while (registerLogQueryInFlight >= concurrency) {
+    await new Promise<void>((resolve) => registerLogQueryWaiters.push(resolve));
+  }
+
+  registerLogQueryInFlight++;
+  try {
+    return await fn();
+  } finally {
+    registerLogQueryInFlight = Math.max(0, registerLogQueryInFlight - 1);
+    const next = registerLogQueryWaiters.shift();
+    if (next) {
+      next();
+    }
+  }
+}
+
 async function withRpcRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
   let lastError: unknown;
 
@@ -102,6 +156,135 @@ async function withRpcRetry<T>(fn: () => Promise<T>, label: string): Promise<T> 
 
 function getRegisterTxCacheFilePath(walletAddress: string): string {
   return path.join(BSC_REGISTER_TX_CACHE_DIR, `${walletAddress.toLowerCase()}.json`);
+}
+
+function normalizeCacheKey(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function getEventCacheFilePath(eventKey: string, fromBlock: number, toBlock: number): string {
+  const safeKey = normalizeCacheKey(eventKey) || 'unknown_event';
+  return path.join(BSC_EVENT_CACHE_DIR, safeKey, `${fromBlock}-${toBlock}.json`);
+}
+
+function toSerializable(value: any, seen = new WeakSet<object>()): any {
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => toSerializable(item, seen));
+  }
+
+  if (typeof value === 'object') {
+    if (seen.has(value)) {
+      return '[Circular]';
+    }
+
+    seen.add(value);
+    const output: Record<string, any> = {};
+    for (const key of Object.keys(value)) {
+      output[key] = toSerializable(value[key], seen);
+    }
+    seen.delete(value);
+    return output;
+  }
+
+  return value;
+}
+
+function normalizeEventForCache(event: any): any {
+  return {
+    blockNumber: Number(event?.blockNumber ?? 0),
+    transactionHash: event?.transactionHash ?? null,
+    index: Number(event?.index ?? event?.logIndex ?? 0),
+    logIndex: Number(event?.logIndex ?? event?.index ?? 0),
+    blockHash: event?.blockHash ?? null,
+    address: event?.address ?? null,
+    data: event?.data ?? null,
+    topics: Array.isArray(event?.topics) ? event.topics : [],
+    eventName: event?.eventName ?? null,
+    eventSignature: event?.eventSignature ?? null,
+    args: toSerializable(event?.args),
+  };
+}
+
+function readEventRangeCache(eventKey: string, fromBlock: number, toBlock: number): any[] | null {
+  try {
+    const filePath = getEventCacheFilePath(eventKey, fromBlock, toBlock);
+    if (!fs.existsSync(filePath)) {
+      return null;
+    }
+
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const payload = JSON.parse(raw) as Partial<EventCachePayload>;
+
+    if (
+      payload.version !== BSC_EVENT_CACHE_VERSION ||
+      !Array.isArray(payload.events)
+    ) {
+      return null;
+    }
+
+    return payload.events;
+  } catch (error) {
+    const { reason } = normalizeRpcError(error);
+    console.warn(`[BSC] 读取事件缓存失败: ${reason}`);
+    return null;
+  }
+}
+
+function writeEventRangeCache(eventKey: string, fromBlock: number, toBlock: number, events: any[]): void {
+  try {
+    const filePath = getEventCacheFilePath(eventKey, fromBlock, toBlock);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+
+    const payload: EventCachePayload = {
+      version: BSC_EVENT_CACHE_VERSION,
+      eventKey,
+      fromBlock,
+      toBlock,
+      cachedAt: new Date().toISOString(),
+      events,
+    };
+
+    fs.writeFileSync(filePath, JSON.stringify(payload), 'utf-8');
+  } catch (error) {
+    const { reason } = normalizeRpcError(error);
+    console.warn(`[BSC] 写入事件缓存失败: ${reason}`);
+  }
+}
+
+async function queryEventRangeWithCache(
+  contract: ethers.Contract,
+  filter: any,
+  fromBlock: number,
+  toBlock: number,
+  eventKey: string
+): Promise<any[]> {
+  const cached = readEventRangeCache(eventKey, fromBlock, toBlock);
+  if (cached) {
+    return cached;
+  }
+
+  const liveEvents = await withRegisterLogQueryLimit(() =>
+    withRpcRetry(
+      () => contract.queryFilter(filter, fromBlock, toBlock),
+      `queryFilter(${eventKey}, ${fromBlock}-${toBlock})`
+    )
+  );
+
+  const normalized = liveEvents.map((evt: any) => normalizeEventForCache(evt));
+  writeEventRangeCache(eventKey, fromBlock, toBlock, normalized);
+  return normalized;
 }
 
 function readRegisterTxCache(walletAddress: string): string | null {
@@ -142,6 +325,73 @@ function writeRegisterTxCache(walletAddress: string, txHash: string): void {
   }
 }
 
+async function queryRegisterEventsAdaptive(
+  contract: ethers.Contract,
+  filter: any,
+  fromBlock: number,
+  toBlock: number,
+  eventKey: string
+): Promise<Array<any>> {
+  try {
+    return await queryEventRangeWithCache(contract, filter, fromBlock, toBlock, eventKey);
+  } catch (error) {
+    const step = toBlock - fromBlock + 1;
+    const minStep = Number.isFinite(BSC_REGISTER_LOG_MIN_STEP) && BSC_REGISTER_LOG_MIN_STEP > 0
+      ? Math.floor(BSC_REGISTER_LOG_MIN_STEP)
+      : 200;
+
+    if (!isLimitExceededError(error) || fromBlock >= toBlock || step <= minStep) {
+      throw error;
+    }
+
+    const mid = Math.floor((fromBlock + toBlock) / 2);
+    console.warn(
+      `[BSC] Register 日志区间过大，拆分查询 ${fromBlock}-${toBlock} -> ${fromBlock}-${mid}, ${mid + 1}-${toBlock}`
+    );
+
+    const left = await queryRegisterEventsAdaptive(contract, filter, fromBlock, mid, eventKey);
+    const right = await queryRegisterEventsAdaptive(contract, filter, mid + 1, toBlock, eventKey);
+    const merged = left.concat(right);
+    writeEventRangeCache(eventKey, fromBlock, toBlock, merged);
+    return merged;
+  }
+}
+
+async function lookupRegisterTxHashOnChain(normalizedAddress: string): Promise<string | null> {
+  const contract = getContract();
+  const filter = contract.filters.Register(normalizedAddress, null);
+  const eventKey = `register_${normalizedAddress}`;
+
+  const latestBlock = await withRpcRetry(
+    () => provider.getBlockNumber(),
+    `getBlockNumber()`
+  );
+
+  const fromStart = Number.isFinite(BSC_START_BLOCK) && BSC_START_BLOCK >= 0 ? BSC_START_BLOCK : 0;
+  const step = Number.isFinite(BSC_EVENT_BLOCK_STEP) && BSC_EVENT_BLOCK_STEP > 0 ? BSC_EVENT_BLOCK_STEP : 5000;
+
+  for (let fromBlock = fromStart; fromBlock <= latestBlock; fromBlock += step) {
+    const toBlock = Math.min(fromBlock + step - 1, latestBlock);
+    const events = await queryRegisterEventsAdaptive(contract, filter, fromBlock, toBlock, eventKey);
+
+    if (events.length > 0) {
+      const sortedEvents = [...events].sort((a, b) => {
+        if (a.blockNumber !== b.blockNumber) return a.blockNumber - b.blockNumber;
+        return (a.index ?? 0) - (b.index ?? 0);
+      });
+
+      const txHash = sortedEvents[0].transactionHash;
+      writeRegisterTxCache(normalizedAddress, txHash);
+      console.log(
+        `[BSC] 找到用户 ${normalizedAddress} 的注册交易: ${txHash}（区块范围 ${fromBlock}-${toBlock}）`
+      );
+      return txHash;
+    }
+  }
+
+  return null;
+}
+
 // 获取合约实例
 function getContract() {
   return new ethers.Contract(DQ_CONTRACT, DQ_ABI, provider);
@@ -165,57 +415,34 @@ export async function getUserRegisterTxHash(walletAddress: string): Promise<stri
       return cachedTxHash;
     }
 
-    const contract = getContract();
-    const filter = contract.filters.Register(normalizedAddress, null);
+    const lastMissAt = registerTxMissCache.get(normalizedAddress);
+    if (lastMissAt && Date.now() - lastMissAt < BSC_REGISTER_TX_NEGATIVE_CACHE_TTL_MS) {
+      return null;
+    }
 
-    // 分段区块查询，避免一次扫全链导致超时/限流
-    const latestBlock = await withRpcRetry(
-      () => provider.getBlockNumber(),
-      `getBlockNumber()`
-    );
+    const pendingLookup = pendingRegisterTxLookups.get(normalizedAddress);
+    if (pendingLookup) {
+      return await pendingLookup;
+    }
 
-    const fromStart = Number.isFinite(BSC_START_BLOCK) && BSC_START_BLOCK >= 0 ? BSC_START_BLOCK : 0;
-    const step = Number.isFinite(BSC_EVENT_BLOCK_STEP) && BSC_EVENT_BLOCK_STEP > 0 ? BSC_EVENT_BLOCK_STEP : 50000;
-
-    for (let fromBlock = fromStart; fromBlock <= latestBlock; fromBlock += step) {
-      const toBlock = Math.min(fromBlock + step - 1, latestBlock);
-
-      let events = await withRpcRetry(
-        () => contract.queryFilter(filter, fromBlock, toBlock),
-        `queryFilter(Register, ${fromBlock}-${toBlock})`
-      );
-
-      // 如果遇到 limit exceeded 错误，缩小步长重试
-      if (events.length === 0) {
-        // 如果当前区块范围太大（超过 10000），尝试缩小步长
-        if (toBlock - fromBlock > 8000) {
-          const smallStep = 2000;
-          for (let smallFrom = fromBlock; smallFrom <= toBlock; smallFrom += smallStep) {
-            const smallTo = Math.min(smallFrom + smallStep - 1, toBlock);
-            try {
-              const smallEvents = await contract.queryFilter(filter, smallFrom, smallTo);
-              events = events.concat(smallEvents);
-            } catch (err: any) {
-              // 如果还是失败，继续下一个分段
-              console.warn(`[BSC] 分段查询失败 ${smallFrom}-${smallTo}: ${err.message}`);
-            }
-          }
+    const lookupPromise = lookupRegisterTxHashOnChain(normalizedAddress)
+      .then((txHash) => {
+        if (!txHash) {
+          registerTxMissCache.set(normalizedAddress, Date.now());
+        } else {
+          registerTxMissCache.delete(normalizedAddress);
         }
-      }
-
-      if (events.length > 0) {
-        const sortedEvents = [...events].sort((a, b) => {
-          if (a.blockNumber !== b.blockNumber) return a.blockNumber - b.blockNumber;
-          return (a.index ?? 0) - (b.index ?? 0);
-        });
-
-        const txHash = sortedEvents[0].transactionHash;
-        writeRegisterTxCache(normalizedAddress, txHash);
-        console.log(
-          `[BSC] 找到用户 ${walletAddress} 的注册交易: ${txHash}（区块范围 ${fromBlock}-${toBlock}）`
-        );
         return txHash;
-      }
+      })
+      .finally(() => {
+        pendingRegisterTxLookups.delete(normalizedAddress);
+      });
+
+    pendingRegisterTxLookups.set(normalizedAddress, lookupPromise);
+    const txHash = await lookupPromise;
+
+    if (txHash) {
+      return txHash;
     }
     
     console.log(`[BSC] 未找到用户 ${walletAddress} 的注册交易`);
