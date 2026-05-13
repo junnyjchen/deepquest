@@ -26,8 +26,8 @@ const DQ_ABI = [
   "function register(address _referrer) external",
   // Register 事件
   "event Register(address indexed user, address indexed referrer)",
-  // isRegistered view 函数（如果有的话）
-  "function users(address) view returns (address referrer, uint256 directCount, uint8 level, uint256 totalInvest, uint256 teamInvest, uint256 energy, uint256 lpShares, uint8 dLevel)"
+  // getUser 函数 - 返回7个值（无 lpShares 字段）
+  "function getUser(address) view returns (address, uint256, uint8, uint256, uint256, uint256, uint8)"
 ];
 
 // 复用 Provider，避免重复创建连接
@@ -466,12 +466,13 @@ export async function isUserRegisteredOnChain(walletAddress: string): Promise<bo
     
     // 尝试获取用户信息
     const userInfo = await withRpcRetry(
-      () => contract.users(walletAddress),
-      `users(${walletAddress})`
+      () => contract.getUser(walletAddress),
+      `getUser(${walletAddress})`
     );
     
     // 如果 referrer 不为 0x0...0，则认为已注册
-    if (userInfo && userInfo.referrer !== ethers.ZeroAddress) {
+    // getUser 返回数组，第一个元素是 referrer
+    if (userInfo && userInfo[0] !== ethers.ZeroAddress) {
       return true;
     }
     
@@ -495,19 +496,19 @@ export async function getUserInfoFromChain(walletAddress: string) {
 
     const contract = getContract();
     const userInfo = await withRpcRetry(
-      () => contract.users(walletAddress),
-      `users(${walletAddress})`
+      () => contract.getUser(walletAddress),
+      `getUser(${walletAddress})`
     );
     
+    // getUser 返回数组: [referrer, directCount, level, totalInvest, teamInvest, energy, dLevel]
     return {
-      referrer: userInfo.referrer,
-      directCount: userInfo.directCount?.toString() || '0',
-      level: userInfo.level?.toString() || '0',
-      totalInvest: userInfo.totalInvest?.toString() || '0',
-      teamInvest: userInfo.teamInvest?.toString() || '0',
-      energy: userInfo.energy?.toString() || '0',
-      lpShares: userInfo.lpShares?.toString() || '0',
-      dLevel: userInfo.dLevel?.toString() || '0',
+      referrer: userInfo[0],
+      directCount: userInfo[1]?.toString() || '0',
+      level: userInfo[2]?.toString() || '0',
+      totalInvest: userInfo[3]?.toString() || '0',
+      teamInvest: userInfo[4]?.toString() || '0',
+      energy: userInfo[5]?.toString() || '0',
+      dLevel: userInfo[6]?.toString() || '0',
     };
   } catch (error) {
     console.error(`[BSC] 获取用户信息失败:`, error);

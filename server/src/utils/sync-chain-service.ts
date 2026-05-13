@@ -243,7 +243,6 @@ export async function getChainUserInfo(userAddress: string): Promise<{
   totalInvest: string;
   teamInvest: string;
   energy: string;
-  lpShares: string;
   dLevel: number;
 } | null> {
   try {
@@ -260,8 +259,7 @@ export async function getChainUserInfo(userAddress: string): Promise<{
       totalInvest: userInfo[3].toString(),
       teamInvest: userInfo[4].toString(),
       energy: userInfo[5].toString(),
-      lpShares: userInfo[6].toString(),
-      dLevel: Number(userInfo[7]),
+      dLevel: Number(userInfo[6]),
     };
   } catch (error) {
     console.error(`[ChainSync] 获取用户 ${userAddress} 信息失败:`, error);
@@ -284,7 +282,6 @@ async function syncUserToDatabase(
     totalInvest: string;
     teamInvest: string;
     energy: string;
-    lpShares: string;
     dLevel: number;
   },
   fields?: string[]
@@ -304,14 +301,13 @@ async function syncUserToDatabase(
       ? await getUserRegisterTxHash(userAddress)
       : existingUser?.activation_tx_hash ?? null;
 
-    // 定义可同步的字段映射
+    // 定义可同步的字段映射（注意：合约无 lpShares 字段）
     const fieldMap: Record<string, { chainKey: string; dbKey: string }> = {
       direct_count: { chainKey: 'directCount', dbKey: 'direct_count' },
       level: { chainKey: 'level', dbKey: 'level' },
       total_invest: { chainKey: 'totalInvest', dbKey: 'total_invest' },
       team_invest: { chainKey: 'teamInvest', dbKey: 'team_invest' },
       energy: { chainKey: 'energy', dbKey: 'energy' },
-      lp_shares: { chainKey: 'lpShares', dbKey: 'lp_shares' },
       d_level: { chainKey: 'dLevel', dbKey: 'd_level' },
       referrer_address: { chainKey: 'referrer', dbKey: 'referrer_address' },
     };
@@ -488,14 +484,54 @@ async function syncUserTeamClosure(userAddress: string, maxDepth: number = 15): 
   // 为每个祖先创建闭包记录
   for (const ancestor of lineage) {
     // 获取祖先用户ID
-    const { data: ancestorData, error: ancestorError } = await supabase
+    let ancestorData = await supabase
       .from('users')
       .select('id')
       .eq('wallet_address', ancestor.address.toLowerCase())
-      .single();
+      .single()
+      .then(res => res.data);
 
-    if (ancestorError || !ancestorData) {
-      console.warn(`[ChainSync] 祖先用户不存在: ${ancestor.address}，depth: ${ancestor.depth}`);
+    // 如果祖先用户不存在，先从链上获取并注册
+    if (!ancestorData) {
+      console.log(`[ChainSync] 祖先用户不存在: ${ancestor.address}，尝试从链上获取并注册...`);
+      
+      try {
+        const ancestorInfo = await getChainUserInfo(ancestor.address);
+        if (ancestorInfo) {
+          // 链上有数据，同步到数据库
+          await syncUserToDatabase(ancestor.address, ancestorInfo);
+          console.log(`[ChainSync] 成功从链上同步祖先用户: ${ancestor.address}`);
+        } else {
+          // 链上也没有，先在数据库创建基础记录
+          console.log(`[ChainSync] 链上无数据，先在数据库创建基础记录: ${ancestor.address}`);
+          const { error: insertError } = await supabase
+            .from('users')
+            .insert({
+              wallet_address: ancestor.address.toLowerCase(),
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            });
+          
+          if (insertError) {
+            console.error(`[ChainSync] 创建祖先用户基础记录失败: ${ancestor.address}`, insertError);
+          }
+        }
+        
+        // 重新查询用户ID
+        ancestorData = await supabase
+          .from('users')
+          .select('id')
+          .eq('wallet_address', ancestor.address.toLowerCase())
+          .single()
+          .then(res => res.data);
+      } catch (error) {
+        console.error(`[ChainSync] 处理祖先用户失败: ${ancestor.address}`, error);
+      }
+    }
+
+    // 如果仍然找不到，跳过
+    if (!ancestorData) {
+      console.warn(`[ChainSync] 祖先用户 ${ancestor.address} 无法获取，depth: ${ancestor.depth}，跳过此关系`);
       continue;
     }
 
