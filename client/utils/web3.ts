@@ -377,6 +377,36 @@ export const claimPartnerOnChain = async (
   return tx;
 };
 
+/**
+ * 领取 SOL 奖励（链上）
+ */
+export const claimSOLOnChain = async (
+  signer: ethers.Signer
+): Promise<ethers.TransactionResponse> => {
+  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+
+  console.log('[Web3] 链上领取 SOL 奖励');
+
+  const tx = await contract.claimReward();
+  console.log('[Web3] 交易已发送:', tx.hash);
+
+  return tx;
+};
+
+/**
+ * 获取待领取 SOL 金额（从链上）
+ */
+export const getPendingSOL = async (userAddress: string): Promise<string> => {
+  try {
+    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
+    const pending = await contract.getPendingSOL(userAddress);
+    return ethers.formatEther(pending);
+  } catch (error) {
+    console.error('[Web3] 获取待领取 SOL 失败:', error);
+    return '0';
+  }
+};
+
 // ============ DQToken 合约交互 ============
 
 /**

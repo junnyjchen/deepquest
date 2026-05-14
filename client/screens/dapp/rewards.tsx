@@ -15,6 +15,13 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappUserApi } from '@/utils/api';
+import {
+  connectWallet,
+  getBrowserProvider,
+  getPendingSOL,
+  claimSOLOnChain,
+  waitForTransaction,
+} from '@/utils/web3';
 
 // 精确匹配参考图的颜色体系
 const BG_DARK = '#0A0A12';
@@ -53,6 +60,9 @@ export default function DappRewards() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [claiming, setClaiming] = useState(false);
+  // SOL 领取相关状态
+  const [pendingSOL, setPendingSOL] = useState('0');
+  const [claimingSOL, setClaimingSOL] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -62,6 +72,7 @@ export default function DappRewards() {
           if (savedWallet) {
             setWalletAddress(savedWallet);
             await fetchRewards(savedWallet, 1);
+            await fetchPendingSOL(savedWallet);
           }
         } catch (error) {
           console.error('初始化失败:', error);
@@ -73,6 +84,17 @@ export default function DappRewards() {
       init();
     }, [])
   );
+
+  // 获取待领取 SOL 金额
+  const fetchPendingSOL = async (address: string) => {
+    try {
+      const pending = await getPendingSOL(address);
+      setPendingSOL(pending);
+    } catch (error) {
+      console.error('获取待领取 SOL 失败:', error);
+      setPendingSOL('0');
+    }
+  };
 
   const fetchRewards = async (address: string, pageNum: number, append = false) => {
     try {
@@ -108,9 +130,57 @@ export default function DappRewards() {
     setRefreshing(true);
     if (walletAddress) {
       await fetchRewards(walletAddress, 1);
+      await fetchPendingSOL(walletAddress);
     }
     setRefreshing(false);
   }, [walletAddress]);
+
+  // 领取 SOL 奖励
+  const handleClaimSOL = async () => {
+    if (!walletAddress) {
+      Alert.alert('提示', '请先连接钱包');
+      return;
+    }
+
+    const pendingAmount = parseFloat(pendingSOL);
+    if (pendingAmount <= 0) {
+      Alert.alert('提示', '暂无可领取的 SOL');
+      return;
+    }
+
+    Alert.alert(
+      '领取 SOL',
+      `确定要领取 ${pendingAmount.toFixed(4)} SOL 吗？`,
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '确认',
+          onPress: async () => {
+            try {
+              setClaimingSOL(true);
+              const provider = getBrowserProvider();
+              if (!provider) {
+                throw new Error('请使用钱包浏览器');
+              }
+              const signer = await provider.getSigner();
+              const tx = await claimSOLOnChain(signer);
+              await waitForTransaction(tx, 1);
+              Alert.alert('成功', `已领取 ${pendingAmount.toFixed(4)} SOL`);
+              // 刷新待领取金额
+              await fetchPendingSOL(walletAddress);
+              // 刷新奖励记录
+              await fetchRewards(walletAddress, 1);
+            } catch (error: any) {
+              console.error('领取 SOL 失败:', error);
+              Alert.alert('失败', error?.message || '领取失败，请重试');
+            } finally {
+              setClaimingSOL(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const onEndReached = () => {
     if (!loadingMore && hasMore && walletAddress) {
@@ -186,6 +256,7 @@ export default function DappRewards() {
   // 计算待领取和已领取总额
   const pendingTotal = rewards.filter(r => r.status === 'pending').reduce((sum, r) => sum + parseFloat(r.amount || '0'), 0);
   const claimedTotal = rewards.filter(r => r.status === 'claimed').reduce((sum, r) => sum + parseFloat(r.amount || '0'), 0);
+  const pendingSOLAmount = parseFloat(pendingSOL);
 
   const renderItem = ({ item }: { item: RewardRecord }) => {
     const typeInfo = getRewardTypeInfo(item.reward_type);
@@ -234,6 +305,38 @@ export default function DappRewards() {
         {/* 收益汇总 */}
         {walletAddress && (
           <View className="px-4 pb-4">
+            {/* SOL 领取卡片 */}
+            <View className="rounded-2xl p-4 mb-4" style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 2, borderColor: CYAN }}>
+              <View className="flex-row items-center justify-between mb-3">
+                <View className="flex-row items-center gap-2">
+                  <View className="w-10 h-10 rounded-full items-center justify-center" style={{ backgroundColor: `${CYAN}20` }}>
+                    <Ionicons name="wallet" size={20} color={CYAN} />
+                  </View>
+                  <View>
+                    <Text className="text-sm font-semibold" style={{ color: TEXT_WHITE }}>SOL 钱包奖励</Text>
+                    <Text className="text-xs" style={{ color: TEXT_MUTED }}>可领取金额</Text>
+                  </View>
+                </View>
+                <Text className="text-2xl font-bold" style={{ color: CYAN }}>{pendingSOLAmount.toFixed(4)}</Text>
+              </View>
+              
+              {pendingSOLAmount > 0 && (
+                <TouchableOpacity
+                  className="py-3 rounded-xl items-center"
+                  style={{ backgroundColor: CYAN }}
+                  onPress={handleClaimSOL}
+                  disabled={claimingSOL}
+                >
+                  {claimingSOL ? (
+                    <ActivityIndicator size="small" color="#0A0A12" />
+                  ) : (
+                    <Text className="text-sm font-semibold" style={{ color: '#0A0A12' }}>领取 SOL</Text>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* DQ 奖励汇总卡片 */}
             <View className="rounded-2xl p-4" style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 2, borderColor: YELLOW }}>
               <View className="flex-row justify-between">
                 <View className="items-center flex-1">
