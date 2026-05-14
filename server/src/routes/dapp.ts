@@ -655,9 +655,9 @@ router.post('/buy-card', async (req, res) => {
 
     // 检查用户是否已购买过此类型卡牌
     const { data: existingCard } = await supabase
-      .from('nft_cards')
+      .from('cards')
       .select('id')
-      .eq('user_address', wallet_address.toLowerCase())
+      .eq('owner_address', wallet_address.toLowerCase())
       .eq('card_type', card_type.toUpperCase())
       .single();
 
@@ -668,19 +668,24 @@ router.post('/buy-card', async (req, res) => {
       });
     }
 
-    // 创建购买记录
+    // 创建购买记录（需要先获取最大token_id）
+    const { data: maxToken } = await supabase
+      .from('cards')
+      .select('token_id')
+      .order('token_id', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    const nextTokenId = (maxToken?.token_id || 0) + 1;
+    
     const { data: purchase, error: insertError } = await supabase
-      .from('nft_cards')
+      .from('cards')
       .insert({
-        user_address: wallet_address.toLowerCase(),
-        card_type: card_type.toUpperCase(),
-        card_level: card.level,
-        price: card.price,
-        reward_rate: card.reward_rate,
-        fee_rate: card.fee_rate,
-        tx_hash: tx_hash,
-        status: 'active',
-        purchased_at: new Date().toISOString()
+        token_id: nextTokenId,
+        owner_address: wallet_address.toLowerCase(),
+        card_type: card_type === 'A' ? 1 : card_type === 'B' ? 2 : 3,
+        mint_price: card.price,
+        status: 'active'
       })
       .select()
       .single();
@@ -731,10 +736,10 @@ router.get('/my-cards/:wallet_address', async (req, res) => {
     const { wallet_address } = req.params;
 
     const { data: cards, error } = await supabase
-      .from('nft_cards')
+      .from('cards')
       .select('*')
-      .eq('user_address', wallet_address.toLowerCase())
-      .order('purchased_at', { ascending: false });
+      .eq('owner_address', wallet_address.toLowerCase())
+      .order('minted_at', { ascending: false });
 
     if (error) {
       return res.status(500).json({
@@ -802,13 +807,13 @@ router.get('/card-stats/:wallet_address', async (req, res) => {
 
     // 获取用户卡牌
     const { data: cards } = await supabase
-      .from('nft_cards')
-      .select('card_type, reward_rate, price')
-      .eq('user_address', wallet_address.toLowerCase())
+      .from('cards')
+      .select('card_type, mint_price')
+      .eq('owner_address', wallet_address.toLowerCase())
       .eq('status', 'active');
 
     // 计算总投入
-    const totalInvest = cards?.reduce((sum: number, card: any) => sum + parseFloat(card.price || '0'), 0) || 0;
+    const totalInvest = cards?.reduce((sum: number, card: any) => sum + parseFloat(card.mint_price || '0'), 0) || 0;
 
     // 获取累计收益
     const { data: rewards } = await supabase
@@ -870,9 +875,9 @@ router.get('/node-info/:wallet_address', async (req, res) => {
 
     // 获取用户的NFT卡牌
     const { data: cards } = await supabase
-      .from('nft_cards')
+      .from('cards')
       .select('*')
-      .eq('user_address', wallet_address.toLowerCase())
+      .eq('owner_address', wallet_address.toLowerCase())
       .eq('status', 'active');
 
     // 获取累计卡牌收益

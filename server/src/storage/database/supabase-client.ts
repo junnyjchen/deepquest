@@ -108,10 +108,37 @@ function getSupabaseClient(token?: string): SupabaseClient {
     key = serviceRoleKey ?? anonKey;
   }
 
+  // 创建自定义 HTTP Agent 以解决 TLS 连接问题
+  const httpAgent = new http.Agent({
+    keepAlive: true,
+    keepAliveMsecs: 30000,
+    maxSockets: 50,
+    timeout: 60000,
+  });
+
+  const httpsAgent = new https.Agent({
+    keepAlive: true,
+    keepAliveMsecs: 30000,
+    maxSockets: 50,
+    timeout: 60000,
+    rejectUnauthorized: true, // 保持 SSL 验证
+  });
+
   if (token) {
     return createClient(url, key, {
       global: {
         headers: { Authorization: `Bearer ${token}` },
+        fetch: (url, options = {}) => {
+          // 根据协议选择合适的 agent
+          const protocol = new URL(url).protocol;
+          const agent = protocol === 'https:' ? httpsAgent : httpAgent;
+          
+          return fetch(url, {
+            ...options,
+            // @ts-ignore - agent is supported in Node.js
+            agent,
+          });
+        },
       },
       db: {
         schema: 'public',
@@ -125,6 +152,19 @@ function getSupabaseClient(token?: string): SupabaseClient {
   }
 
   return createClient(url, key, {
+    global: {
+      fetch: (url, options = {}) => {
+        // 根据协议选择合适的 agent
+        const protocol = new URL(url).protocol;
+        const agent = protocol === 'https:' ? httpsAgent : httpAgent;
+        
+        return fetch(url, {
+          ...options,
+          // @ts-ignore - agent is supported in Node.js
+          agent,
+        });
+      },
+    },
     db: {
       schema: 'public',
       timeout: 60000,
@@ -452,6 +492,47 @@ async function ensureDatabaseReady(): Promise<void> {
     console.log('  3. Database tables are created');
     console.log('='.repeat(60) + '\n');
   }
+}
+
+/**
+ * 数据库查询重试包装器
+ * 自动重试因 TLS 连接问题导致的查询失败
+ */
+export async function withRetry<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  delayMs: number = 1000
+): Promise<T> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      lastError = error;
+      const errorMsg = error?.message || String(error);
+      
+      // 检查是否是 TLS 连接错误
+      const isTLSError = 
+        errorMsg.includes('TLS') ||
+        errorMsg.includes('socket disconnected') ||
+        errorMsg.includes('ECONNRESET') ||
+        errorMsg.includes('ETIMEDOUT') ||
+        errorMsg.includes('ENOTFOUND') ||
+        errorMsg.includes('network');
+
+      if (isTLSError && attempt < maxRetries) {
+        console.warn(`[Database] Connection error on attempt ${attempt}/${maxRetries}, retrying in ${delayMs}ms...`);
+        console.warn(`[Database] Error: ${errorMsg}`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+        continue;
+      }
+      
+      throw error;
+    }
+  }
+
+  throw lastError || new Error('Operation failed after retries');
 }
 
 export { 
