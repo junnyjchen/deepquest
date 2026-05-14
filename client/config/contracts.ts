@@ -2,8 +2,8 @@
  * DeepQuest 合约配置
  * 
  * 合约地址（最新）：
- * 主合约（DQMining）：0x2f05163B2A4db48Ac9223897b5a01aA0158F0A6E
- * 质押合约（DQMiningStake）：0x666197e39dB9bA342De02aE969Ea76EdE6709823
+ * 主合约（DQMining）：0x732B7f9EF6381120458D49CF4aaaF9a4B780c008
+ * 质押合约（DQMiningStake）：0x8F0fb2E3Dd7564C8fCa82050934A576Ecdf74006
  * 
  * ABI 来源：assets/DQMining.sol (基于合约源码生成)
  */
@@ -11,11 +11,11 @@
 // 主合约地址
 export const CONTRACT_ADDRESSES = {
   DQPROJECT: {
-    address: '0x2f05163B2A4db48Ac9223897b5a01aA0158F0A6E',
+    address: '0x732B7f9EF6381120458D49CF4aaaF9a4B780c008',
     name: 'DQProject'
   },
   DQSTAKE: {
-    address: '0x666197e39dB9bA342De02aE969Ea76EdE6709823',
+    address: '0x8F0fb2E3Dd7564C8fCa82050934A576Ecdf74006',
     name: 'DQMiningStake'
   },
   DQTOKEN: {
