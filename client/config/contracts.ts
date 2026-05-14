@@ -25,6 +25,10 @@ export const CONTRACT_ADDRESSES = {
   DQCARD: {
     address: '0xA275d02a6bDc9bd79FdAAD1838a9f5b1F19d032a', // 待确认
     name: 'DQCard'
+  },
+  SOL: {
+    address: '0x570A5D26f7765Ecb712C0924E4De545B89fD43dF',
+    name: 'SOL'
   }
 };
 

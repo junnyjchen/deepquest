@@ -34,6 +34,12 @@ import {
   getUserFromChain,
   isUserRegisteredOnChain,
   registerUserOnChain,
+  getBNBBalance,
+  getSOLTokenBalance,
+  getDQTokenBalance,
+  sellDQForSOL,
+  approveDQToken,
+  checkDQAllowance,
   DQPROJECT_ABI,
 } from '@/utils/web3';
 import { CONTRACT_ADDRESSES } from '@/config/contracts';
@@ -262,10 +268,17 @@ export default function DappIndex() {
   const handleConnect = async () => {
     try {
       // 尝试连接钱包
-      const { provider, address } = await connectWallet();
+      const walletInfo = await connectWallet();
+      
+      if (!walletInfo) {
+        Alert.alert('错误', '钱包连接失败');
+        return;
+      }
+      
+      const { provider, address } = walletInfo;
       
       // 切换到 BSC 主网
-      await switchToBSC(provider);
+      await switchToBSC();
       
       // 保存钱包地址
       await AsyncStorage.setItem(WALLET_STORAGE_KEY, address);
@@ -291,8 +304,18 @@ export default function DappIndex() {
         }
       }
 
-      //连接钱包之后 获取用户 DQ 和 SOL 余额，显示出来
-      
+      // 连接钱包之后 获取用户 DQ 和 SOL 余额，显示出来
+      try {
+        const [solBal, dqBal] = await Promise.all([
+          getSOLTokenBalance(address),
+          getDQTokenBalance(address)
+        ]);
+        setSolBalance(parseFloat(solBal).toFixed(4));
+        setDqtBalance(parseFloat(dqBal).toFixed(2));
+        console.log('[DApp] 余额更新:', { sol: solBal, dq: dqBal });
+      } catch (err) {
+        console.log('[DApp] 获取余额失败:', err);
+      }
 
       
       // 3. 先检查本地激活状态（优先使用本地状态）
@@ -463,8 +486,13 @@ export default function DappIndex() {
       }
 
       // 2. 调用合约注册
-      const { provider } = await connectWallet();
-      const signer = await provider.getSigner();
+      const walletInfo = await connectWallet();
+      if (!walletInfo) {
+        Alert.alert('错误', '钱包连接失败');
+        return;
+      }
+      
+      const { provider, signer } = walletInfo;
       const tx = await registerUserOnChain(signer, referrer);
 
       Alert.alert(
@@ -529,6 +557,142 @@ export default function DappIndex() {
     router.replace('/(dapp)');
   };
 
+  // 兑换操作
+  const handleSwap = async () => {
+    if (!walletAddress) {
+      Alert.alert('提示', '请先连接钱包');
+      return;
+    }
+    if (!sellAmount || parseFloat(sellAmount) <= 0) {
+      Alert.alert('提示', '请输入兑换数量');
+      return;
+    }
+
+    // 检查 DQ 余额
+    const dqBalance = parseFloat(dqtBalance);
+    const sellAmountNum = parseFloat(sellAmount);
+    if (sellAmountNum > dqBalance) {
+      Alert.alert('提示', 'DQ 余额不足');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+
+      // 检查是否连接了钱包
+      if (typeof window !== 'undefined' && window.ethereum) {
+        // 1. 获取钱包信息
+        const walletInfo = await connectWallet();
+        if (!walletInfo) {
+          Alert.alert('错误', '钱包连接失败');
+          return;
+        }
+
+        const { signer } = walletInfo;
+
+        // 2. 检查授权额度
+        const allowance = await checkDQAllowance(walletAddress);
+        console.log('[DApp] DQ 授权额度:', allowance);
+
+        if (parseFloat(allowance) < sellAmountNum) {
+          // 需要授权
+          Alert.alert(
+            '需要授权',
+            `为了兑换 DQ，需要先授权合约使用您的 DQ 代币。`,
+            [
+              { text: '取消', style: 'cancel' },
+              {
+                text: '授权',
+                onPress: async () => {
+                  try {
+                    const approveTx = await approveDQToken(signer, sellAmount);
+                    Alert.alert('授权已提交', '请等待区块链确认...', [
+                      { text: '确定' },
+                      { text: '查看详情', onPress: () => Linking.openURL(`https://bscscan.com/tx/${approveTx.hash}`) }
+                    ]);
+
+                    // 等待授权确认
+                    await approveTx.wait();
+
+                    // 授权完成后，执行兑换
+                    const swapTx = await sellDQForSOL(signer, sellAmount, '0');
+                    Alert.alert(
+                      '兑换已提交',
+                      `正在兑换 ${sellAmount} DQ 为 SOL...`,
+                      [
+                        { text: '确定' },
+                        { text: '查看详情', onPress: () => Linking.openURL(`https://bscscan.com/tx/${swapTx.hash}`) }
+                      ]
+                    );
+
+                    // 等待兑换确认
+                    await swapTx.wait();
+
+                    // 刷新余额
+                    const [newSolBal, newDqBal] = await Promise.all([
+                      getSOLTokenBalance(walletAddress),
+                      getDQTokenBalance(walletAddress)
+                    ]);
+                    setSolBalance(parseFloat(newSolBal).toFixed(4));
+                    setDqtBalance(parseFloat(newDqBal).toFixed(2));
+
+                    Alert.alert('兑换成功', `已成功兑换 ${sellAmount} DQ！`);
+                    setSellAmount('');
+                  } catch (error: any) {
+                    console.error('授权或兑换失败:', error);
+                    Alert.alert('失败', error.message || '授权或兑换失败');
+                  } finally {
+                    setSubmitting(false);
+                  }
+                }
+              }
+            ]
+          );
+          return;
+        }
+
+        // 3. 已有足够授权，直接兑换
+        const swapTx = await sellDQForSOL(signer, sellAmount, '0');
+        Alert.alert(
+          '兑换已提交',
+          `正在兑换 ${sellAmount} DQ 为 SOL...`,
+          [
+            { text: '确定' },
+            { text: '查看详情', onPress: () => Linking.openURL(`https://bscscan.com/tx/${swapTx.hash}`) }
+          ]
+        );
+
+        // 等待交易确认
+        await swapTx.wait();
+
+        // 刷新余额
+        const [newSolBal, newDqBal] = await Promise.all([
+          getSOLTokenBalance(walletAddress),
+          getDQTokenBalance(walletAddress)
+        ]);
+        setSolBalance(parseFloat(newSolBal).toFixed(4));
+        setDqtBalance(parseFloat(newDqBal).toFixed(2));
+
+        Alert.alert('兑换成功', `已成功兑换 ${sellAmount} DQ！`);
+        setSellAmount('');
+      } else {
+        // 模拟模式 - 调用后端 API
+        Alert.alert('提示', '请在浏览器中使用钱包进行兑换');
+      }
+    } catch (error: any) {
+      console.error('兑换失败:', error);
+      let errorMsg = error.message || '兑换失败，请重试';
+      if (error.message && error.message.includes('insufficient allowance')) {
+        errorMsg = 'DQ 授权不足，请重新授权';
+      } else if (error.message && error.message.includes('insufficient balance')) {
+        errorMsg = 'DQ 余额不足';
+      }
+      Alert.alert('错误', errorMsg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // 质押操作
   const handleStake = async () => {
     if (!walletAddress) {
@@ -580,17 +744,10 @@ export default function DappIndex() {
 
   // 兑换/质押确定
   const handleConfirm = () => {
+    console.log('确认操作:', { mode, sellAmount, buyAmount, stakeAmount, stakePeriod });
     if (mode === 'swap') {
       // 兑换
-      if (!walletAddress) {
-        Alert.alert('提示', '请先连接钱包');
-        return;
-      }
-      if (!sellAmount || !buyAmount) {
-        Alert.alert('提示', '请输入兑换数量');
-        return;
-      }
-      Alert.alert('功能开发中', '兑换功能正在开发中');
+      handleSwap();
     } else {
       // 质押
       handleStake();

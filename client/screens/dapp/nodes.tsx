@@ -14,6 +14,13 @@ import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappApi } from '@/utils/api';
+import {
+  connectWallet,
+  buyNodeOnChain,
+  approveUSDT,
+  checkUSDTAllowance,
+  getUSDTBalance,
+} from '@/utils/web3';
 
 // 颜色体系
 const BG_DARK = '#0A0A12';
@@ -144,25 +151,75 @@ export default function DappNodes() {
           onPress: async () => {
             setSubmitting(true);
             try {
-              // 模拟生成交易哈希 (实际应该调用合约)
-              const txHash = '0x' + Array.from({ length: 64 }, () =>
-                Math.floor(Math.random() * 16).toString(16)
-              ).join('');
+              // 检查是否连接了钱包
+              if (typeof window !== 'undefined' && window.ethereum) {
+                // 1. 获取钱包信息
+                const walletInfo = await connectWallet();
+                if (!walletInfo) {
+                  Alert.alert('错误', '钱包连接失败');
+                  return;
+                }
 
-              const response = await dappApi.buyCard(walletAddress, selectedCard, txHash);
+                const { signer } = walletInfo;
 
-              if (response.code === 0) {
-                Alert.alert(
-                  '购买成功',
-                  `恭喜您成功购买 ${card.name}！\n\n权益:\n- 每日分币: ${card.reward_rate}%\n- 赠送级别: ${card.level}\n- 手续费: ${card.fee_rate}% SOL`,
-                  [{ text: '确定', onPress: loadData }]
-                );
-                setSelectedCard(null);
-                setActiveTab('mine');
+                // 2. 检查 USDT 余额
+                const usdtBalance = await getUSDTBalance(walletAddress);
+                const price = parseFloat(card.price);
+                if (parseFloat(usdtBalance) < price) {
+                  Alert.alert('余额不足', `您的 USDT 余额不足。\n当前余额: ${parseFloat(usdtBalance).toFixed(2)} USDT\n需要: ${card.price} USDT`);
+                  return;
+                }
+
+                // 3. 检查 USDT 授权额度
+                const allowance = await checkUSDTAllowance(walletAddress);
+                console.log('[Nodes] USDT 授权额度:', allowance);
+
+                if (parseFloat(allowance) < price) {
+                  // 需要授权
+                  Alert.alert(
+                    '需要授权',
+                    `为了购买节点卡片，需要先授权合约使用您的 USDT。`,
+                    [
+                      { text: '取消', style: 'cancel' },
+                      {
+                        text: '授权',
+                        onPress: async () => {
+                          try {
+                            const approveTx = await approveUSDT(signer, card.price);
+                            Alert.alert('授权已提交', '请等待区块链确认...', [
+                              { text: '确定' },
+                            ]);
+
+                            // 等待授权确认
+                            await approveTx.wait();
+
+                            // 授权完成后，执行购买
+                            await executeBuyNode(signer, selectedCard, card);
+                          } catch (error: any) {
+                            console.error('授权或购买失败:', error);
+                            let errorMsg = error.message || '授权或购买失败';
+                            if (error.message && error.message.includes('insufficient funds')) {
+                              errorMsg = '余额不足，请确保有足够的 BNB 支付手续费';
+                            }
+                            Alert.alert('失败', errorMsg);
+                          } finally {
+                            setSubmitting(false);
+                          }
+                        }
+                      }
+                    ]
+                  );
+                  return;
+                }
+
+                // 4. 已有足够授权，直接购买
+                await executeBuyNode(signer, selectedCard, card);
               } else {
-                Alert.alert('购买失败', response.message || '请重试');
+                // 模拟模式
+                Alert.alert('提示', '请在浏览器中使用钱包进行购买');
               }
             } catch (error: any) {
+              console.error('购买失败:', error);
               Alert.alert('错误', error.message || '网络错误，请重试');
             } finally {
               setSubmitting(false);
@@ -171,6 +228,58 @@ export default function DappNodes() {
         },
       ]
     );
+  };
+
+  // 执行链上购买节点
+  const executeBuyNode = async (signer: any, cardType: string, card: CardConfig) => {
+    try {
+      // 将卡片类型转换为数字：A=1, B=2, C=3
+      const cardTypeMap: Record<string, number> = { A: 1, B: 2, C: 3 };
+      const cardTypeNum = cardTypeMap[cardType];
+
+      if (!cardTypeNum) {
+        throw new Error('无效的卡片类型');
+      }
+
+      const buyTx = await buyNodeOnChain(signer, cardTypeNum);
+      Alert.alert(
+        '购买已提交',
+        `正在购买 ${card.name}...`,
+        [
+          { text: '确定' },
+        ]
+      );
+
+      // 等待交易确认
+      await buyTx.wait();
+
+      // 调用后端 API 记录购买
+      if (walletAddress) {
+        try {
+          await dappApi.buyCard(walletAddress, cardType, buyTx.hash);
+        } catch (apiError) {
+          console.log('[Nodes] 后端记录失败:', apiError);
+        }
+      }
+
+      Alert.alert(
+        '购买成功',
+        `恭喜您成功购买 ${card.name}！\n\n权益:\n- 每日分币: ${card.reward_rate}%\n- 赠送级别: ${card.level}\n- 手续费: ${card.fee_rate}% SOL`,
+        [{ text: '确定', onPress: loadData }]
+      );
+      setSelectedCard(null);
+      setActiveTab('mine');
+    } catch (error: any) {
+      console.error('链上购买失败:', error);
+      let errorMsg = error.message || '购买失败';
+      if (error.message && error.message.includes('insufficient funds')) {
+        errorMsg = 'USDT 余额不足或 BNB 手续费不足';
+      } else if (error.message && error.message.includes('user rejected')) {
+        errorMsg = '您取消了交易';
+      }
+      Alert.alert('购买失败', errorMsg);
+      throw error;
+    }
   };
 
   // 获取卡牌颜色

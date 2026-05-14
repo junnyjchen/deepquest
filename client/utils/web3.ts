@@ -276,6 +276,60 @@ export const claimLPOnChain = async (
 };
 
 /**
+ * 授权 DQ Token 给主合约（用于兑换）
+ */
+export const approveDQToken = async (
+  signer: ethers.Signer,
+  amount: string
+): Promise<ethers.TransactionResponse> => {
+  const dqContract = await getSignedContract(CONTRACT_ADDRESSES.DQTOKEN.address, DQTOKEN_ABI, signer);
+  const amountInWei = ethers.parseEther(amount);
+
+  console.log('[Web3] 授权 DQ Token:', amount);
+
+  const tx = await dqContract.approve(CONTRACT_ADDRESSES.DQPROJECT.address, amountInWei);
+  console.log('[Web3] 授权交易已发送:', tx.hash);
+
+  return tx;
+};
+
+/**
+ * 检查 DQ Token 授权额度
+ */
+export const checkDQAllowance = async (
+  userAddress: string
+): Promise<string> => {
+  try {
+    const contract = getContract(CONTRACT_ADDRESSES.DQTOKEN.address, DQTOKEN_ABI);
+    const allowance = await contract.allowance(userAddress, CONTRACT_ADDRESSES.DQPROJECT.address);
+    return ethers.formatEther(allowance);
+  } catch (error) {
+    console.error('[Web3] 检查授权额度失败:', error);
+    return '0';
+  }
+};
+
+/**
+ * 卖出 DQ 换取 SOL（链上）
+ */
+export const sellDQForSOL = async (
+  signer: ethers.Signer,
+  dqAmount: string,
+  minSolAmount: string = '0'
+): Promise<ethers.TransactionResponse> => {
+  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+  const dqAmountInWei = ethers.parseEther(dqAmount);
+  const minSolAmountInWei = ethers.parseEther(minSolAmount);
+
+  console.log('[Web3] 链上兑换 DQ 为 SOL:', dqAmount, 'DQ, 最小获得:', minSolAmount, 'SOL');
+
+  const tx = await contract.sellDQForSOL(dqAmountInWei, minSolAmountInWei);
+  console.log('[Web3] 交易已发送:', tx.hash);
+
+  return tx;
+};
+
+/**
  * 领取 NFT 奖励（链上）
  */
 export const claimNFTOnChain = async (
@@ -326,6 +380,34 @@ export const claimPartnerOnChain = async (
 // ============ DQToken 合约交互 ============
 
 /**
+ * 获取 BNB 余额（原生代币）
+ */
+export const getBNBBalance = async (address: string): Promise<string> => {
+  try {
+    const provider = new ethers.JsonRpcProvider(BSC_RPC_URL);
+    const balance = await provider.getBalance(address);
+    return ethers.formatEther(balance);
+  } catch (error) {
+    console.error('[Web3] 获取 BNB 余额失败:', error);
+    return '0';
+  }
+};
+
+/**
+ * 获取 SOL Token 余额（ERC20 代币）
+ */
+export const getSOLTokenBalance = async (address: string): Promise<string> => {
+  try {
+    const contract = getContract(CONTRACT_ADDRESSES.SOL.address, DQTOKEN_ABI);
+    const balance = await contract.balanceOf(address);
+    return ethers.formatEther(balance);
+  } catch (error) {
+    console.error('[Web3] 获取 SOL Token 余额失败:', error);
+    return '0';
+  }
+};
+
+/**
  * 获取 DQ Token 余额
  */
 export const getDQTokenBalance = async (address: string): Promise<string> => {
@@ -335,6 +417,72 @@ export const getDQTokenBalance = async (address: string): Promise<string> => {
     return ethers.formatEther(balance);
   } catch (error) {
     console.error('[Web3] 获取 DQ Token 余额失败:', error);
+    return '0';
+  }
+};
+
+/**
+ * 获取 USDT 合约地址（从主合约读取）
+ */
+export const getUSDTAddress = async (): Promise<string> => {
+  try {
+    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
+    const usdtAddress = await contract.USDT();
+    return usdtAddress;
+  } catch (error) {
+    console.error('[Web3] 获取 USDT 地址失败:', error);
+    // 默认返回 BSC 主网 USDT 地址
+    return '0x55d398326f99059fF775485246999027B3197955';
+  }
+};
+
+/**
+ * 授权 USDT 给主合约（用于购买节点）
+ */
+export const approveUSDT = async (
+  signer: ethers.Signer,
+  amount: string
+): Promise<ethers.TransactionResponse> => {
+  const usdtAddress = await getUSDTAddress();
+  const usdtContract = await getSignedContract(usdtAddress, DQTOKEN_ABI, signer);
+  const amountInWei = ethers.parseUnits(amount, 18); // USDT 也是 18 位小数
+
+  console.log('[Web3] 授权 USDT:', amount);
+
+  const tx = await usdtContract.approve(CONTRACT_ADDRESSES.DQPROJECT.address, amountInWei);
+  console.log('[Web3] USDT 授权交易已发送:', tx.hash);
+
+  return tx;
+};
+
+/**
+ * 检查 USDT 授权额度
+ */
+export const checkUSDTAllowance = async (
+  userAddress: string
+): Promise<string> => {
+  try {
+    const usdtAddress = await getUSDTAddress();
+    const contract = getContract(usdtAddress, DQTOKEN_ABI);
+    const allowance = await contract.allowance(userAddress, CONTRACT_ADDRESSES.DQPROJECT.address);
+    return ethers.formatUnits(allowance, 18);
+  } catch (error) {
+    console.error('[Web3] 检查 USDT 授权额度失败:', error);
+    return '0';
+  }
+};
+
+/**
+ * 获取 USDT 余额
+ */
+export const getUSDTBalance = async (address: string): Promise<string> => {
+  try {
+    const usdtAddress = await getUSDTAddress();
+    const contract = getContract(usdtAddress, DQTOKEN_ABI);
+    const balance = await contract.balanceOf(address);
+    return ethers.formatUnits(balance, 18);
+  } catch (error) {
+    console.error('[Web3] 获取 USDT 余额失败:', error);
     return '0';
   }
 };
