@@ -290,6 +290,10 @@ export default function DappIndex() {
           console.log('[DApp] 后端注册跳过:', err);
         }
       }
+
+      //连接钱包之后 获取用户 DQ 和 SOL 余额，显示出来
+      
+
       
       // 3. 先检查本地激活状态（优先使用本地状态）
       const localActivated = await loadLocalActivation(address);
