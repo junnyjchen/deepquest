@@ -2,7 +2,7 @@
  * Web3 工具库 - 钱包连接和链上交互
  */
 import { ethers } from 'ethers';
-import { CONTRACT_ADDRESSES, DQPROJECT_ABI, DQTOKEN_ABI, DQCARD_ABI } from '../config/contracts';
+import { CONTRACT_ADDRESSES, DQPROJECT_ABI, DQTOKEN_ABI, DQCARD_ABI, DQSTAKE_ABI } from '../config/contracts';
 
 // BSC 主网配置
 const BSC_CHAIN_ID = 56;
@@ -577,7 +577,7 @@ export const getCardPrices = async (): Promise<{ A: string; B: string; C: string
 export const waitForTransaction = async (
   tx: ethers.TransactionResponse,
   confirmations: number = 1
-): Promise<ethers.Receipt> => {
+): Promise<ethers.TransactionReceipt | null> => {
   console.log('[Web3] 等待交易确认:', tx.hash);
   return await tx.wait(confirmations);
 };
@@ -588,6 +588,124 @@ export const waitForTransaction = async (
 export const formatAddress = (address: string, start: number = 6, end: number = 4): string => {
   if (!address || address.length < start + end) return address;
   return `${address.slice(0, start)}...${address.slice(-end)}`;
+};
+
+// ============ LP 分红和 NFT 分红查询 ============
+
+/**
+ * 查询用户 LP 分红
+ * @param address 用户地址
+ * @returns { lpShare: string, pendingReward: string } LP份额和待领取分红(DQ)
+ */
+export const getLPReward = async (address: string): Promise<{ lpShare: string; pendingReward: string }> => {
+  try {
+    const contract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
+    const result = await contract.getLP(address);
+    
+    // getLP 返回 (lpShare, pendingReward)
+    const lpShare = ethers.formatEther(result[0]); // LP份额
+    const pendingReward = ethers.formatEther(result[1]); // 可领取的DQ分红
+    
+    console.log('[Web3] LP分红查询:', { lpShare, pendingReward });
+    return { lpShare, pendingReward };
+  } catch (error) {
+    console.error('[Web3] 查询LP分红失败:', error);
+    return { lpShare: '0', pendingReward: '0' };
+  }
+};
+
+/**
+ * 查询用户 NFT 分红
+ * @param address 用户地址
+ * @returns string 待领取的NFT分红(DQ)
+ */
+export const getNFTReward = async (address: string): Promise<string> => {
+  try {
+    const dqCardContract = getContract(CONTRACT_ADDRESSES.DQCARD.address, DQCARD_ABI);
+    const stakeContract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
+    
+    // 1. 获取用户持有的NFT数量
+    const nftCount = await dqCardContract.balanceOf(address);
+    const count = Number(nftCount);
+    
+    if (count === 0) {
+      return '0';
+    }
+    
+    // 2. 获取累计奖励系数 nA[0], nA[1], nA[2] (需要从合约状态读取)
+    // 注意：这些是合约内部状态，可能需要合约提供查询函数
+    // 这里我们通过计算每个NFT的分红来累加
+    
+    // 3. 遍历用户的每个NFT
+    for (let i = 0; i < count; i++) {
+      try {
+        // 获取NFT的tokenId
+        const tokenId = await dqCardContract.tokenOfOwnerByIndex(address, i);
+        // 获取NFT类型 (1=A, 2=B, 3=C)
+        const cardType = await dqCardContract.cardType(tokenId);
+        const typeNum = Number(cardType);
+        
+        // 获取该类型的价格
+        const price = await dqCardContract.getCardPrice(typeNum);
+        
+        // 这里需要从质押合约读取分红累计值
+        // 由于合约可能没有直接提供查询接口，我们返回一个说明
+        console.log(`[Web3] NFT #${i}: Type=${typeNum}, Price=${ethers.formatEther(price)}`);
+        
+        // 注意：完整的计算需要访问合约的 nA[idx] 和 nD{idx}[user] 状态
+        // 如果合约没有提供查询函数，可能需要等待合约升级或使用事件日志
+        
+      } catch (err) {
+        console.error(`[Web3] 获取NFT #${i} 信息失败:`, err);
+      }
+    }
+    
+    // 由于无法直接读取 nA 和 nD 状态变量，返回提示
+    console.warn('[Web3] NFT分红需要合约提供查询函数，当前仅能通过claimNft交易来获取');
+    return '0'; // 暂时返回0，实际需要合约提供getNFTReward函数
+    
+  } catch (error) {
+    console.error('[Web3] 查询NFT分红失败:', error);
+    return '0';
+  }
+};
+
+/**
+ * 查询用户D等级分红
+ * @param address 用户地址
+ * @returns string 待领取的D等级分红(DQ)
+ */
+export const getDLevelReward = async (address: string): Promise<string> => {
+  try {
+    const contract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
+    const reward = await contract.getDLevelReward(address);
+    const formatted = ethers.formatEther(reward);
+    console.log('[Web3] D等级分红查询:', formatted);
+    return formatted;
+  } catch (error) {
+    console.error('[Web3] 查询D等级分红失败:', error);
+    return '0';
+  }
+};
+
+/**
+ * 查询合伙人分红
+ * @returns { dqReward: string, solReward: string } DQ和SOL分红
+ */
+export const getPartnerReward = async (): Promise<{ dqReward: string; solReward: string }> => {
+  try {
+    const contract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
+    const result = await contract.getPartnerReward();
+    
+    const dqReward = ethers.formatEther(result[0]); // DQ分红
+    const solReward = ethers.formatEther(result[1]); // SOL分红
+    
+    console.log('[Web3] 合伙人分红查询:', { dqReward, solReward });
+    return { dqReward, solReward };
+  } catch (error) {
+    console.error('[Web3] 查询合伙人分红失败:', error);
+    return { dqReward: '0', solReward: '0' };
+  }
 };
 
 // TypeScript 类型声明
