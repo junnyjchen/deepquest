@@ -15,6 +15,7 @@ import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappApi } from '@/utils/api';
+import { showToast } from '@/utils/toast';
 
 const { width } = Dimensions.get('window');
 
@@ -93,12 +94,12 @@ export default function DappNodes() {
   // 领取NFT分红
   const handleClaimNFT = async () => {
     if (!walletAddress) {
-      Alert.alert('提示', '请先连接钱包');
+      showToast.info('提示', '请先连接钱包');
       return;
     }
 
     if (!nodeInfo?.isQualified) {
-      Alert.alert('提示', '您的节点未达标，无法领取分红');
+      showToast.info('提示', '您的节点未达标，无法领取分红');
       return;
     }
 
@@ -114,13 +115,13 @@ export default function DappNodes() {
             try {
               const response = await dappApi.claimNFT(walletAddress);
               if (response.code === 0) {
-                Alert.alert('领取成功', `成功领取 ${pendingNFT} DQ！`);
+                showToast.success('领取成功', `成功领取 ${pendingNFT} DQ！`);
                 loadData();
               } else {
-                Alert.alert('领取失败', response.message || '请重试');
+                showToast.error('领取失败', response.message || '请重试');
               }
             } catch (error: any) {
-              Alert.alert('错误', error.message || '网络错误');
+              showToast.error('错误', error.message || '网络错误');
             } finally {
               setSubmitting(false);
             }

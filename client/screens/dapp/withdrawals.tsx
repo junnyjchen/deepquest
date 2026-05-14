@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  Alert,
   StyleSheet,
   Platform,
 } from 'react-native';
@@ -18,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappUserApi } from '@/utils/api';
+import { showToast } from '@/utils/toast';
 
 // 精确匹配参考图的颜色体系
 const BG_DARK = '#0A0A12';
@@ -129,7 +129,7 @@ export default function DappWithdrawals() {
   // 复制交易哈希
   const handleCopyTxHash = async (txHash: string) => {
     await Clipboard.setStringAsync(txHash);
-    Alert.alert('已复制', '交易哈希已复制到剪贴板');
+    showToast.success('已复制', '交易哈希已复制到剪贴板');
   }
 
   // 格式化时间

@@ -5,15 +5,16 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   StyleSheet,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { LogoHeader } from '@/components/LogoHeader';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappApi } from '@/utils/api';
+import { showToast } from '@/utils/toast';
 import {
   connectWallet,
   buyNodeOnChain,
@@ -73,6 +74,15 @@ export default function DappNodes() {
     totalReward: '0.00',
   });
   const [activeTab, setActiveTab] = useState<'buy' | 'mine'>('buy');
+  
+  // 确认对话框状态
+  const [confirmDialog, setConfirmDialog] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info' as 'info' | 'warning' | 'danger',
+    onConfirm: () => { /* placeholder */ },
+  });
 
   // 加载数据
   const loadData = useCallback(async () => {
@@ -124,12 +134,12 @@ export default function DappNodes() {
   // 购买卡牌
   const handleBuyCard = async () => {
     if (!walletAddress) {
-      Alert.alert('提示', '请先连接钱包');
+      showToast.info('提示', '请先连接钱包');
       return;
     }
 
     if (!selectedCard) {
-      Alert.alert('提示', '请选择要购买的卡牌');
+      showToast.info('提示', '请选择要购买的卡牌');
       return;
     }
 
@@ -137,18 +147,19 @@ export default function DappNodes() {
     if (!card) return;
 
     if (card.remaining <= 0) {
-      Alert.alert('提示', '该卡牌已售罄');
+      showToast.error('提示', '该卡牌已售罄');
       return;
     }
 
-    Alert.alert(
-      '确认购买',
-      `您确定购买 ${card.name} 吗？\n价格: ${card.price} USDT\n\n资金分配:\n- LP质押: 60%\n- 节点(NFT): 15%\n\n注意: 购买后不可退款`,
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '确认购买',
-          onPress: async () => {
+    // 显示购买确认对话框
+    setConfirmDialog({
+      visible: true,
+      title: '确认购买',
+      message: `您确定购买 ${card.name} 吗？\n价格: ${card.price} USDT\n\n资金分配:\n- LP质押: 60%\n- 节点(NFT): 15%\n\n注意: 购买后不可退款`,
+      type: 'warning',
+      onConfirm: async () => {
+        setConfirmDialog({ ...confirmDialog, visible: false });
+        (async () => {
             setSubmitting(true);
             try {
               // 检查是否连接了钱包
@@ -156,7 +167,7 @@ export default function DappNodes() {
                 // 1. 获取钱包信息
                 const walletInfo = await connectWallet();
                 if (!walletInfo) {
-                  Alert.alert('错误', '钱包连接失败');
+                  showToast.error('错误', '钱包连接失败');
                   return;
                 }
 
@@ -166,7 +177,7 @@ export default function DappNodes() {
                 const usdtBalance = await getUSDTBalance(walletAddress);
                 const price = parseFloat(card.price);
                 if (parseFloat(usdtBalance) < price) {
-                  Alert.alert('余额不足', `您的 USDT 余额不足。\n当前余额: ${parseFloat(usdtBalance).toFixed(2)} USDT\n需要: ${card.price} USDT`);
+                  showToast.error('余额不足', `您的 USDT 余额不足\n当前余额: ${parseFloat(usdtBalance).toFixed(2)} USDT\n需要: ${card.price} USDT`);
                   return;
                 }
 
@@ -175,40 +186,37 @@ export default function DappNodes() {
                 console.log('[Nodes] USDT 授权额度:', allowance);
 
                 if (parseFloat(allowance) < price) {
-                  // 需要授权
-                  Alert.alert(
-                    '需要授权',
-                    `为了购买节点卡片，需要先授权合约使用您的 USDT。`,
-                    [
-                      { text: '取消', style: 'cancel' },
-                      {
-                        text: '授权',
-                        onPress: async () => {
-                          try {
-                            const approveTx = await approveUSDT(signer, card.price);
-                            Alert.alert('授权已提交', '请等待区块链确认...', [
-                              { text: '确定' },
-                            ]);
+                  // 需要授权 - 显示授权确认对话框
+                  setConfirmDialog({
+                    visible: true,
+                    title: '需要授权',
+                    message: '为了购买节点卡片，需要先授权合约使用您的 USDT。',
+                    type: 'info',
+                    onConfirm: async () => {
+                      setConfirmDialog({ ...confirmDialog, visible: false });
+                      (async () => {
+                      try {
+                        const approveTx = await approveUSDT(signer, card.price);
+                        showToast.info('授权已提交', '请等待区块链确认...');
 
-                            // 等待授权确认
-                            await approveTx.wait();
+                        // 等待授权确认
+                        await approveTx.wait();
 
-                            // 授权完成后，执行购买
-                            await executeBuyNode(signer, selectedCard, card);
-                          } catch (error: any) {
-                            console.error('授权或购买失败:', error);
-                            let errorMsg = error.message || '授权或购买失败';
-                            if (error.message && error.message.includes('insufficient funds')) {
-                              errorMsg = '余额不足，请确保有足够的 BNB 支付手续费';
-                            }
-                            Alert.alert('失败', errorMsg);
-                          } finally {
-                            setSubmitting(false);
-                          }
+                        // 授权完成后，执行购买
+                        await executeBuyNode(signer, selectedCard, card);
+                      } catch (error: any) {
+                        console.error('授权或购买失败:', error);
+                        let errorMsg = error.message || '授权或购买失败';
+                        if (error.message && error.message.includes('insufficient funds')) {
+                          errorMsg = '余额不足，请确保有足够的 BNB 支付手续费';
                         }
+                        showToast.error('失败', errorMsg);
+                      } finally {
+                        setSubmitting(false);
                       }
-                    ]
-                  );
+                    })();
+                    },
+                  });
                   return;
                 }
 
@@ -216,18 +224,17 @@ export default function DappNodes() {
                 await executeBuyNode(signer, selectedCard, card);
               } else {
                 // 模拟模式
-                Alert.alert('提示', '请在浏览器中使用钱包进行购买');
+                showToast.info('提示', '请在浏览器中使用钱包进行购买');
               }
             } catch (error: any) {
               console.error('购买失败:', error);
-              Alert.alert('错误', error.message || '网络错误，请重试');
+              showToast.error('错误', error.message || '网络错误，请重试');
             } finally {
               setSubmitting(false);
             }
-          },
-        },
-      ]
-    );
+          })();
+      },
+    });
   };
 
   // 执行链上购买节点
@@ -242,13 +249,7 @@ export default function DappNodes() {
       }
 
       const buyTx = await buyNodeOnChain(signer, cardTypeNum);
-      Alert.alert(
-        '购买已提交',
-        `正在购买 ${card.name}...`,
-        [
-          { text: '确定' },
-        ]
-      );
+      showToast.info('购买已提交', `正在购买 ${card.name}...`);
 
       // 等待交易确认
       await buyTx.wait();
@@ -262,11 +263,11 @@ export default function DappNodes() {
         }
       }
 
-      Alert.alert(
+      showToast.success(
         '购买成功',
-        `恭喜您成功购买 ${card.name}！\n\n权益:\n- 每日分币: ${card.reward_rate}%\n- 赠送级别: ${card.level}\n- 手续费: ${card.fee_rate}% SOL`,
-        [{ text: '确定', onPress: loadData }]
+        `恭喜您成功购买 ${card.name}！\n\n权益:\n- 每日分币: ${card.reward_rate}%\n- 赠送级别: ${card.level}\n- 手续费: ${card.fee_rate}% SOL`
       );
+      loadData();
       setSelectedCard(null);
       setActiveTab('mine');
     } catch (error: any) {
@@ -277,7 +278,7 @@ export default function DappNodes() {
       } else if (error.message && error.message.includes('user rejected')) {
         errorMsg = '您取消了交易';
       }
-      Alert.alert('购买失败', errorMsg);
+      showToast.error('购买失败', errorMsg);
       throw error;
     }
   };
@@ -602,6 +603,16 @@ export default function DappNodes() {
           <View style={{ height: 100 }} />
         </ScrollView>
       </View>
+      
+      {/* 确认对话框 */}
+      <ConfirmDialog
+        visible={confirmDialog.visible}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        type={confirmDialog.type}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog({ ...confirmDialog, visible: false })}
+      />
     </Screen>
   );
 }

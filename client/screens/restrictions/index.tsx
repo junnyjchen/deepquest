@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator, To
 import AdminLayout from '@/components/AdminLayout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { restrictionsApi } from '@/utils/api';
+import { showToast } from '@/utils/toast';
 
 interface RestrictionRecord {
   id: number;
@@ -84,14 +85,14 @@ export default function RestrictionsScreen() {
 
   const handleAddRestriction = async () => {
     if (!addressInput.trim()) {
-      Alert.alert('错误', '请输入钱包地址');
+      showToast.error('错误', '请输入钱包地址');
       return;
     }
     
     // 验证地址格式
     const addressRegex = /^0x[a-fA-F0-9]{40}$/;
     if (!addressRegex.test(addressInput.trim())) {
-      Alert.alert('错误', '钱包地址格式不正确');
+      showToast.error('错误', '钱包地址格式不正确');
       return;
     }
 
@@ -107,13 +108,13 @@ export default function RestrictionsScreen() {
             setSubmitting(true);
             try {
               await restrictionsApi.add(addressInput.trim(), reasonInput.trim());
-              Alert.alert('成功', '地址已限制');
+              showToast.success('成功', '地址已限制');
               setShowAddModal(false);
               setAddressInput('');
               setReasonInput('');
               fetchData(1);
             } catch (error: any) {
-              Alert.alert('错误', error.message);
+              showToast.error('错误', error.message);
             } finally {
               setSubmitting(false);
             }
@@ -134,10 +135,10 @@ export default function RestrictionsScreen() {
           onPress: async () => {
             try {
               await restrictionsApi.remove(record.user_address);
-              Alert.alert('成功', '地址限制已解除');
+              showToast.success('成功', '地址限制已解除');
               fetchData(1);
             } catch (error: any) {
-              Alert.alert('错误', error.message);
+              showToast.error('错误', error.message);
             }
           },
         },

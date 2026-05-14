@@ -18,6 +18,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Crypto from 'expo-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappUserApi } from '@/utils/api';
+import { showToast } from '@/utils/toast';
 
 // 精确匹配参考图的颜色体系
 const BG_DARK = '#0A0A12';
@@ -157,14 +158,14 @@ export default function DappProfile() {
               await AsyncStorage.setItem(WALLET_STORAGE_KEY, mockWallet);
               setWalletAddress(mockWallet);
               await fetchUserData(mockWallet);
-              Alert.alert('成功', `钱包已连接: ${mockWallet.slice(0, 10)}...`);
+              showToast.success('成功', `钱包已连接: ${mockWallet.slice(0, 10)}...`);
             }
           },
         ]
       );
     } catch (error) {
       console.error('连接钱包失败:', error);
-      Alert.alert('错误', '钱包连接失败');
+      showToast.error('错误', '钱包连接失败');
     }
   };
 
@@ -172,7 +173,7 @@ export default function DappProfile() {
   const handleCopyAddress = async () => {
     if (walletAddress) {
       await Clipboard.setStringAsync(walletAddress);
-      Alert.alert('复制成功', '钱包地址已复制');
+      showToast.success('复制成功', '钱包地址已复制');
     }
   };
 
@@ -238,9 +239,9 @@ export default function DappProfile() {
       const origin = typeof window !== 'undefined' ? window.location.origin : 'https://app.deepquest.io';
       const inviteLink = `${origin}/invite?ref=${walletAddress}`;
       await Clipboard.setStringAsync(inviteLink);
-      Alert.alert('复制成功', '邀请链接已复制到剪贴板');
+      showToast.success('复制成功', '邀请链接已复制到剪贴板');
     } else {
-      Alert.alert('提示', '请先连接钱包');
+      showToast.info('提示', '请先连接钱包');
     }
   };
 

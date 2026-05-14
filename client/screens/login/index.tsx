@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, KeyboardAvoidingView, Platform, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, TextInput, StyleSheet, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useAuth } from '@/contexts/AuthContext';
+import { showToast } from '@/utils/toast';
 
 export default function LoginScreen() {
   const router = useSafeRouter();
@@ -14,7 +15,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!username || !password) {
-      Alert.alert('错误', '请输入用户名和密码');
+      showToast.error('错误', '请输入用户名和密码');
       return;
     }
 
@@ -23,7 +24,7 @@ export default function LoginScreen() {
       await login(username, password);
       router.replace('/dashboard');
     } catch (error: any) {
-      Alert.alert('登录失败', error.message || '请检查用户名和密码');
+      showToast.error('登录失败', error.message || '请检查用户名和密码');
     } finally {
       setLoading(false);
     }

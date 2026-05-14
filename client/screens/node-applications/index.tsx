@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput } from 'react-native';
 import AdminLayout from '@/components/AdminLayout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { nodeApplicationsApi } from '@/utils/api';
+import { showToast } from '@/utils/toast';
 
 interface NodeApplication {
   id: number;
@@ -124,12 +125,12 @@ export default function NodeApplicationsScreen() {
     
     try {
       await nodeApplicationsApi.review(reviewingApp.id, status, 1, reviewNotes);
-      Alert.alert('Success', `Application ${status === 'approved' ? 'approved' : 'rejected'} successfully`);
+      showToast.success('Success', `Application ${status === 'approved' ? 'approved' : 'rejected'} successfully`);
       setReviewModalVisible(false);
       fetchApplications(1);
       fetchStats();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to review application');
+      showToast.error('Error', error.message || 'Failed to review application');
     }
   };
 

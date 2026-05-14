@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappUserApi } from '@/utils/api';
+import { showToast } from '@/utils/toast';
 import {
   connectWallet,
   getBrowserProvider,
@@ -138,13 +139,13 @@ export default function DappRewards() {
   // 领取 SOL 奖励
   const handleClaimSOL = async () => {
     if (!walletAddress) {
-      Alert.alert('提示', '请先连接钱包');
+      showToast.info('提示', '请先连接钱包');
       return;
     }
 
     const pendingAmount = parseFloat(pendingSOL);
     if (pendingAmount <= 0) {
-      Alert.alert('提示', '暂无可领取的 SOL');
+      showToast.info('提示', '暂无可领取的 SOL');
       return;
     }
 
@@ -165,14 +166,14 @@ export default function DappRewards() {
               const signer = await provider.getSigner();
               const tx = await claimSOLOnChain(signer);
               await waitForTransaction(tx, 1);
-              Alert.alert('成功', `已领取 ${pendingAmount.toFixed(4)} SOL`);
+              showToast.success('成功', `已领取 ${pendingAmount.toFixed(4)} SOL`);
               // 刷新待领取金额
               await fetchPendingSOL(walletAddress);
               // 刷新奖励记录
               await fetchRewards(walletAddress, 1);
             } catch (error: any) {
               console.error('领取 SOL 失败:', error);
-              Alert.alert('失败', error?.message || '领取失败，请重试');
+              showToast.error('失败', error?.message || '领取失败，请重试');
             } finally {
               setClaimingSOL(false);
             }
@@ -190,7 +191,7 @@ export default function DappRewards() {
 
   const handleClaim = async () => {
     if (!walletAddress) {
-      Alert.alert('提示', '请先连接钱包');
+      showToast.info('提示', '请先连接钱包');
       return;
     }
 
@@ -206,13 +207,13 @@ export default function DappRewards() {
               setClaiming(true);
               const response = await dappUserApi.claimReward(walletAddress);
               if (response.code === 0) {
-                Alert.alert('成功', `已领取 ${response.data?.claimed || 0} DQ`);
+                showToast.success('成功', `已领取 ${response.data?.claimed || 0} DQ`);
                 await fetchRewards(walletAddress, 1);
               } else {
-                Alert.alert('失败', response.message || '领取失败');
+                showToast.error('失败', response.message || '领取失败');
               }
             } catch (error) {
-              Alert.alert('错误', '领取失败，请重试');
+              showToast.error('错误', '领取失败，请重试');
             } finally {
               setClaiming(false);
             }

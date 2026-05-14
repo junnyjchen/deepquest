@@ -1,10 +1,11 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, Alert, ScrollView, ActivityIndicator, Platform, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Platform, StyleSheet } from 'react-native';
 import AdminLayout from '@/components/AdminLayout';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE } from '@/utils/api';
+import { showToast } from '@/utils/toast';
 
 // Web 端读取文件内容
 async function readFileContent(uri: string): Promise<string> {
@@ -66,11 +67,11 @@ export default function NodeCsvImportScreen() {
       setDebugInfo(`解析: ${valid.length} 条数据, ${errors.length} 个错误`);
       
       if (errors.length > 0) {
-        Alert.alert('解析警告', `部分数据有问题:\n${errors.slice(0, 5).join('\n')}`);
+        showToast.error('解析警告', `部分数据有问题:\n${errors.slice(0, 5).join('\n')}`);
       }
     } catch (error: any) {
       console.error('[CSV] 读取文件失败:', error);
-      Alert.alert('错误', `读取文件失败: ${error.message}`);
+      showToast.error('错误', `读取文件失败: ${error.message}`);
     }
   }, []);
 
@@ -160,12 +161,12 @@ export default function NodeCsvImportScreen() {
     console.log('[CSV] parsedData.length:', parsedData.length);
     
     if (csvData.length === 0) {
-      Alert.alert('错误', '请先选择 CSV 文件');
+      showToast.error('错误', '请先选择 CSV 文件');
       return;
     }
 
     if (parsedData.length === 0) {
-      Alert.alert('错误', '没有有效数据可导入');
+      showToast.error('错误', '没有有效数据可导入');
       return;
     }
 
@@ -194,14 +195,14 @@ export default function NodeCsvImportScreen() {
       console.log('[CSV] 导入结果:', result);
       
       if (!response.ok) {
-        Alert.alert('导入失败', result.message || result.error || `请求失败: ${response.status}`);
+        showToast.error('导入失败', result.message || result.error || `请求失败: ${response.status}`);
       } else {
         setResults(result);
-        Alert.alert('导入成功', `成功导入 ${result.data?.success || 0} 个节点`);
+        showToast.success('导入成功', `成功导入 ${result.data?.success || 0} 个节点`);
       }
     } catch (error: any) {
       console.error('[CSV] 导入失败:', error);
-      Alert.alert('导入失败', error.message || '服务器错误');
+      showToast.error('导入失败', error.message || '服务器错误');
     } finally {
       setLoading(false);
     }

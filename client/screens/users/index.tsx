@@ -4,6 +4,7 @@ import AdminLayout from '@/components/AdminLayout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { usersApi } from '@/utils/api';
 import { Link } from 'expo-router';
+import { showToast } from '@/utils/toast';
 
 interface User {
   id: number;
@@ -93,7 +94,7 @@ export default function UsersScreen() {
   // 区块链DAPP标准：从链上同步用户
   const handleSyncUser = async () => {
     if (!syncAddress.trim()) {
-      Alert.alert('Error', 'Please enter a wallet address');
+      showToast.error('Error', 'Please enter a wallet address');
       return;
     }
     
@@ -108,7 +109,7 @@ export default function UsersScreen() {
         [{ text: 'OK', onPress: () => fetchUsers(1) }]
       );
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to sync user');
+      showToast.error('Error', error.message || 'Failed to sync user');
     } finally {
       setSyncing(false);
     }

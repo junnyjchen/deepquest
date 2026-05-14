@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, TextInput, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, TextInput, Modal } from 'react-native';
 import AdminLayout from '@/components/AdminLayout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { configApi } from '@/utils/api';
+import { showToast } from '@/utils/toast';
 
 interface Config {
   id: number;
@@ -125,10 +126,10 @@ export default function ConfigScreen() {
       const result = await configApi.init();
       console.log('[Config] Init result:', result);
       await fetchConfigs();
-      Alert.alert('成功', '配置已初始化');
+      showToast.success('成功', '配置已初始化');
     } catch (error: any) {
       console.error('[Config] Init error:', error);
-      Alert.alert('错误', error?.message || error?.error || '初始化失败');
+      showToast.error('错误', error?.message || error?.error || '初始化失败');
     }
   };
 
@@ -162,9 +163,9 @@ export default function ConfigScreen() {
       await configApi.update(editingConfig.key, newValue, editingConfig.description);
       setEditModalVisible(false);
       fetchConfigs();
-      Alert.alert('成功', '配置已更新');
+      showToast.success('成功', '配置已更新');
     } catch (error: any) {
-      Alert.alert('错误', error.message);
+      showToast.error('错误', error.message);
     }
   };
 

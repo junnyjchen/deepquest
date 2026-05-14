@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity, TextInput, Modal, Alert, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl, TouchableOpacity, TextInput, Modal, ActivityIndicator, ScrollView } from 'react-native';
 import AdminLayout from '@/components/AdminLayout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { cardsApi } from '@/utils/api';
+import { showToast } from '@/utils/toast';
 
 interface Card {
   id: number;
@@ -141,13 +142,13 @@ export default function CardsScreen() {
   // 批量发放卡牌
   const handleMintCards = async () => {
     if (!mintAddress.trim()) {
-      Alert.alert('错误', '请输入钱包地址');
+      showToast.error('错误', '请输入钱包地址');
       return;
     }
 
     // 验证地址格式
     if (!/^0x[a-fA-F0-9]{40}$/.test(mintAddress)) {
-      Alert.alert('错误', '钱包地址格式不正确');
+      showToast.error('错误', '钱包地址格式不正确');
       return;
     }
 
@@ -158,12 +159,12 @@ export default function CardsScreen() {
         cardType: mintType,
         mintPrice: getMintPrice(mintType),
       }]);
-      Alert.alert('成功', '卡牌发放成功');
+      showToast.success('成功', '卡牌发放成功');
       setMintModalVisible(false);
       setMintAddress('');
       onRefresh();
     } catch (error: any) {
-      Alert.alert('错误', error.message || '发放失败');
+      showToast.error('错误', error.message || '发放失败');
     } finally {
       setMintLoading(false);
     }

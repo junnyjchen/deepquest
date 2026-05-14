@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { LogBox } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { Provider } from '@/components/Provider';
+import { toastConfig } from '@/utils/toast';
 
 import '../global.css';
 
@@ -36,7 +37,7 @@ export default function RootLayout() {
         <Stack.Screen name="stakes" options={{ title: "Stakes" }} />
         <Stack.Screen name="(dapp)" />
       </Stack>
-      <Toast />
+      <Toast config={toastConfig} />
     </Provider>
   );
 }

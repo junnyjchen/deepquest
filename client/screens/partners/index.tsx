@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, RefreshControl, ActivityIndicator, To
 import AdminLayout from '@/components/AdminLayout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { partnersApi } from '@/utils/api';
+import { showToast } from '@/utils/toast';
 
 interface Partner {
   id: number;
@@ -100,7 +101,7 @@ export default function PartnersScreen() {
               await partnersApi.updateStatus(address, newStatus);
               fetchData(1);
             } catch (error: any) {
-              Alert.alert('Error', error.message);
+              showToast.error('Error', error.message);
             }
           },
         },

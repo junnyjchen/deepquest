@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappApi } from '@/utils/api';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { showToast } from '@/utils/toast';
 
 // 颜色体系
 const BG_DARK = '#0A0A12';
@@ -134,7 +135,7 @@ export default function InviteBinding() {
 
   const handleBindReferrer = async () => {
     if (!walletAddress || !referrerAddress) {
-      Alert.alert('错误', '缺少必要信息');
+      showToast.error('错误', '缺少必要信息');
       return;
     }
 
@@ -157,11 +158,11 @@ export default function InviteBinding() {
           ]
         );
       } else {
-        Alert.alert('绑定失败', result.message || '绑定推荐人失败');
+        showToast.error('绑定失败', result.message || '绑定推荐人失败');
       }
     } catch (error: any) {
       console.error('绑定失败:', error);
-      Alert.alert('绑定失败', error.message || '绑定推荐人失败');
+      showToast.error('绑定失败', error.message || '绑定推荐人失败');
     } finally {
       setSubmitting(false);
     }
