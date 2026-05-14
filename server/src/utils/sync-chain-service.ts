@@ -422,7 +422,7 @@ async function getReferralLineageFromDB(
 
   for (let depth = 1; depth <= maxDepth; depth++) {
     if (visited.has(currentAddress)) {
-      console.warn(`[ChainSync] 检测到循环引用，停止追溯 depth=${depth}`);
+      console.warn(`[ChainSync] 检测到循环引用，停止追溯, 当前地址=${currentAddress}, depth=${depth}`);
       break;
     }
     visited.add(currentAddress);
