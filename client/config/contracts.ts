@@ -6,7 +6,7 @@
 // 主合约地址
 export const CONTRACT_ADDRESSES = {
   DQPROJECT: {
-    address: '0x2f05163B2A4db48Ac9223897b5a01aA0158F0A6E',
+    address: '0x732B7f9EF6381120458D49CF4aaaF9a4B780c008',
     name: 'DQProject'
   },
   DQTOKEN: {

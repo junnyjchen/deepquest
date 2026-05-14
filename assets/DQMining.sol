@@ -37,14 +37,15 @@ interface IPancakeRouter02 {
 interface IDQMiningStake {
     function addLP(address _u, uint256 _a, uint256 _t) external;
     function distLP(uint256 _fee) external;
-    function distNFT(uint256 _fee) external;
-    function distD(uint256 _fee) external;
+    function distNFT(uint256 _fee) external payable;  // payable，接收BNB手续费
+    // distD已删除，团队奖励改为D等级分红
     function distP(uint256 _fee) external;
     function claimLP(address _u) external;
     function claimNft(address _u) external;
     function claimD(address _u) external;
     function claimFee(address _u) external;
     function claimPdq(address _u) external;
+    function registerDLevel(address _user, uint8 _level) external;  // 注册D等级
     function claimPbnb(address _u) external;
     function withdraw(address _u, uint256 _a) external;
     function rmLP(address _u) external;
@@ -61,7 +62,7 @@ contract DQMining is ReentrancyGuard {
 
     address public constant OWNER = 0x274aCc6397349F21179ed6258A54B2a11B28faF5;
     IDQToken public constant dqToken = IDQToken(0x96e5B90115d41849F8F558Ef3A2eB627C6DF734B);
-    IDQCard public constant dqCard = IDQCard(0x1857aCeDf9b73163D791eb2F0374a328416291a1);
+    IDQCard public dqCard;
     address public constant USDT = 0x55d398326f99059fF775485246999027B3197955;
     address public constant SOL = 0x570A5D26f7765Ecb712C0924E4De545B89fD43dF;
     address public constant ROUTER = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
@@ -70,6 +71,10 @@ contract DQMining is ReentrancyGuard {
     address public constant STAKE_OP = 0x7cc3260b1E4e1d830A6a92A3b2F77257fbab169F;
     address public constant INS = 0x2db993B862969040Cd971Df8Fd2a2C80EC285203;
     address public constant BUY_FEE = 0x1850933c0d64db3A56476F5Bdc4191BCFd242e30;
+    
+    // ========== 新增：DAO地址常量 ==========
+    address public constant DAO = 0x27b84FC9eb5C3a19585093aD6D11292cbbaB5852;
+    // =====================================
 
     address public stakeContract;
 
@@ -89,6 +94,14 @@ contract DQMining is ReentrancyGuard {
     uint256[6] public mgrThresh = [100, 200, 600, 2000, 6000, 20000];
     uint256[6] public mgrRates = [5, 10, 15, 20, 25, 30];
     uint256 public constant ENERGY_MUL = 3;
+    
+    // ========== 动态奖励提现手续费配置 ==========
+    uint256 public constant WITHDRAW_FEE = 10;        // 提现手续费10%
+    uint256 public constant FEE_NODE_RATE = 40;       // 手续费的40%给NFT节点
+    uint256 public constant FEE_PARTNER_RATE = 30;    // 手续费的30%给合伙人
+    uint256 public constant FEE_FOUNDATION_RATE = 30; // 手续费的30%给基金会
+    uint256 public constant CLAIM_BNB_FEE = 0.00005 ether;  // 领取手续费收益需支付的BNB
+    // ==============================================
 
     struct User {
         address referrer;
@@ -99,8 +112,15 @@ contract DQMining is ReentrancyGuard {
         uint256 energy;
         uint256 directSales;
         uint8 dLevel;
+        uint256 validAddressCount;  // 线下所有有入金的用户数量
+        uint256 pendingSOL;         // 待提现的动态奖励余额
         EnumerableSet.AddressSet children;
     }
+
+    // ========== D等级阈值（线下有入金用户数量） ==========
+    // D1: 30, D2: 120, D3: 360, D4: 1000, D5: 4000, D6: 10000, D7: 15000, D8: 30000
+    uint256[8] public dLevelThresh = [30, 120, 360, 1000, 4000, 10000, 15000, 30000];
+    // ==================================================
 
     mapping(address => User) internal users;
     address[] public allUsers;
@@ -108,6 +128,11 @@ contract DQMining is ReentrancyGuard {
     mapping(address => bool) public isBlacklisted;
     mapping(address => uint256) public dailyDeposit;
     mapping(address => bool) public depositWhiteList;
+    
+    // ========== 提现手续费累计奖励 ==========
+    uint256 public nftPendingSOL;        // NFT节点累计SOL奖励
+    uint256 public partnerPendingSOL;    // 合伙人累计SOL奖励
+    // ======================================
 
     event Register(address indexed u, address indexed r);
     event Deposit(address indexed u, uint256 a);
@@ -115,6 +140,12 @@ contract DQMining is ReentrancyGuard {
     event SwapSOLForDQ(address indexed u, uint256 s, uint256 d);
     event SwapAndAddLP(address indexed u, uint256 s, uint256 d, uint256 l);
     event SellDQ(address indexed u, uint256 d, uint256 s, uint256 f);
+    event DQCardSet(address indexed oldAddr, address indexed newAddr);
+    event NodeLevelSet(address indexed u, uint8 level);
+    event DLevelSet(address indexed u, uint8 dLevel);
+    // ========== 新增事件 ==========
+    event PhaseAdvanced(uint256 oldPhase, uint256 newPhase, uint256 newLimit);
+    // ================================
 
     modifier onlyOwner() { require(msg.sender == OWNER, "!owner"); _; }
     modifier onlyReg() { require(users[msg.sender].referrer != address(0) || msg.sender == OWNER, "!reg"); _; }
@@ -123,10 +154,26 @@ contract DQMining is ReentrancyGuard {
         startTime = block.timestamp;
         users[OWNER].referrer = address(0);
         allUsers.push(OWNER);
+        dqCard = IDQCard(0x1857aCeDf9b73163D791eb2F0374a328416291a1);
     }
 
     function setStakeContract(address _a) external onlyOwner { stakeContract = _a; }
     function setDepositWhiteList(address _u, bool _s) external onlyOwner { depositWhiteList[_u] = _s; emit WhiteListSet(_u, _s); }
+    
+    function setDQCard(address _addr) external onlyOwner {
+        require(_addr != address(0), "!addr");
+        address oldAddr = address(dqCard);
+        dqCard = IDQCard(_addr);
+        emit DQCardSet(oldAddr, _addr);
+    }
+
+    // ========== 新增：nextPhase() 函数 ==========
+    function nextPhase() external onlyOwner {
+        uint256 oldPhase = currentPhase;
+        currentPhase++;
+        emit PhaseAdvanced(oldPhase, currentPhase, getDailyLimit());
+    }
+    // ===========================================
 
     function register(address _r) external {
         require(_r != msg.sender && users[msg.sender].referrer == address(0), "!inv");
@@ -154,6 +201,40 @@ contract DQMining is ReentrancyGuard {
         }
     }
 
+    // 管理员批量设置用户等级（S1-S6）
+    function setNodesLevel(address[] calldata _u, uint8[] calldata _lvl) external onlyOwner {
+        require(_u.length == _lvl.length, "!len");
+        for (uint i = 0; i < _u.length; i++) {
+            require(_lvl[i] >= 1 && _lvl[i] <= 6, "!level");  // S1-S6
+            users[_u[i]].level = _lvl[i];
+            emit NodeLevelSet(_u[i], _lvl[i]);
+        }
+    }
+    
+    // 管理员单个设置用户等级（S1-S6）
+    function setUserLevel(address _u, uint8 _lvl) external onlyOwner {
+        require(_lvl >= 1 && _lvl <= 6, "!level");  // S1-S6
+        users[_u].level = _lvl;
+        emit NodeLevelSet(_u, _lvl);
+    }
+
+    event DLevelSet(address indexed u, uint8 dLevel);
+    
+    function setUserDLevel(address _u, uint8 _lvl) external onlyOwner {
+        require(_lvl >= 0 && _lvl <= 8, "!Dlevel");
+        users[_u].dLevel = _lvl;
+        emit DLevelSet(_u, _lvl);
+    }
+    
+    function setNodesDLevel(address[] calldata _u, uint8[] calldata _lvl) external onlyOwner {
+        require(_u.length == _lvl.length, "!len");
+        for (uint i = 0; i < _u.length; i++) {
+            require(_lvl[i] <= 8, "!Dlevel");
+            users[_u[i]].dLevel = _lvl[i];
+            emit DLevelSet(_u[i], _lvl[i]);
+        }
+    }
+
     function importNodes(address[] calldata _u, uint8[] calldata _t) external onlyOwner {
         require(_u.length == _t.length, "!len");
         for (uint i = 0; i < _u.length; i++) {
@@ -178,6 +259,11 @@ contract DQMining is ReentrancyGuard {
         }
         IERC20(SOL).safeTransferFrom(msg.sender, address(this), _a);
         User storage u = users[msg.sender];
+        
+        // ========== 首次入金时更新上级有效用户计数 ==========
+        bool isFirstDeposit = (u.totalInvest == 0);
+        // ============================================================
+        
         u.totalInvest += _a;
         u.energy += _a * ENERGY_MUL;
         uint256 dyn = _a * 50 / 100;
@@ -190,6 +276,13 @@ contract DQMining is ReentrancyGuard {
             if (swapLp > 0) _swapAndAddLP(msg.sender, swapLp);
         }
         if (u.referrer != address(0)) _updateTeam(u.referrer, _a);
+        
+        // ========== 首次入金时更新所有上级的有效用户计数 ==========
+        if (isFirstDeposit) {
+            _updateValidAddressCount(msg.sender);
+        }
+        // ============================================================
+        
         emit Deposit(msg.sender, _a);
     }
 
@@ -197,9 +290,10 @@ contract DQMining is ReentrancyGuard {
         address[] memory p = new address[](2);
         p[0] = SOL;
         p[1] = address(dqToken);
-        uint256 dqAmt = IPancakeRouter02(ROUTER).getAmountsOut(_a, p)[1];
+        // 注意：不使用getAmountsOut计算期望值，因为DQToken有手续费机制
+        // 设置最小期望为0，让实际数量由市场决定
         IERC20(SOL).approve(ROUTER, _a);
-        IPancakeRouter02(ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(_a, dqAmt / 2, p, address(this), block.timestamp + 300);
+        IPancakeRouter02(ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(_a, 0, p, address(this), block.timestamp + 300);
         uint256 sBal = IERC20(SOL).balanceOf(address(this));
         uint256 dBal = dqToken.balanceOf(address(this));
         if (sBal > 0 && dBal > 0) {
@@ -220,39 +314,96 @@ contract DQMining is ReentrancyGuard {
         uint256 direct = _a * DIRECT_RATE / 100;
         if (_canClaim(ref)) {
             users[ref].energy -= direct;
-            IERC20(SOL).safeTransfer(ref, direct);
+            users[ref].pendingSOL += direct;  // 存入余额，不直接转账
             users[ref].directSales += _a;
         }
         _distSee(_u, ref, _a, 1);
-        address dao = _findDAO(ref);
-        if (dao != address(0) && _canClaim(dao)) {
-            uint256 daoR = _a * DAO_RATE / 100;
-            users[dao].energy -= daoR;
-            IERC20(SOL).safeTransfer(dao, daoR);
-        }
+        
+        // ========== 修复：DAO补贴直接分配给DAO地址 ==========
+        IERC20(SOL).safeTransfer(DAO, _a * DAO_RATE / 100);
+        // ==================================================
+        
         IERC20(SOL).safeTransfer(INS, _a * INS_RATE / 100);
         IERC20(SOL).safeTransfer(OP, _a * OP_RATE / 100);
+        
+        // ========== 新增：管理奖分配（基于动态分币的30%） ==========
+        _distMgr(_u, _a * MGR_RATE / 100);
+        // ============================================================
     }
+    
+    // ========== 修复：管理奖级差分配函数 ==========
+    uint256 public constant MGR_RATE = 30;  // 管理奖费率30%（管理奖池的30%，即入金的15%）
+    
+    // 级差分配：低等级先拿完整份额，高等级拿差额，确保30%全部分配
+    function _distMgr(address _u, uint256 _a) internal {
+        // 每个等级只记录第一个出现的用户（避免重复）
+        address[6] memory levelUser;  // levelUser[0] = S1, levelUser[5] = S6
+        bool[6] memory levelFound;
+        
+        // 1. 遍历链条，记录每个等级的第一个用户
+        address cur = users[_u].referrer;
+        while (cur != address(0)) {
+            uint8 lvl = users[cur].level;
+            if (lvl >= 1 && lvl <= 6 && !levelFound[lvl - 1] && _canClaim(cur)) {
+                levelUser[lvl - 1] = cur;
+                levelFound[lvl - 1] = true;
+            }
+            cur = users[cur].referrer;
+        }
+        
+        // 2. 从低到高分配（S1→S6），低等级拿完整份额，高等级拿差额
+        uint8 prevRate = 0;
+        for (uint8 lvl = 1; lvl <= 6; lvl++) {
+            if (!levelFound[lvl - 1]) continue;
+            
+            uint8 curRate = mgrRates[lvl - 1];
+            uint8 diffRate = curRate - prevRate;
+            
+            if (diffRate > 0) {
+                uint256 mgrR = _a * diffRate / 100;
+                if (mgrR > 0) {
+                    address userAddr = levelUser[lvl - 1];
+                    users[userAddr].energy -= mgrR;
+                    users[userAddr].pendingSOL += mgrR;  // 存入余额，不直接转账
+                    emit MgrReward(userAddr, mgrR, lvl, diffRate);
+                }
+            }
+            prevRate = curRate;
+        }
+    }
+    
+    event MgrReward(address indexed u, uint256 amount, uint8 level, uint8 diffRate);
+    // ===========================================
 
+    // ========== 修复：见点奖递进式层数逻辑 ==========
     function _distSee(address _u, address _r, uint256 _a, uint8 _d) internal {
         if (_r == address(0) || _d > 15) return;
         User storage ru = users[_r];
-        uint8 maxD = ru.directCount >= 5 ? 15 : (ru.directCount >= 1 ? 3 : 0);
+        
+        // 递进式层数：推1拿3层，推2拿6层，推3拿9层，推4拿12层，推5拿15层
+        uint8 maxD;
+        if (ru.directCount >= 5) maxD = 15;
+        else if (ru.directCount >= 4) maxD = 12;
+        else if (ru.directCount >= 3) maxD = 9;
+        else if (ru.directCount >= 2) maxD = 6;
+        else if (ru.directCount >= 1) maxD = 3;
+        else maxD = 0;
+        
         if (_d <= maxD && _canClaim(_r)) {
             uint256 see = _a * SEE_RATE / 100 / 15;
             users[_r].energy -= see;
-            IERC20(SOL).safeTransfer(_r, see);
+            users[_r].pendingSOL += see;  // 存入余额，不直接转账
         }
         if (ru.referrer != address(0)) _distSee(_u, ru.referrer, _a, _d + 1);
     }
+    // ==============================================
 
-    function _findDAO(address _u) internal view returns (address) {
-        User storage u = users[_u];
-        if (u.level >= 6 || u.level >= 3) return _u;
-        if (u.referrer != address(0)) return _findDAO(u.referrer);
-        return address(0);
-    }
+    // ========== 删除冗余的 _findDAO() 函数 ==========
+    // 原函数已删除，DAO补贴直接分配给固定DAO地址
+    // ================================================
 
+    // ========== 修改：_updateTeam只更新团队业绩和等级，不分配管理奖 ==========
+    // 管理奖分配已移到_distMgr函数中，基于动态分币部分计算
     function _updateTeam(address _u, uint256 _a) internal {
         User storage u = users[_u];
         u.teamInvest += _a;
@@ -262,13 +413,11 @@ contract DQMining is ReentrancyGuard {
             if (small >= mgrThresh[i] * 1 ether) newLvl = i + 1;
         }
         if (newLvl > u.level) { u.level = newLvl; }
-        if (u.level > 0 && _canClaim(_u)) {
-            uint256 mgrR = _a * mgrRates[u.level - 1] / 100;
-            if (mgrR > 0) { users[_u].energy -= mgrR; IERC20(SOL).safeTransfer(_u, mgrR); }
-        }
+        // 管理奖分配已移到_distMgr函数中
         _updateDLevel(_u);
         if (u.referrer != address(0)) _updateTeam(u.referrer, _a);
     }
+    // ===========================================================================
 
     function _calcSmallTeam(address _u) internal view returns (uint256) {
         if (users[_u].children.length() == 0) return 0;
@@ -281,14 +430,39 @@ contract DQMining is ReentrancyGuard {
         return total > maxChild ? total - maxChild : 0;
     }
 
+    // ========== D等级基于线下有入金用户数量 ==========
     function _updateDLevel(address _u) internal {
         User storage u = users[_u];
         uint8 newD = 0;
         for (uint8 i = 0; i < 8; i++) {
-            if (u.directCount >= (i == 0 ? 30 : i == 1 ? 120 : i == 2 ? 360 : i == 3 ? 1000 : i == 4 ? 4000 : i == 5 ? 10000 : i == 6 ? 15000 : 30000)) newD = i + 1;
+            if (u.validAddressCount >= dLevelThresh[i]) {
+                newD = i + 1;
+            }
         }
-        if (newD > u.dLevel) u.dLevel = newD;
+        if (newD > u.dLevel) {
+            u.dLevel = newD;
+            emit DLevelUpdated(_u, newD, u.validAddressCount);
+            
+            // ========== 新增：同步D等级到Stake合约 ==========
+            if (stakeContract != address(0)) {
+                IDQMiningStake(stakeContract).registerDLevel(_u, newD);
+            }
+            // ==============================================
+        }
     }
+    
+    // 用户首次入金时，更新其所有上级（线下所有有入金用户数量统计）
+    function _updateValidAddressCount(address _u) internal {
+        address cur = users[_u].referrer;
+        while (cur != address(0)) {
+            users[cur].validAddressCount++;
+            _updateDLevel(cur);  // 更新D等级
+            cur = users[cur].referrer;
+        }
+    }
+    
+    event DLevelUpdated(address indexed u, uint8 dLevel, uint256 validCount);
+    // ====================================================
 
     function _canClaim(address _u) internal view returns (bool) {
         if (isBlacklisted[_u]) return false;
@@ -345,7 +519,7 @@ contract DQMining is ReentrancyGuard {
         p[1] = address(dqToken);
         uint256 dqAmt = IPancakeRouter02(ROUTER).getAmountsOut(_s / 2, p)[1];
         IERC20(SOL).approve(ROUTER, _s / 2);
-        IPancakeRouter02(ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(_s / 2, dqAmt / 2, p, address(this), block.timestamp + 300);
+        IPancakeRouter02(ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(_s / 2, _minLp, p, address(this), block.timestamp + 300);
         (, , uint256 lp) = IPancakeRouter02(ROUTER).addLiquidity(SOL, address(dqToken), IERC20(SOL).balanceOf(address(this)), dqToken.balanceOf(address(this)), 0, 0, address(this), block.timestamp + 300);
         require(lp >= _minLp, "!slip");
         IDQMiningStake(stakeContract).addLP(msg.sender, lp, block.timestamp);
@@ -353,28 +527,49 @@ contract DQMining is ReentrancyGuard {
         return lp;
     }
 
-    function sellDQForSOL(uint256 _d, uint256 _minSol) external nonReentrant returns (uint256) {
-        require(_d > 0, "!a");
-        dqToken.transferFrom(msg.sender, address(this), _d);
-        dqToken.burn(_d);
-        uint256 solBal = IERC20(SOL).balanceOf(address(this));
-        require(solBal > 0, "!sol");
-        uint256 solOut = solBal * _d / dqToken.totalSupply();
-        require(solOut >= _minSol, "!slip");
-        uint256 fee = solOut * 6 / 100;
-        uint256 stakeFee = fee * 50 / 100;
-        uint256 opFee = fee - stakeFee;
-        if (stakeFee > 0 && stakeContract != address(0)) {
-            IERC20(SOL).safeTransfer(stakeContract, stakeFee);
-            IDQMiningStake(stakeContract).distLP(stakeFee);
+    /// @notice 卖DQ换SOL，合约内直接销毁DQ，从合约SOL池给用户
+    /// @param _dq 卖出的DQ数量
+    /// @param _minSol 最少得到的SOL数量（滑点保护）
+    /// @return solOut 用户实际得到的SOL数量
+    /// @dev 卖出逻辑：94%销毁 + 6%手续费，用户得到94%对应的SOL
+    /// 例如：卖100 DQ -> 94 DQ销毁，6 DQ手续费，用户得到94 DQ对应的SOL
+    function sellDQForSOL(uint256 _dq, uint256 _minSol) external nonReentrant returns (uint256 solOut) {
+        require(_dq > 0, "!zero");
+        
+        // 1. 从用户转入DQ
+        dqToken.transferFrom(msg.sender, address(this), _dq);
+        
+        // 2. 94%销毁到黑洞地址
+        uint256 burnAmount = _dq * 94 / 100;
+        dqToken.burn(burnAmount);
+        
+        // 3. 6%手续费转给分配合约（单币质押50% + 手续费地址50%）
+        uint256 feeAmount = _dq * 6 / 100;
+        if (stakeContract != address(0)) {
+            dqToken.transfer(stakeContract, feeAmount);
+            IDQMiningStake(stakeContract).distDQFee(feeAmount);
         }
-        IERC20(SOL).safeTransfer(STAKE_OP, opFee);
-        IERC20(SOL).safeTransfer(msg.sender, solOut - fee);
-        emit SellDQ(msg.sender, _d, solOut - fee, fee);
-        return solOut - fee;
+        
+        // 4. 从PancakeSwap获取94% DQ对应多少SOL（只查价格，不实际交易）
+        address[] memory path = new address[](2);
+        path[0] = address(dqToken);
+        path[1] = SOL;
+        
+        uint256 dqForPrice = _dq * 94 / 100;
+        uint256[] memory amounts = IPancakeRouter02(ROUTER).getAmountsOut(dqForPrice, path);
+        solOut = amounts[1];
+        
+        require(solOut >= _minSol, "!slip");
+        require(IERC20(SOL).balanceOf(address(this)) >= solOut, "!sol");
+        
+        // 5. 从合约SOL池转给用户（94%对应的SOL）
+        IERC20(SOL).safeTransfer(msg.sender, solOut);
+        
+        emit SellDQ(msg.sender, _dq, solOut, burnAmount, feeAmount);
     }
+    
+    event SellDQ(address indexed user, uint256 dqAmount, uint256 solOut, uint256 burned, uint256 fee);
 
-    // 代理到质押合约
     function claimLP() external nonReentrant { if (stakeContract != address(0)) IDQMiningStake(stakeContract).claimLP(msg.sender); }
     function claimNft() external nonReentrant { if (stakeContract != address(0)) IDQMiningStake(stakeContract).claimNft(msg.sender); }
     function claimDTeam() external nonReentrant { if (stakeContract != address(0)) IDQMiningStake(stakeContract).claimD(msg.sender); }
@@ -411,19 +606,99 @@ contract DQMining is ReentrancyGuard {
         if (_amount > 0 && stakeContract != address(0)) IDQMiningStake(stakeContract).distNFT(_amount);
     }
 
-    function distributeFeeToDTeam(uint256 _amount) external {
-        if (_amount > 0 && stakeContract != address(0)) IDQMiningStake(stakeContract).distD(_amount);
-    }
+    // distributeFeeToDTeam已删除，团队奖励改为D等级分红，在mine函数中自动处理
 
+    // 保留原有函数，但建议使用 nextPhase()
     function advancePhase() external onlyOwner { currentPhase++; }
 
     function adminWithdrawDQ(uint256 _a) external onlyOwner { dqToken.transfer(OWNER, _a); }
     function adminWithdrawSOL(uint256 _a) external onlyOwner { IERC20(SOL).safeTransfer(OWNER, _a); }
 
-    function getUser(address _u) external view returns (address, uint256, uint8, uint256, uint256, uint256, uint8) {
+    function getUser(address _u) external view returns (
+        address referrer, 
+        uint256 directCount, 
+        uint8 level, 
+        uint256 totalInvest, 
+        uint256 teamInvest, 
+        uint256 energy, 
+        uint8 dLevel,
+        uint256 validAddressCount,
+        uint256 pendingSOL
+    ) {
         User storage us = users[_u];
-        return (us.referrer, us.directCount, us.level, us.totalInvest, us.teamInvest, us.energy, us.dLevel);
+        return (us.referrer, us.directCount, us.level, us.totalInvest, us.teamInvest, us.energy, us.dLevel, us.validAddressCount, us.pendingSOL);
     }
+    
+    // ========== 动态奖励提现功能 ==========
+    // 查询待提现余额
+    function getPendingSOL(address _u) external view returns (uint256) {
+        return users[_u].pendingSOL;
+    }
+    
+    // 用户提现动态奖励（扣10%手续费）
+    function claimReward() external nonReentrant {
+        User storage u = users[msg.sender];
+        require(u.pendingSOL > 0, "!bal");
+        require(!isBlacklisted[msg.sender], "bl");
+        
+        uint256 amount = u.pendingSOL;
+        u.pendingSOL = 0;
+        
+        // 计算10%手续费
+        uint256 fee = amount * WITHDRAW_FEE / 100;
+        uint256 userAmount = amount - fee;
+        
+        // 手续费分配：40% NFT，30% 合伙人，30% 基金会
+        uint256 feeNft = fee * FEE_NODE_RATE / 100;
+        uint256 feePartner = fee * FEE_PARTNER_RATE / 100;
+        uint256 feeFoundation = fee * FEE_FOUNDATION_RATE / 100;
+        
+        // 累计到奖励池
+        nftPendingSOL += feeNft;
+        partnerPendingSOL += feePartner;
+        
+        // 基金会直接转账
+        IERC20(SOL).safeTransfer(FOUNDATION, feeFoundation);
+        
+        // 用户到账
+        IERC20(SOL).safeTransfer(msg.sender, userAmount);
+        
+        emit ClaimReward(msg.sender, userAmount, fee);
+    }
+    
+    // NFT持有者领取SOL奖励（通过Stake合约，需支付BNB手续费）
+    function claimNftSOL() external payable nonReentrant {
+        require(msg.value >= CLAIM_BNB_FEE, "!bnb");  // 需支付BNB手续费
+        require(stakeContract != address(0), "!stake");
+        uint256 amount = nftPendingSOL;
+        require(amount > 0, "!bal");
+        nftPendingSOL = 0;
+        IERC20(SOL).safeTransfer(stakeContract, amount);
+        IDQMiningStake(stakeContract).distNFT{value: msg.value}(amount);
+    }
+    
+    // 合伙人领取SOL奖励（需支付BNB手续费）
+    function claimPartnerSOL() external payable nonReentrant {
+        require(msg.value >= CLAIM_BNB_FEE, "!bnb");  // 需支付BNB手续费
+        uint256 amount = partnerPendingSOL;
+        require(amount > 0, "!bal");
+        partnerPendingSOL = 0;
+        // 合伙人地址固定，BNB转到基金会
+        address partnerAddr = IDQMiningStake(stakeContract).PARTNER();
+        IERC20(SOL).safeTransfer(partnerAddr, amount);
+        payable(FOUNDATION).transfer(msg.value);  // BNB给基金会
+        emit ClaimPartnerSOL(partnerAddr, amount);
+    }
+    
+    // 查询BNB余额
+    function getBnbBalance() external view returns (uint256) {
+        return address(this).balance;
+    }
+    
+    event ClaimReward(address indexed user, uint256 amount, uint256 fee);
+    event ClaimPartnerSOL(address indexed partner, uint256 amount);
+    event ClaimPartnerBNB(address indexed partner, uint256 amount);
+    // ======================================
 
     function getTeamSize(address _u) external view returns (uint256) { return users[_u].children.length(); }
 
