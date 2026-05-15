@@ -1,6 +1,10 @@
 import { ethers } from 'ethers';
 import fs from 'fs';
 import path from 'path';
+import {
+  DQ_CONTRACT_ADDRESS,
+  DQ_ABI as DQ_MINING_ABI,
+} from '../config/contracts';
 
 // BSC 主网 RPC
 const BSC_RPC_URL = process.env.BSC_RPC_URL || 'https://bsc-dataseed.binance.org/';
@@ -17,19 +21,9 @@ const BSC_EVENT_CACHE_VERSION = 1;
 const RPC_RETRY_MAX = Number(process.env.BSC_RPC_RETRY_MAX || 3);
 const RPC_RETRY_BASE_DELAY_MS = Number(process.env.BSC_RPC_RETRY_BASE_DELAY_MS || 300);
 
-// 合约地址
-const DQ_CONTRACT = '0xD6C7f9a6460034317294c52FDc056C548fbd0040';
-
-// DQProject ABI - 只包含 register 和 Register 事件
-const DQ_ABI = [
-  // register 函数
-  "function register(address _referrer) external",
-  // Register 事件
-  "event Register(address indexed user, address indexed referrer)",
-  // getUser 函数 - 返回9个值（与 assets/DQMining.sol 对齐）
-  // (referrer, directCount, level, totalInvest, teamInvest, energy, dLevel, validAddressCount, pendingSOL)
-  "function getUser(address) view returns (address, uint256, uint8, uint256, uint256, uint256, uint8, uint256, uint256)"
-];
+// 合约地址/ABI：统一从配置读取，避免与前端/链上部署版本不一致
+const DQ_CONTRACT = DQ_CONTRACT_ADDRESS;
+const DQ_ABI = DQ_MINING_ABI;
 
 // 复用 Provider，避免重复创建连接
 const provider = new ethers.JsonRpcProvider(BSC_RPC_URL, undefined, {
@@ -493,6 +487,20 @@ export async function getUserInfoFromChain(walletAddress: string) {
     if (!ethers.isAddress(walletAddress)) {
       console.warn(`[BSC] 非法地址，跳过用户信息查询: ${walletAddress}`);
       return null;
+    }
+
+    // 基础诊断：避免“前端可用、后端不可用”时难以定位（常见原因是地址/网络不一致）
+    try {
+      const network = await provider.getNetwork();
+      const code = await provider.getCode(DQ_CONTRACT);
+      const codeSize = Math.max(0, Math.floor((code.length - 2) / 2));
+      if (code === '0x' || codeSize === 0) {
+        console.warn(
+          `[BSC] 合约地址无代码（可能地址/网络不对）：contract=${DQ_CONTRACT} chainId=${network.chainId.toString()}`
+        );
+      }
+    } catch (e) {
+      console.warn('[BSC] 获取链/合约诊断信息失败:', e);
     }
 
     const contract = getContract();

@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappApi } from '@/utils/api';
 import { showToast } from '@/utils/toast';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const { width } = Dimensions.get('window');
 
@@ -45,6 +46,7 @@ interface CardNodeInfo {
 }
 
 export default function DappNodes() {
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [nodeInfo, setNodeInfo] = useState<{
@@ -94,34 +96,37 @@ export default function DappNodes() {
   // 领取NFT分红
   const handleClaimNFT = async () => {
     if (!walletAddress) {
-      showToast.info('提示', '请先连接钱包');
+      showToast.info(t('common.tips'), t('common.pleaseConnectWallet'));
       return;
     }
 
     if (!nodeInfo?.isQualified) {
-      showToast.info('提示', '您的节点未达标，无法领取分红');
+      showToast.info(t('common.tips'), t('nodesNew.claim.notQualifiedMessage'));
       return;
     }
 
     Alert.alert(
-      '领取NFT分红',
-      `确定要领取 ${pendingNFT} DQ 的NFT分红吗？`,
+      t('nodesNew.claim.title'),
+      t('nodesNew.claim.confirmMessage').replace('{amount}', pendingNFT),
       [
-        { text: '取消', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: '确认领取',
+          text: t('nodesNew.claim.confirmAction'),
           onPress: async () => {
             setSubmitting(true);
             try {
               const response = await dappApi.claimNFT(walletAddress);
               if (response.code === 0) {
-                showToast.success('领取成功', `成功领取 ${pendingNFT} DQ！`);
+                showToast.success(
+                  t('nodesNew.claim.successTitle'),
+                  t('nodesNew.claim.successMessage').replace('{amount}', pendingNFT)
+                );
                 loadData();
               } else {
-                showToast.error('领取失败', response.message || '请重试');
+                showToast.error(t('nodesNew.claim.failedTitle'), response.message || t('common.pleaseRetry'));
               }
             } catch (error: any) {
-              showToast.error('错误', error.message || '网络错误');
+              showToast.error(t('common.error'), error.message || t('common.networkError'));
             } finally {
               setSubmitting(false);
             }
@@ -144,10 +149,14 @@ export default function DappNodes() {
   // 获取卡牌名称
   const getCardName = (type: number) => {
     switch (type) {
-      case 1: return 'S1 节点卡';
-      case 2: return 'S2 节点卡';
-      case 3: return 'S3 节点卡';
-      default: return '未知';
+      case 1:
+        return t('nodesNew.cardName.s1');
+      case 2:
+        return t('nodesNew.cardName.s2');
+      case 3:
+        return t('nodesNew.cardName.s3');
+      default:
+        return t('common.unknown');
     }
   };
 
@@ -164,7 +173,7 @@ export default function DappNodes() {
         <View style={[styles.container, { backgroundColor: BG_DARK }]}>
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={YELLOW} />
-            <Text style={styles.loadingText}>加载中...</Text>
+            <Text style={styles.loadingText}>{t('common.loading')}</Text>
           </View>
         </View>
       </Screen>
@@ -177,14 +186,14 @@ export default function DappNodes() {
       <ScrollView style={[styles.container, { backgroundColor: BG_DARK }]}>
         {/* 页面标题 */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>NODE CENTER</Text>
-          <Text style={styles.headerSubtitle}>节点中心</Text>
+          <Text style={styles.headerTitle}>{t('nodesNew.title')}</Text>
+          <Text style={styles.headerSubtitle}>{t('nodesNew.subtitle')}</Text>
         </View>
 
         {/* 达标状态卡片 */}
         <View style={styles.statusCard}>
           <View style={styles.statusHeader}>
-            <Text style={styles.statusLabel}>节点达标状态</Text>
+            <Text style={styles.statusLabel}>{t('nodesNew.qualification.title')}</Text>
             <View style={[
               styles.statusBadge,
               { backgroundColor: nodeInfo?.isQualified ? GREEN + '20' : RED + '20' }
@@ -198,7 +207,7 @@ export default function DappNodes() {
                 styles.statusText,
                 { color: nodeInfo?.isQualified ? GREEN : RED }
               ]}>
-                {nodeInfo?.isQualified ? '已达标' : '未达标'}
+                {nodeInfo?.isQualified ? t('nodesNew.qualified') : t('nodesNew.notQualified')}
               </Text>
             </View>
           </View>
@@ -215,19 +224,19 @@ export default function DappNodes() {
               ]} />
             </View>
             <Text style={styles.progressText}>
-              {nodeInfo?.qualifiedLines || 0} / {nodeInfo?.requiredLines || 0} 条线
+              {t('nodesNew.progressLines')
+                .replace('{qualified}', String(nodeInfo?.qualifiedLines || 0))
+                .replace('{required}', String(nodeInfo?.requiredLines || 0))}
             </Text>
           </View>
 
-          <Text style={styles.progressHint}>
-            达标条件：直接下级中有用户完成入金即为1条达标线
-          </Text>
+          <Text style={styles.progressHint}>{t('nodesNew.progressHint')}</Text>
         </View>
 
         {/* 待领取NFT分红 */}
         <View style={styles.rewardCard}>
           <View style={styles.rewardHeader}>
-            <Text style={styles.rewardLabel}>待领取 NFT 分红</Text>
+            <Text style={styles.rewardLabel}>{t('nodesNew.pendingRewardTitle')}</Text>
             <View style={styles.rewardBadge}>
               <Ionicons name="diamond-outline" size={14} color={PURPLE} />
               <Text style={styles.rewardBadgeText}>DQ</Text>
@@ -247,7 +256,7 @@ export default function DappNodes() {
               <ActivityIndicator color={BG_DARK} size="small" />
             ) : (
               <Text style={styles.claimButtonText}>
-                {nodeInfo?.isQualified ? '领取分红' : '节点未达标'}
+                {nodeInfo?.isQualified ? t('nodesNew.claim.buttonQualified') : t('nodesNew.claim.buttonNotQualified')}
               </Text>
             )}
           </TouchableOpacity>
@@ -255,8 +264,8 @@ export default function DappNodes() {
 
         {/* 我的卡牌 */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>MY NODES</Text>
-          <Text style={styles.sectionSubtitle}>我的节点卡</Text>
+          <Text style={styles.sectionTitle}>{t('nodesNew.myNodesTitle')}</Text>
+          <Text style={styles.sectionSubtitle}>{t('nodesNew.myNodesSubtitle')}</Text>
           
           {nodeInfo?.cards && nodeInfo.cards.length > 0 ? (
             <View style={styles.cardsGrid}>
@@ -290,15 +299,17 @@ export default function DappNodes() {
                       styles.cardQualifiedText,
                       { color: card.isQualified ? GREEN : RED }
                     ]}>
-                      {card.isQualified ? '已达标' : '未达标'}
+                      {card.isQualified ? t('nodesNew.qualified') : t('nodesNew.notQualified')}
                     </Text>
                   </View>
                   <View style={styles.cardInfo}>
                     <Text style={styles.cardInfoText}>
-                      {card.qualifiedLines}/{card.requiredLines} 线
+                      {t('nodesNew.card.lines')
+                        .replace('{qualified}', String(card.qualifiedLines))
+                        .replace('{required}', String(card.requiredLines))}
                     </Text>
                     <Text style={styles.cardInfoText}>
-                      权重: {card.rewardWeight}%
+                      {t('nodesNew.card.weight').replace('{weight}', String(card.rewardWeight))}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -307,8 +318,8 @@ export default function DappNodes() {
           ) : (
             <View style={styles.emptyCards}>
               <Ionicons name="card-outline" size={48} color={BORDER_GRAY} />
-              <Text style={styles.emptyText}>您还没有购买节点卡</Text>
-              <Text style={styles.emptyHint}>前往购买节点卡开启DeFi之旅</Text>
+              <Text style={styles.emptyText}>{t('nodesNew.empty.title')}</Text>
+              <Text style={styles.emptyHint}>{t('nodesNew.empty.subtitle')}</Text>
             </View>
           )}
         </View>

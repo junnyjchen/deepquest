@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   StyleSheet,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
@@ -15,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappApi } from '@/utils/api';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { showToast } from '@/utils/toast';
+import ConfirmDialog from '@/components/ConfirmDialog';
 
 // 颜色体系
 const BG_DARK = '#0A0A12';
@@ -50,11 +50,56 @@ export default function InviteBinding() {
   const [alreadyBound, setAlreadyBound] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  useEffect(() => {
-    initPage();
-  }, []);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    type?: 'info' | 'warning' | 'danger';
+    onConfirm?: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info',
+  });
 
-  const initPage = async () => {
+  const closeConfirmDialog = () => {
+    setConfirmDialog((prev) => ({
+      ...prev,
+      visible: false,
+      onConfirm: undefined,
+    }));
+  };
+
+  const validateReferrer = useCallback(async () => {
+    if (!referrerAddress) {
+      setErrorMessage('无效的邀请链接');
+      return;
+    }
+
+    try {
+      setValidating(true);
+      const result = await dappApi.validateReferrer(referrerAddress);
+      
+      if (result.valid && result.data) {
+        setReferrerValid(true);
+        setReferrerInfo(result.data);
+      } else {
+        setReferrerValid(false);
+        setErrorMessage(t('invite.referrerNotFound'));
+      }
+    } catch (error: any) {
+      console.error('验证推荐人失败:', error);
+      setReferrerValid(false);
+      setErrorMessage(error.message || t('invite.validateReferrerFailed'));
+    } finally {
+      setValidating(false);
+    }
+  }, [referrerAddress, t]);
+
+  const initPage = useCallback(async () => {
     try {
       // 获取钱包地址
       const savedWallet = await AsyncStorage.getItem(WALLET_STORAGE_KEY);
@@ -65,16 +110,15 @@ export default function InviteBinding() {
         if (referrerAddress) {
           await AsyncStorage.setItem('@deepquest_pending_referrer', referrerAddress);
         }
-        Alert.alert(
-          '提示',
-          '请先连接钱包后再绑定推荐人',
-          [
-            {
-              text: '确定',
-              onPress: () => router.back(),
-            },
-          ]
-        );
+        setConfirmDialog({
+          visible: true,
+          title: t('common.tips'),
+          message: t('invite.pleaseConnectWalletThenBind'),
+          confirmText: t('common.confirm'),
+          cancelText: '',
+          type: 'info',
+          onConfirm: () => router.back(),
+        });
         setLoading(false);
         setValidating(false);
         return;
@@ -95,47 +139,25 @@ export default function InviteBinding() {
       if (referrerAddress) {
         await validateReferrer();
       } else {
-        setErrorMessage('无效的邀请链接');
+        setErrorMessage(t('invite.invalidInviteLink'));
         setValidating(false);
       }
     } catch (error: any) {
       console.error('初始化失败:', error);
-      setErrorMessage(error.message || '初始化失败');
+      setErrorMessage(error.message || t('common.initFailed'));
     } finally {
       setLoading(false);
       setValidating(false);
     }
-  };
+  }, [referrerAddress, router, validateReferrer, t]);
 
-  const validateReferrer = async () => {
-    if (!referrerAddress) {
-      setErrorMessage('无效的邀请链接');
-      return;
-    }
-
-    try {
-      setValidating(true);
-      const result = await dappApi.validateReferrer(referrerAddress);
-      
-      if (result.valid && result.data) {
-        setReferrerValid(true);
-        setReferrerInfo(result.data);
-      } else {
-        setReferrerValid(false);
-        setErrorMessage('推荐人不存在');
-      }
-    } catch (error: any) {
-      console.error('验证推荐人失败:', error);
-      setReferrerValid(false);
-      setErrorMessage(error.message || '验证推荐人失败');
-    } finally {
-      setValidating(false);
-    }
-  };
+  useEffect(() => {
+    initPage();
+  }, [initPage]);
 
   const handleBindReferrer = async () => {
     if (!walletAddress || !referrerAddress) {
-      showToast.error('错误', '缺少必要信息');
+      showToast.error(t('common.error'), t('common.missingRequiredInfo'));
       return;
     }
 
@@ -147,22 +169,21 @@ export default function InviteBinding() {
       const result = await dappApi.bindReferrer(walletAddress, referrerAddress);
       
       if (result.code === 0) {
-        Alert.alert(
-          '绑定成功',
-          '您已成功绑定推荐关系！',
-          [
-            {
-              text: '返回首页',
-              onPress: () => router.back(),
-            },
-          ]
-        );
+        setConfirmDialog({
+          visible: true,
+          title: t('invite.bindSuccessTitle'),
+          message: t('invite.bindSuccessMessage'),
+          confirmText: t('invite.backHome'),
+          cancelText: '',
+          type: 'info',
+          onConfirm: () => router.back(),
+        });
       } else {
-        showToast.error('绑定失败', result.message || '绑定推荐人失败');
+        showToast.error(t('invite.bindFailedTitle'), result.message || t('invite.bindFailedMessage'));
       }
     } catch (error: any) {
       console.error('绑定失败:', error);
-      showToast.error('绑定失败', error.message || '绑定推荐人失败');
+      showToast.error(t('invite.bindFailedTitle'), error.message || t('invite.bindFailedMessage'));
     } finally {
       setSubmitting(false);
     }
@@ -178,7 +199,7 @@ export default function InviteBinding() {
         <View style={styles.container}>
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={YELLOW} />
-            <Text style={styles.loadingText}>加载中...</Text>
+            <Text style={styles.loadingText}>{t('common.loading')}</Text>
           </View>
         </View>
       </Screen>
@@ -302,6 +323,21 @@ export default function InviteBinding() {
           )}
         </View>
       </View>
+
+      <ConfirmDialog
+        visible={confirmDialog.visible}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        type={confirmDialog.type}
+        onCancel={closeConfirmDialog}
+        onConfirm={() => {
+          const handler = confirmDialog.onConfirm;
+          closeConfirmDialog();
+          handler?.();
+        }}
+      />
     </Screen>
   );
 }

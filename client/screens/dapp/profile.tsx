@@ -258,25 +258,25 @@ export default function DappProfile() {
   const handleConnect = async () => {
     try {
       Alert.alert(
-        '连接钱包',
-        '请选择钱包类型',
+        t('profile.connectWalletTitle'),
+        t('profile.selectWalletType'),
         [
-          { text: '取消', style: 'cancel' },
+          { text: t('common.cancel'), style: 'cancel' },
           { 
-            text: '模拟钱包（测试）', 
+            text: t('profile.mockWalletAction'), 
             onPress: async () => {
               const mockWallet = await generateMockWallet();
               await AsyncStorage.setItem(WALLET_STORAGE_KEY, mockWallet);
               setWalletAddress(mockWallet);
               await fetchUserData(mockWallet);
-              showToast.success('成功', `钱包已连接: ${mockWallet.slice(0, 10)}...`);
+              showToast.success(t('common.success'), t('common.walletConnected').replace('{addr}', `${mockWallet.slice(0, 10)}...`));
             }
           },
         ]
       );
     } catch (error) {
       console.error('连接钱包失败:', error);
-      showToast.error('错误', '钱包连接失败');
+      showToast.error(t('common.error'), t('common.walletConnectFailed'));
     }
   };
 
@@ -284,16 +284,16 @@ export default function DappProfile() {
   const handleCopyAddress = async () => {
     if (walletAddress) {
       await Clipboard.setStringAsync(walletAddress);
-      showToast.success('复制成功', '钱包地址已复制');
+      showToast.success(t('common.success'), t('profile.walletCopied'));
     }
   };
 
   // 断开钱包连接
   const handleDisconnect = () => {
-    Alert.alert('断开钱包', '确定要断开钱包连接吗？', [
-      { text: '取消', style: 'cancel' },
+    Alert.alert(t('profile.disconnectWalletTitle'), t('profile.disconnectWalletConfirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
       { 
-        text: '确定', 
+        text: t('profile.disconnectAction'), 
         style: 'destructive',
         onPress: async () => {
           await AsyncStorage.removeItem(WALLET_STORAGE_KEY);
@@ -329,14 +329,14 @@ export default function DappProfile() {
         // 生成邀请链接
         const inviteLink = `${origin}/invite?ref=${walletAddress}`;
         await Share.share({
-          title: 'Join DeepQuest',
-          message: `加入DeepQuest，质押DQ获取被动收益！\n我的邀请链接: ${inviteLink}`,
+          title: t('profile.share.title'),
+          message: t('profile.share.messageWithLink').replace('{inviteLink}', inviteLink),
           url: inviteLink,
         });
       } else {
         await Share.share({
-          title: 'Join DeepQuest',
-          message: '下载DeepQuest Web3 DeFi量化平台，开启您的DeFi之旅！',
+          title: t('profile.share.title'),
+          message: t('profile.share.messageNoWallet'),
         });
       }
     } catch (error) {
@@ -351,9 +351,9 @@ export default function DappProfile() {
       const origin = typeof window !== 'undefined' ? window.location.origin : 'https://app.deepquest.io';
       const inviteLink = `${origin}/invite?ref=${walletAddress}`;
       await Clipboard.setStringAsync(inviteLink);
-      showToast.success('复制成功', '邀请链接已复制到剪贴板');
+      showToast.success(t('common.success'), t('team.inviteLinkCopied'));
     } else {
-      showToast.info('提示', '请先连接钱包');
+      showToast.info(t('common.tips'), t('common.pleaseConnectWallet'));
     }
   };
 
@@ -401,11 +401,13 @@ export default function DappProfile() {
                 </View>
                 <View>
                   <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>
-                    {walletAddress ? '已连接' : '未连接'}
+                    {walletAddress ? t('common.connected') : t('common.notConnected')}
                   </Text>
                   <TouchableOpacity onPress={handleCopyAddress} disabled={!walletAddress}>
                     <Text className="text-sm mt-1 font-mono" style={{ color: TEXT_MUTED }}>
-                      {(userLoading || chainLoading) ? '加载中...' : (walletAddress ? `${walletAddress.slice(0, 8)}...${walletAddress.slice(-6)}` : '点击连接钱包')}
+                      {(userLoading || chainLoading)
+                        ? t('common.loading')
+                        : (walletAddress ? `${walletAddress.slice(0, 8)}...${walletAddress.slice(-6)}` : t('common.tapToConnectWallet'))}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -476,32 +478,33 @@ export default function DappProfile() {
             <View className="flex-row items-center gap-2 mb-4">
               <View className="w-1 h-5 rounded-full" style={{ backgroundColor: YELLOW }} />
               <View className="w-1 h-5 rounded-full" style={{ backgroundColor: YELLOW }} />
-              <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>资产统计</Text>
+              <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>{t('profile.assetsStats')}</Text>
+              
             </View>
 
             <View className="grid grid-cols-2 gap-x-4 gap-y-4">
               <View>
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>SOL余额</Text>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('profile.solBalance')}</Text>
                 <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>
                   {userLoading ? '...' : userData.bnbBalance}
                 </Text>
               </View>
               <View>
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>DQ余额</Text>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('profile.dqBalance')}</Text>
                 <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>
                   {userLoading ? '...' : userData.dqtBalance}
                 </Text>
               </View>
               <View>
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>质押数量</Text>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('profile.stakedAmount')}</Text>
                 <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>
                   {userLoading ? '...' : userData.stakedAmount} SOL
                 </Text>
               </View>
               <View>
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>质押天数</Text>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('profile.stakeDays')}</Text>
                 <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>
-                  {userLoading ? '...' : userData.stakeDays} 天
+                  {userLoading ? '...' : userData.stakeDays} {t('common.daysUnit')}
                 </Text>
               </View>
             </View>
@@ -517,19 +520,19 @@ export default function DappProfile() {
             <View className="flex-row items-center gap-2 mb-4">
               <View className="w-1 h-5 rounded-full" style={{ backgroundColor: YELLOW }} />
               <View className="w-1 h-5 rounded-full" style={{ backgroundColor: YELLOW }} />
-              <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>收益统计</Text>
+              <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>{t('profile.earningsStats')}</Text>
             </View>
 
             <View className="grid grid-cols-2 gap-x-4 gap-y-4">
               <View>
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>待领取收益</Text>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('profile.pendingRewards')}</Text>
                 <Text className="text-xl font-bold" style={{ color: YELLOW }}>
                   {userLoading ? '...' : userData.pendingRewards}
                 </Text>
                 <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQ</Text>
               </View>
               <View>
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>累计收益</Text>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('profile.totalRewards')}</Text>
                 <Text className="text-xl font-bold" style={{ color: CYAN }}>
                   {userLoading ? '...' : userData.totalRewards}
                 </Text>
@@ -548,16 +551,16 @@ export default function DappProfile() {
             <View className="flex-row items-center gap-2 mb-4">
               <View className="w-1 h-5 rounded-full" style={{ backgroundColor: YELLOW }} />
               <View className="w-1 h-5 rounded-full" style={{ backgroundColor: YELLOW }} />
-              <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>团队数据</Text>
+              <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>{t('team.title')}</Text>
             </View>
 
             <View className="grid grid-cols-2 gap-x-4 gap-y-4">
               <View>
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>团队规模</Text>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('team.totalMembers')}</Text>
                 <Text className="text-xl font-bold" style={{ color: TEXT_WHITE }}>
                   {userLoading ? '...' : userData.teamSize}
                 </Text>
-                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>人</Text>
+                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>{t('common.peopleUnit')}</Text>
               </View>
               <View>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>直推人数</Text>

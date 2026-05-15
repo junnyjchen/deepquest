@@ -6,7 +6,6 @@ import {
   ActivityIndicator,
   RefreshControl,
   FlatList,
-  Alert,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { LogoHeader } from '@/components/LogoHeader';
@@ -16,6 +15,8 @@ import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappUserApi } from '@/utils/api';
 import { showToast } from '@/utils/toast';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   connectWallet,
   getBrowserProvider,
@@ -45,14 +46,16 @@ interface RewardRecord {
 }
 
 const REWARD_TYPES: Record<string, { label: string; color: string }> = {
-  deposit: { label: '质押收益', color: CYAN },
-  referral: { label: '直推奖励', color: YELLOW },
-  team: { label: '团队奖励', color: '#00FF88' },
-  level: { label: '等级奖励', color: '#D020FF' },
-  default: { label: '其他奖励', color: TEXT_MUTED },
+  // label 会在组件内根据语言动态生成，这里仅保留颜色（避免初始化时依赖 hooks）
+  deposit: { label: 'deposit', color: CYAN },
+  referral: { label: 'referral', color: YELLOW },
+  team: { label: 'team', color: '#00FF88' },
+  level: { label: 'level', color: '#D020FF' },
+  default: { label: 'default', color: TEXT_MUTED },
 };
 
 export default function DappRewards() {
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
@@ -64,6 +67,15 @@ export default function DappRewards() {
   // SOL 领取相关状态
   const [pendingSOL, setPendingSOL] = useState('0');
   const [claimingSOL, setClaimingSOL] = useState(false);
+
+  // 确认对话框状态（替代 Alert，确保多语言切换时文案一致）
+  const [confirmDialog, setConfirmDialog] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info' as 'info' | 'warning' | 'danger',
+    onConfirm: () => { /* placeholder */ },
+  });
 
   useFocusEffect(
     useCallback(() => {
@@ -139,48 +151,43 @@ export default function DappRewards() {
   // 领取 SOL 奖励
   const handleClaimSOL = async () => {
     if (!walletAddress) {
-      showToast.info('提示', '请先连接钱包');
+      showToast.info(t('common.tips'), t('common.pleaseConnectWallet'));
       return;
     }
 
     const pendingAmount = parseFloat(pendingSOL);
     if (pendingAmount <= 0) {
-      showToast.info('提示', '暂无可领取的 SOL');
+      showToast.info(t('common.tips'), t('rewards.noSolToClaim'));
       return;
     }
 
-    Alert.alert(
-      '领取 SOL',
-      `确定要领取 ${pendingAmount.toFixed(4)} SOL 吗？`,
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '确认',
-          onPress: async () => {
-            try {
-              setClaimingSOL(true);
-              const provider = getBrowserProvider();
-              if (!provider) {
-                throw new Error('请使用钱包浏览器');
-              }
-              const signer = await provider.getSigner();
-              const tx = await claimSOLOnChain(signer);
-              await waitForTransaction(tx, 1);
-              showToast.success('成功', `已领取 ${pendingAmount.toFixed(4)} SOL`);
-              // 刷新待领取金额
-              await fetchPendingSOL(walletAddress);
-              // 刷新奖励记录
-              await fetchRewards(walletAddress, 1);
-            } catch (error: any) {
-              console.error('领取 SOL 失败:', error);
-              showToast.error('失败', error?.message || '领取失败，请重试');
-            } finally {
-              setClaimingSOL(false);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmDialog({
+      visible: true,
+      title: t('rewards.claimSolTitle'),
+      message: t('rewards.claimSolConfirm').replace('{amount}', pendingAmount.toFixed(4)),
+      type: 'warning',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, visible: false }));
+        try {
+          setClaimingSOL(true);
+          const provider = getBrowserProvider();
+          if (!provider) {
+            throw new Error(t('common.useWalletBrowser'));
+          }
+          const signer = await provider.getSigner();
+          const tx = await claimSOLOnChain(signer);
+          await waitForTransaction(tx, 1);
+          showToast.success(t('common.success'), t('rewards.claimSolSuccess').replace('{amount}', pendingAmount.toFixed(4)));
+          await fetchPendingSOL(walletAddress);
+          await fetchRewards(walletAddress, 1);
+        } catch (error: any) {
+          console.error('领取 SOL 失败:', error);
+          showToast.error(t('common.error'), error?.message || t('rewards.claimFailed'));
+        } finally {
+          setClaimingSOL(false);
+        }
+      },
+    });
   };
 
   const onEndReached = () => {
@@ -191,40 +198,46 @@ export default function DappRewards() {
 
   const handleClaim = async () => {
     if (!walletAddress) {
-      showToast.info('提示', '请先连接钱包');
+      showToast.info(t('common.tips'), t('common.pleaseConnectWallet'));
       return;
     }
 
-    Alert.alert(
-      '领取奖励',
-      '确定要领取所有待领取奖励吗？',
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '确认',
-          onPress: async () => {
-            try {
-              setClaiming(true);
-              const response = await dappUserApi.claimReward(walletAddress);
-              if (response.code === 0) {
-                showToast.success('成功', `已领取 ${response.data?.claimed || 0} DQ`);
-                await fetchRewards(walletAddress, 1);
-              } else {
-                showToast.error('失败', response.message || '领取失败');
-              }
-            } catch (error) {
-              showToast.error('错误', '领取失败，请重试');
-            } finally {
-              setClaiming(false);
-            }
-          },
-        },
-      ]
-    );
+    setConfirmDialog({
+      visible: true,
+      title: t('rewards.claimTitle'),
+      message: t('rewards.claimAllConfirm'),
+      type: 'warning',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, visible: false }));
+        try {
+          setClaiming(true);
+          const response = await dappUserApi.claimReward(walletAddress);
+          if (response.code === 0) {
+            showToast.success(t('common.success'), t('rewards.claimDqSuccess').replace('{amount}', String(response.data?.claimed || 0)));
+            await fetchRewards(walletAddress, 1);
+          } else {
+            showToast.error(t('common.error'), response.message || t('rewards.claimFailed'));
+          }
+        } catch (error) {
+          showToast.error(t('common.error'), t('rewards.claimFailed'));
+        } finally {
+          setClaiming(false);
+        }
+      },
+    });
   };
 
   const getRewardTypeInfo = (type: string) => {
-    return REWARD_TYPES[type] || REWARD_TYPES.default;
+    const info = REWARD_TYPES[type] || REWARD_TYPES.default;
+    const labelMap: Record<string, string> = {
+      deposit: t('rewards.type.deposit'),
+      referral: t('rewards.type.referral'),
+      team: t('rewards.type.team'),
+      level: t('rewards.type.level'),
+      default: t('rewards.type.other'),
+    };
+
+    return { ...info, label: labelMap[type] || labelMap.default };
   };
 
   const getStatusColor = (status: string) => {
@@ -241,9 +254,9 @@ export default function DappRewards() {
   const getStatusText = (status: string) => {
     switch (status) {
       case 'claimed':
-        return '已领取';
+        return t('rewards.claimed');
       case 'pending':
-        return '待领取';
+        return t('rewards.pending');
       default:
         return status;
     }
@@ -293,7 +306,7 @@ export default function DappRewards() {
       <Screen>
         <View className="flex-1 items-center justify-center" style={{ backgroundColor: BG_DARK }}>
           <ActivityIndicator size="large" color={YELLOW} />
-          <Text className="text-white mt-4">加载中...</Text>
+          <Text className="text-white mt-4">{t('common.loading')}</Text>
         </View>
       </Screen>
     );
@@ -314,8 +327,8 @@ export default function DappRewards() {
                     <Ionicons name="wallet" size={20} color={CYAN} />
                   </View>
                   <View>
-                    <Text className="text-sm font-semibold" style={{ color: TEXT_WHITE }}>SOL 钱包奖励</Text>
-                    <Text className="text-xs" style={{ color: TEXT_MUTED }}>可领取金额</Text>
+                    <Text className="text-sm font-semibold" style={{ color: TEXT_WHITE }}>{t('rewards.solWalletReward')}</Text>
+                    <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('rewards.claimableAmount')}</Text>
                   </View>
                 </View>
                 <Text className="text-2xl font-bold" style={{ color: CYAN }}>{pendingSOLAmount.toFixed(4)}</Text>
@@ -331,7 +344,7 @@ export default function DappRewards() {
                   {claimingSOL ? (
                     <ActivityIndicator size="small" color="#0A0A12" />
                   ) : (
-                    <Text className="text-sm font-semibold" style={{ color: '#0A0A12' }}>领取 SOL</Text>
+                    <Text className="text-sm font-semibold" style={{ color: '#0A0A12' }}>{t('rewards.claimSol')}</Text>
                   )}
                 </TouchableOpacity>
               )}
@@ -341,13 +354,13 @@ export default function DappRewards() {
             <View className="rounded-2xl p-4" style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 2, borderColor: YELLOW }}>
               <View className="flex-row justify-between">
                 <View className="items-center flex-1">
-                  <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>待领取</Text>
+                  <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('rewards.pending')}</Text>
                   <Text className="text-xl font-bold" style={{ color: YELLOW }}>{pendingTotal.toFixed(2)}</Text>
                   <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQ</Text>
                 </View>
                 <View className="w-px" style={{ backgroundColor: BORDER_GRAY }} />
                 <View className="items-center flex-1">
-                  <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>已领取</Text>
+                  <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('rewards.claimed')}</Text>
                   <Text className="text-xl font-bold" style={{ color: CYAN }}>{claimedTotal.toFixed(2)}</Text>
                   <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQ</Text>
                 </View>
@@ -363,7 +376,7 @@ export default function DappRewards() {
                   {claiming ? (
                     <ActivityIndicator size="small" color="#333" />
                   ) : (
-                    <Text className="text-sm font-semibold" style={{ color: '#333' }}>一键领取</Text>
+                    <Text className="text-sm font-semibold" style={{ color: '#333' }}>{t('rewards.claimAll')}</Text>
                   )}
                 </TouchableOpacity>
               )}
@@ -375,7 +388,7 @@ export default function DappRewards() {
         {!walletAddress && (
           <View className="px-4 pb-4">
             <View className="rounded-xl p-4" style={{ backgroundColor: 'rgba(255,215,0,0.1)', borderWidth: 1, borderColor: YELLOW }}>
-              <Text className="text-sm" style={{ color: YELLOW }}>请先连接钱包查看收益记录</Text>
+              <Text className="text-sm" style={{ color: YELLOW }}>{t('rewards.pleaseConnectWalletToView')}</Text>
             </View>
           </View>
         )}
@@ -384,8 +397,8 @@ export default function DappRewards() {
         {walletAddress && rewards.length === 0 ? (
           <View className="flex-1 items-center justify-center px-4">
             <Ionicons name="gift-outline" size={64} color={TEXT_MUTED} />
-            <Text className="text-base mt-4" style={{ color: TEXT_MUTED }}>暂无收益记录</Text>
-            <Text className="text-sm mt-2" style={{ color: TEXT_MUTED }}>质押或邀请好友获取收益</Text>
+            <Text className="text-base mt-4" style={{ color: TEXT_MUTED }}>{t('rewards.noRecords')}</Text>
+            <Text className="text-sm mt-2" style={{ color: TEXT_MUTED }}>{t('rewards.noRecordsHint')}</Text>
           </View>
         ) : (
           <FlatList
@@ -412,6 +425,15 @@ export default function DappRewards() {
             }
           />
         )}
+
+        <ConfirmDialog
+          visible={confirmDialog.visible}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          type={confirmDialog.type}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog(prev => ({ ...prev, visible: false }))}
+        />
       </View>
     </Screen>
   );

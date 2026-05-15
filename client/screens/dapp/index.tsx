@@ -21,8 +21,8 @@ import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappApi } from '@/utils/api';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
-import { useLanguage } from '@/contexts/LanguageContext';
 import { showToast } from '@/utils/toast';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   connectWallet,
   switchToBSC,
@@ -211,14 +211,14 @@ export default function DappIndex() {
       const result = await dappApi.bindReferrer(walletAddress, pendingInviteReferrer);
       
       if (result.code === 0) {
-        showToast.success('绑定成功', '您已成功绑定推荐人！');
+        showToast.success(t('index.bindSuccessTitle'), t('index.bindSuccessMessage'));
         await AsyncStorage.removeItem('@deepquest_pending_referrer');
         setPendingInviteReferrer(null);
       } else {
-        showToast.error('绑定失败', result.message || '绑定推荐人失败');
+        showToast.error(t('index.bindFailedTitle'), result.message || t('index.bindFailedMessage'));
       }
     } catch (error: any) {
-      showToast.error('绑定失败', error.message || '绑定推荐人失败');
+      showToast.error(t('index.bindFailedTitle'), error.message || t('index.bindFailedMessage'));
     } finally {
       setBindLoading(false);
       setInviteModalVisible(false);
@@ -265,7 +265,7 @@ export default function DappIndex() {
       const walletInfo = await connectWallet();
       
       if (!walletInfo) {
-        showToast.error('错误', '钱包连接失败');
+        showToast.error(t('common.error'), t('common.walletConnectFailed'));
         return;
       }
       
@@ -319,6 +319,7 @@ export default function DappIndex() {
         setIsOnChainRegistered(true);
         // 显示成功提示
         showToast.success('成功', `钱包已连接: ${address.slice(0, 10)}...`);
+        showToast.success(t('common.success'), t('common.walletConnected').replace('{addr}', `${address.slice(0, 10)}...`));
         return;
       }
       
@@ -347,12 +348,12 @@ export default function DappIndex() {
           // 链上也未激活，提示用户激活
           setIsOnChainRegistered(false);
           Alert.alert(
-            '账户未激活',
-            '您的账户尚未激活。激活后即可享受完整功能。',
+            t('index.accountNotActivatedTitle'),
+            t('index.accountNotActivatedMessage'),
             [
-              { text: '取消', style: 'cancel' },
+              { text: t('common.cancel'), style: 'cancel' },
               { 
-                text: '立即激活', 
+                text: t('index.activateNow'), 
                 onPress: () => handleActivateClick() 
               }
             ]
@@ -365,12 +366,12 @@ export default function DappIndex() {
       // 如果 MetaMask 不可用，提供模拟选项
       if (typeof window !== 'undefined' && !window.ethereum) {
         Alert.alert(
-          '提示',
-          '未检测到钱包扩展。请在浏览器中安装 TP 钱包或 MetaMask 扩展。',
-          [{ text: '确定' }]
+          t('common.tips'),
+          t('index.walletExtensionNotFound'),
+          [{ text: t('common.confirm') }]
         );
       } else {
-        showToast.error('错误', error.message || '钱包连接失败');
+        showToast.error(t('common.error'), error.message || t('common.walletConnectFailed'));
       }
     }
   };
@@ -401,7 +402,7 @@ export default function DappIndex() {
       setIsOnChainRegistered(registered);
       if (registered) {
         setActivationModalVisible(false);
-        showToast.success('成功', '账户已激活！');
+        showToast.success(t('common.success'), t('index.accountActivated'));
       } else {
         // 未激活，弹出激活弹窗
         setActivationModalVisible(true);
@@ -414,7 +415,7 @@ export default function DappIndex() {
   // 点击激活按钮：直接打开激活弹窗
   const handleActivateClick = async () => {
     if (!walletAddress) {
-      showToast.info('提示', '请先连接钱包');
+      showToast.info(t('common.tips'), t('common.pleaseConnectWallet'));
       return;
     }
     
@@ -432,7 +433,7 @@ export default function DappIndex() {
   // 激活账户（发起链上注册交易）
   const handleActivate = async () => {
     if (!walletAddress) {
-      showToast.info('提示', '请先连接钱包');
+      showToast.info(t('common.tips'), t('common.pleaseConnectWallet'));
       return;
     }
 
@@ -445,6 +446,7 @@ export default function DappIndex() {
         setIsOnChainRegistered(true);
         setActivationModalVisible(false);
         showToast.info('提示', '账户已经激活，无需重复激活！');
+        showToast.info(t('common.tips'), t('index.accountAlreadyActivated'));
         return;
       }
 
@@ -461,13 +463,13 @@ export default function DappIndex() {
 
       // 如果仍然没有推荐人，提示用户
       if (!referrer) {
-        showToast.info('提示', '激活需要提供节点推荐人地址，请联系您的推荐人获取地址后重新激活。');
+        showToast.info(t('common.tips'), t('index.activationNeedReferrer'));
         return;
       }
 
       // 验证地址格式
       if (!/^0x[a-fA-F0-9]{40}$/.test(referrer)) {
-        showToast.error('错误', '推荐人地址格式不正确，请检查后重试。');
+        showToast.error(t('common.error'), t('index.invalidReferrerAddress'));
         return;
       }
 
@@ -482,7 +484,7 @@ export default function DappIndex() {
       // 2. 调用合约注册
       const walletInfo = await connectWallet();
       if (!walletInfo) {
-        showToast.error('错误', '钱包连接失败');
+        showToast.error(t('common.error'), t('common.walletConnectFailed'));
         return;
       }
       
@@ -490,11 +492,11 @@ export default function DappIndex() {
       const tx = await registerUserOnChain(signer, referrer);
 
       Alert.alert(
-        '交易已提交',
-        '激活交易已提交，等待区块链确认...',
+        t('index.txSubmittedTitle'),
+        t('index.activationTxSubmittedMessage'),
         [
-          { text: '确定' },
-          { text: '查看详情', onPress: () => Linking.openURL(`https://bscscan.com/tx/${tx.hash}`) }
+          { text: t('common.confirm') },
+          { text: t('common.view'), onPress: () => Linking.openURL(`https://bscscan.com/tx/${tx.hash}`) }
         ]
       );
 
@@ -524,13 +526,13 @@ export default function DappIndex() {
     } catch (error: any) {
       console.error('激活失败:', error);
       // 解析合约错误信息
-      let errorMsg = '请确保钱包已连接并有足够的手续费';
+      let errorMsg = t('index.activateDefaultError');
       if (error.message && error.message.includes('invalid referrer')) {
-        errorMsg = '推荐人必须是节点会员，请联系您的推荐人确认其是否为有效节点。';
+        errorMsg = t('index.invalidReferrerNeedNode');
       } else if (error.message) {
         errorMsg = error.message.substring(0, 100);
       }
-      showToast.error('激活失败', errorMsg);
+      showToast.error(t('index.activateFailedTitle'), errorMsg);
     } finally {
       setActivating(false);
     }
@@ -558,11 +560,13 @@ export default function DappIndex() {
     if (!walletAddress) {
       console.log('[handleSwap] 钱包未连接，返回');
       showToast.info('提示', '请先连接钱包');
+      showToast.info(t('common.tips'), t('common.pleaseConnectWallet'));
       return;
     }
     if (!sellAmount || parseFloat(sellAmount) <= 0) {
       console.log('[handleSwap] 兑换数量无效，返回');
       showToast.info('提示', '请输入兑换数量');
+      showToast.info(t('common.tips'), t('index.pleaseInputSwapAmount'));
       return;
     }
 
@@ -572,6 +576,7 @@ export default function DappIndex() {
     if (sellAmountNum > dqBalance) {
       console.log('[handleSwap] DQ 余额不足', { sellAmountNum, dqBalance });
       showToast.info('提示', 'DQ 余额不足');
+      showToast.info(t('common.tips'), t('index.insufficientDqBalance'));
       return;
     }
 
@@ -583,7 +588,7 @@ export default function DappIndex() {
         // 1. 获取钱包信息
         const walletInfo = await connectWallet();
         if (!walletInfo) {
-          showToast.error('错误', '钱包连接失败');
+          showToast.error(t('common.error'), t('common.walletConnectFailed'));
           return;
         }
 
@@ -596,18 +601,18 @@ export default function DappIndex() {
         if (parseFloat(allowance) < sellAmountNum) {
           // 需要授权
           Alert.alert(
-            '需要授权',
-            `为了兑换 DQ，需要先授权合约使用您的 DQ 代币。`,
+            t('index.needApproveTitle'),
+            t('index.needApproveMessage'),
             [
-              { text: '取消', style: 'cancel' },
+              { text: t('common.cancel'), style: 'cancel' },
               {
-                text: '授权',
+                text: t('index.approveAction'),
                 onPress: async () => {
                   try {
                     const approveTx = await approveDQToken(signer, sellAmount);
-                    Alert.alert('授权已提交', '请等待区块链确认...', [
-                      { text: '确定' },
-                      { text: '查看详情', onPress: () => Linking.openURL(`https://bscscan.com/tx/${approveTx.hash}`) }
+                    Alert.alert(t('index.approveSubmittedTitle'), t('index.waitForChainConfirm'), [
+                      { text: t('common.confirm') },
+                      { text: t('common.view'), onPress: () => Linking.openURL(`https://bscscan.com/tx/${approveTx.hash}`) }
                     ]);
 
                     // 等待授权确认
@@ -616,11 +621,11 @@ export default function DappIndex() {
                     // 授权完成后，执行兑换
                     const swapTx = await sellDQForSOL(signer, sellAmount, '0');
                     Alert.alert(
-                      '兑换已提交',
-                      `正在兑换 ${sellAmount} DQ 为 SOL...`,
+                      t('index.swapSubmittedTitle'),
+                      t('index.swappingMessage').replace('{amount}', sellAmount),
                       [
-                        { text: '确定' },
-                        { text: '查看详情', onPress: () => Linking.openURL(`https://bscscan.com/tx/${swapTx.hash}`) }
+                        { text: t('common.confirm') },
+                        { text: t('common.view'), onPress: () => Linking.openURL(`https://bscscan.com/tx/${swapTx.hash}`) }
                       ]
                     );
 
@@ -635,11 +640,11 @@ export default function DappIndex() {
                     setSolBalance(parseFloat(newSolBal).toFixed(4));
                     setDqtBalance(parseFloat(newDqBal).toFixed(2));
 
-                    showToast.success('兑换成功', `已成功兑换 ${sellAmount} DQ！`);
+                    showToast.success(t('index.swapSuccessTitle'), t('index.swapSuccessMessage').replace('{amount}', sellAmount));
                     setSellAmount('');
                   } catch (error: any) {
                     console.error('授权或兑换失败:', error);
-                    showToast.error('失败', error.message || '授权或兑换失败');
+                    showToast.error(t('common.error'), error.message || t('index.approveOrSwapFailed'));
                   } finally {
                     setSubmitting(false);
                   }
@@ -653,11 +658,11 @@ export default function DappIndex() {
         // 3. 已有足够授权，直接兑换
         const swapTx = await sellDQForSOL(signer, sellAmount, '0');
         Alert.alert(
-          '兑换已提交',
-          `正在兑换 ${sellAmount} DQ 为 SOL...`,
+          t('index.swapSubmittedTitle'),
+          t('index.swappingMessage').replace('{amount}', sellAmount),
           [
-            { text: '确定' },
-            { text: '查看详情', onPress: () => Linking.openURL(`https://bscscan.com/tx/${swapTx.hash}`) }
+            { text: t('common.confirm') },
+            { text: t('common.view'), onPress: () => Linking.openURL(`https://bscscan.com/tx/${swapTx.hash}`) }
           ]
         );
 
@@ -672,21 +677,21 @@ export default function DappIndex() {
         setSolBalance(parseFloat(newSolBal).toFixed(4));
         setDqtBalance(parseFloat(newDqBal).toFixed(2));
 
-        showToast.success('兑换成功', `已成功兑换 ${sellAmount} DQ！`);
+        showToast.success(t('index.swapSuccessTitle'), t('index.swapSuccessMessage').replace('{amount}', sellAmount));
         setSellAmount('');
       } else {
         // 模拟模式 - 调用后端 API
-        showToast.info('提示', '请在浏览器中使用钱包进行兑换');
+        showToast.info(t('common.tips'), t('index.pleaseUseWalletToSwap'));
       }
     } catch (error: any) {
       console.error('兑换失败:', error);
-      let errorMsg = error.message || '兑换失败，请重试';
+      let errorMsg = error.message || t('index.swapFailedRetry');
       if (error.message && error.message.includes('insufficient allowance')) {
-        errorMsg = 'DQ 授权不足，请重新授权';
+        errorMsg = t('index.insufficientAllowance');
       } else if (error.message && error.message.includes('insufficient balance')) {
-        errorMsg = 'DQ 余额不足';
+        errorMsg = t('index.insufficientDqBalance');
       }
-      showToast.error('错误', errorMsg);
+      showToast.error(t('common.error'), errorMsg);
     } finally {
       setSubmitting(false);
     }
@@ -695,11 +700,11 @@ export default function DappIndex() {
   // 质押操作
   const handleStake = async () => {
     if (!walletAddress) {
-      showToast.info('提示', '请先连接钱包');
+      showToast.info(t('common.tips'), t('common.pleaseConnectWallet'));
       return;
     }
     if (!stakeAmount || parseFloat(stakeAmount) <= 0) {
-      showToast.info('提示', '请输入质押数量');
+      showToast.info(t('common.tips'), t('index.pleaseInputStakeAmount'));
       return;
     }
     
@@ -711,7 +716,7 @@ export default function DappIndex() {
         // 获取钱包信息
         const walletInfo = await connectWallet();
         if (!walletInfo) {
-          showToast.error('错误', '钱包连接失败');
+          showToast.error(t('common.error'), t('common.walletConnectFailed'));
           return;
         }
 
@@ -721,11 +726,13 @@ export default function DappIndex() {
         const tx = await depositSOLOnChain(signer, stakeAmount);
         
         Alert.alert(
-          '交易已提交',
-          `质押 ${stakeAmount} SOL 成功！\n交易哈希: ${tx.hash.slice(0, 20)}...`,
+          t('index.txSubmittedTitle'),
+          t('index.stakeSubmittedMessage')
+            .replace('{amount}', stakeAmount)
+            .replace('{hash}', `${tx.hash.slice(0, 20)}...`),
           [
-            { text: '确定' },
-            { text: '查看详情', onPress: () => Linking.openURL(`https://bscscan.com/tx/${tx.hash}`) }
+            { text: t('common.confirm') },
+            { text: t('common.view'), onPress: () => Linking.openURL(`https://bscscan.com/tx/${tx.hash}`) }
           ]
         );
         setStakeAmount('');
@@ -735,15 +742,20 @@ export default function DappIndex() {
         const response = await dappApi.stake(walletAddress, stakeAmount, txHash);
         
         if (response.code === 0) {
-          showToast.success('成功', `质押 ${stakeAmount} SOL 成功！\n交易哈希: ${txHash.slice(0, 20)}...`);
+          showToast.success(
+            t('common.success'),
+            t('index.stakeSuccessMessage')
+              .replace('{amount}', stakeAmount)
+              .replace('{hash}', `${txHash.slice(0, 20)}...`)
+          );
           setStakeAmount('');
         } else {
-          showToast.error('失败', response.message || '质押失败');
+          showToast.error(t('common.error'), response.message || t('index.stakeFailed'));
         }
       }
     } catch (error: any) {
       console.error('质押失败:', error);
-      showToast.error('错误', error.message || '质押失败，请重试');
+      showToast.error(t('common.error'), error.message || t('index.stakeFailedRetry'));
     } finally {
       setSubmitting(false);
     }

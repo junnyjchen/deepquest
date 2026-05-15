@@ -18,6 +18,7 @@ import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappUserApi } from '@/utils/api';
 import { showToast } from '@/utils/toast';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 // 精确匹配参考图的颜色体系
 const BG_DARK = '#0A0A12';
@@ -41,20 +42,21 @@ interface WithdrawalRecord {
   processed_at?: string;
 }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  pending: { label: '处理中', color: '#FFA500' },
-  completed: { label: '已完成', color: '#00FF00' },
-  rejected: { label: '已拒绝', color: '#FF4444' },
+const STATUS_CONFIG: Record<string, { color: string }> = {
+  pending: { color: '#FFA500' },
+  completed: { color: '#00FF00' },
+  rejected: { color: '#FF4444' },
 };
 
-const TYPE_CONFIG: Record<string, { label: string; icon: string }> = {
-  dynamic: { label: '动态奖励', icon: 'trending-up' },
-  lp: { label: 'LP奖励', icon: 'diamond' },
-  nft: { label: 'NFT奖励', icon: 'image' },
-  team: { label: '团队奖励', icon: 'people' },
+const TYPE_CONFIG: Record<string, { icon: string }> = {
+  dynamic: { icon: 'trending-up' },
+  lp: { icon: 'diamond' },
+  nft: { icon: 'image' },
+  team: { icon: 'people' },
 };
 
 export default function DappWithdrawals() {
+  const { t, language } = useLanguage();
   const router = useSafeRouter();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -129,13 +131,15 @@ export default function DappWithdrawals() {
   // 复制交易哈希
   const handleCopyTxHash = async (txHash: string) => {
     await Clipboard.setStringAsync(txHash);
-    showToast.success('已复制', '交易哈希已复制到剪贴板');
+    showToast.success(t('profile.copied'), t('withdrawals.txHashCopied'));
   }
 
   // 格式化时间
   const formatTime = (timestamp: string) => {
     const date = new Date(timestamp);
-    return date.toLocaleString('zh-CN', {
+    // i18n 语言 code 与 BCP47 locale 不完全一致，这里做一个简单映射
+    const locale = language === 'zh-TW' ? 'zh-TW' : language === 'zh-CN' ? 'zh-CN' : language;
+    return date.toLocaleString(locale, {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -146,26 +150,40 @@ export default function DappWithdrawals() {
 
   // 渲染单条记录
   const renderItem = ({ item }: { item: WithdrawalRecord }) => {
-    const statusConfig = STATUS_CONFIG[item.status] || { label: '未知', color: TEXT_MUTED };
-    const typeConfig = TYPE_CONFIG[item.withdraw_type] || { label: item.withdraw_type, icon: 'help' };
+    const statusConfig = STATUS_CONFIG[item.status] || { color: TEXT_MUTED };
+    const statusLabelMap: Record<string, string> = {
+      pending: t('withdrawals.status.pending'),
+      completed: t('withdrawals.status.completed'),
+      rejected: t('withdrawals.status.rejected'),
+    };
+    const statusLabel = statusLabelMap[item.status] || t('common.unknown');
+
+    const typeConfig = TYPE_CONFIG[item.withdraw_type] || { icon: 'help' };
+    const typeLabelMap: Record<string, string> = {
+      dynamic: t('withdrawals.type.dynamic'),
+      lp: t('withdrawals.type.lp'),
+      nft: t('withdrawals.type.nft'),
+      team: t('withdrawals.type.team'),
+    };
+    const typeLabel = typeLabelMap[item.withdraw_type] || item.withdraw_type;
 
     return (
       <View style={styles.recordCard}>
         <View style={styles.recordHeader}>
           <View style={styles.typeTag}>
             <Ionicons name={typeConfig.icon as any} size={14} color={YELLOW} />
-            <Text style={styles.typeText}>{typeConfig.label}</Text>
+            <Text style={styles.typeText}>{typeLabel}</Text>
           </View>
           <View style={[styles.statusTag, { backgroundColor: statusConfig.color + '20' }]}>
             <Text style={[styles.statusText, { color: statusConfig.color }]}>
-              {statusConfig.label}
+              {statusLabel}
             </Text>
           </View>
         </View>
 
         <View style={styles.recordBody}>
           <View style={styles.amountRow}>
-            <Text style={styles.amountLabel}>提现金额</Text>
+            <Text style={styles.amountLabel}>{t('withdrawals.amount')}</Text>
             <Text style={styles.amountValue}>{parseFloat(item.amount).toFixed(2)} DQ</Text>
           </View>
           
@@ -173,7 +191,7 @@ export default function DappWithdrawals() {
             style={styles.txRow}
             onPress={() => handleCopyTxHash(item.tx_hash)}
           >
-            <Text style={styles.txLabel}>交易哈希</Text>
+            <Text style={styles.txLabel}>{t('withdrawals.txHash')}</Text>
             <View style={styles.txValueContainer}>
               <Text style={styles.txValue} numberOfLines={1}>
                 {item.tx_hash.slice(0, 10)}...{item.tx_hash.slice(-8)}
@@ -183,13 +201,13 @@ export default function DappWithdrawals() {
           </TouchableOpacity>
 
           <View style={styles.timeRow}>
-            <Text style={styles.timeLabel}>申请时间</Text>
+            <Text style={styles.timeLabel}>{t('withdrawals.applyTime')}</Text>
             <Text style={styles.timeValue}>{formatTime(item.created_at)}</Text>
           </View>
 
           {item.processed_at && (
             <View style={styles.timeRow}>
-              <Text style={styles.timeLabel}>处理时间</Text>
+              <Text style={styles.timeLabel}>{t('withdrawals.processTime')}</Text>
               <Text style={styles.timeValue}>{formatTime(item.processed_at)}</Text>
             </View>
           )}
@@ -202,8 +220,8 @@ export default function DappWithdrawals() {
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
       <Ionicons name="wallet-outline" size={64} color={BORDER_GRAY} />
-      <Text style={styles.emptyText}>暂无提现记录</Text>
-      <Text style={styles.emptySubtext}>您的提现记录将显示在这里</Text>
+      <Text style={styles.emptyText}>{t('withdrawals.noRecords')}</Text>
+      <Text style={styles.emptySubtext}>{t('withdrawals.noRecordsHint')}</Text>
     </View>
   );
 
@@ -213,7 +231,7 @@ export default function DappWithdrawals() {
     return (
       <View style={styles.footerLoader}>
         <ActivityIndicator size="small" color={YELLOW} />
-        <Text style={styles.footerText}>加载更多...</Text>
+        <Text style={styles.footerText}>{t('common.loadMore')}...</Text>
       </View>
     );
   };
@@ -239,7 +257,7 @@ export default function DappWithdrawals() {
         <View style={[styles.container, { backgroundColor: BG_DARK }]}>
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={YELLOW} />
-            <Text style={styles.loadingText}>加载中...</Text>
+            <Text style={styles.loadingText}>{t('common.loading')}</Text>
           </View>
         </View>
       </Screen>
@@ -252,7 +270,7 @@ export default function DappWithdrawals() {
         <View style={[styles.container, { backgroundColor: BG_DARK }]}>
           <View style={styles.emptyContainer}>
             <Ionicons name="wallet-outline" size={64} color={BORDER_GRAY} />
-            <Text style={styles.emptyText}>请先连接钱包</Text>
+            <Text style={styles.emptyText}>{t('common.pleaseConnectWallet')}</Text>
           </View>
         </View>
       </Screen>
@@ -267,7 +285,7 @@ export default function DappWithdrawals() {
         <View style={styles.statsCard}>
           <View style={styles.statsItem}>
             <Ionicons name="wallet" size={20} color={YELLOW} />
-            <Text style={styles.statsLabel}>累计提现</Text>
+            <Text style={styles.statsLabel}>{t('withdrawals.totalWithdraw')}</Text>
             <Text style={styles.statsValue}>{totalWithdraw}</Text>
             <Text style={styles.statsUnit}>DQ</Text>
           </View>

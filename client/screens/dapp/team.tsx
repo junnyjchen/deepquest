@@ -134,9 +134,9 @@ export default function DappTeam() {
     if (walletAddress) {
       const inviteCode = walletAddress;
       await Clipboard.setStringAsync(inviteCode);
-      showToast.success('复制成功', '邀请码已复制到剪贴板');
+      showToast.success(t('common.success'), t('team.inviteCodeCopied'));
     } else {
-      showToast.info('提示', '请先连接钱包');
+      showToast.info(t('common.tips'), t('common.pleaseConnectWallet'));
     }
   };
 
@@ -147,9 +147,9 @@ export default function DappTeam() {
       const origin = typeof window !== 'undefined' ? window.location.origin : 'https://app.deepquest.io';
       const inviteLink = `${origin}/invite?ref=${walletAddress}`;
       await Clipboard.setStringAsync(inviteLink);
-      showToast.success('复制成功', '邀请链接已复制到剪贴板');
+      showToast.success(t('common.success'), t('team.inviteLinkCopied'));
     } else {
-      showToast.info('提示', '请先连接钱包');
+      showToast.info(t('common.tips'), t('common.pleaseConnectWallet'));
     }
   };
 
@@ -158,7 +158,7 @@ export default function DappTeam() {
       <Screen>
         <View className="flex-1 items-center justify-center" style={{ backgroundColor: BG_DARK }}>
           <ActivityIndicator size="large" color={YELLOW} />
-          <Text className="text-white mt-4">加载中...</Text>
+          <Text className="text-white mt-4">{t('common.loading')}</Text>
         </View>
       </Screen>
     );
@@ -186,7 +186,7 @@ export default function DappTeam() {
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}>
               <Ionicons name="people" size={16} color={CYAN} />
-              <Text className="text-sm font-medium" style={{ color: CYAN }}>{teamData.totalMembers} 人</Text>
+              <Text className="text-sm font-medium" style={{ color: CYAN }}>{teamData.totalMembers} {t('common.peopleUnit')}</Text>
             </View>
           </View>
         </View>
@@ -200,13 +200,13 @@ export default function DappTeam() {
             >
               <View className="flex-row items-center gap-2">
                 <Ionicons name="person" size={14} color={TEXT_MUTED} />
-                <Text className="text-xs" style={{ color: TEXT_MUTED }}>推荐人</Text>
+                <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('team.referrer')}</Text>
                 <Text className="text-xs font-mono" style={{ color: TEXT_WHITE }}>
                   {teamData.referrerAddress?.slice(0, 10)}...{teamData.referrerAddress?.slice(-6)}
                 </Text>
               </View>
               <TouchableOpacity className="px-2 py-1 rounded" style={{ backgroundColor: 'rgba(0,240,255,0.1)' }}>
-                <Text className="text-xs" style={{ color: CYAN }}>查看</Text>
+                <Text className="text-xs" style={{ color: CYAN }}>{t('common.view')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -221,33 +221,33 @@ export default function DappTeam() {
             <View className="flex-row items-center gap-2 mb-4">
               <View className="w-1 h-5 rounded-full" style={{ backgroundColor: YELLOW }} />
               <View className="w-1 h-5 rounded-full" style={{ backgroundColor: YELLOW }} />
-              <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>团队统计</Text>
+              <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>{t('team.teamStats')}</Text>
             </View>
 
             <View className="grid grid-cols-2 gap-x-4 gap-y-4">
               <View>
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>团队总人数</Text>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('team.totalMembersLabel')}</Text>
                 <Text className="text-xl font-bold" style={{ color: CYAN }}>
                   {teamLoading ? '...' : teamData.teamCount}
                 </Text>
-                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>人</Text>
+                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>{t('common.peopleUnit')}</Text>
               </View>
               <View>
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>直推人数</Text>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('team.directMembersLabel')}</Text>
                 <Text className="text-xl font-bold" style={{ color: '#00FF88' }}>
                   {teamLoading ? '...' : teamData.directCount}
                 </Text>
-                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>人</Text>
+                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>{t('common.peopleUnit')}</Text>
               </View>
               <View>
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>团队业绩</Text>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('team.teamPerformance')}</Text>
                 <Text className="text-xl font-bold" style={{ color: YELLOW }}>
                   {teamLoading ? '...' : teamData.teamInvest}
                 </Text>
                 <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>SOL</Text>
               </View>
               <View>
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>团队奖励</Text>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('team.teamRewards')}</Text>
                 <Text className="text-xl font-bold" style={{ color: TEXT_WHITE }}>
                   {teamLoading ? '...' : teamData.referralRewards}
                 </Text>
@@ -266,19 +266,19 @@ export default function DappTeam() {
             <View className="flex-row items-center gap-2 mb-4">
               <View className="w-1 h-5 rounded-full" style={{ backgroundColor: YELLOW }} />
               <View className="w-1 h-5 rounded-full" style={{ backgroundColor: YELLOW }} />
-              <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>我的推广收益</Text>
+              <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>{t('team.myPromotionEarnings')}</Text>
             </View>
 
             <View className="grid grid-cols-2 gap-x-4 gap-y-4 mb-4">
               <View>
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>直推奖励</Text>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('team.directRewards')}</Text>
                 <Text className="text-xl font-bold" style={{ color: YELLOW }}>
                   {teamLoading ? '...' : teamData.myDirectRewards}
                 </Text>
                 <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>DQ</Text>
               </View>
               <View>
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>团队奖励</Text>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('team.teamRewards')}</Text>
                 <Text className="text-xl font-bold" style={{ color: CYAN }}>
                   {teamLoading ? '...' : teamData.myRewards}
                 </Text>
@@ -294,14 +294,14 @@ export default function DappTeam() {
               <View className="flex-row items-center justify-between mb-2">
                 <View className="flex-row items-center gap-2">
                   <Ionicons name="link" size={14} color={TEXT_MUTED} />
-                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>我的邀请码</Text>
+                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('team.myInviteCode')}</Text>
                 </View>
                 <TouchableOpacity onPress={handleCopyInviteCode}>
                   <Ionicons name="copy" size={16} color={TEXT_MUTED} />
                 </TouchableOpacity>
               </View>
               <Text className="text-base font-mono font-semibold" style={{ color: TEXT_WHITE }}>
-                {walletAddress ? `${walletAddress.slice(0, 8)}...${walletAddress.slice(-6)}` : '未连接钱包'}
+                {walletAddress ? `${walletAddress.slice(0, 8)}...${walletAddress.slice(-6)}` : t('common.walletNotConnected')}
               </Text>
             </View>
 
@@ -311,7 +311,7 @@ export default function DappTeam() {
               style={{ backgroundColor: YELLOW }}
               onPress={handleCopyInviteLink}
             >
-              <Text className="text-sm font-semibold" style={{ color: '#333' }}>复制邀请链接</Text>
+              <Text className="text-sm font-semibold" style={{ color: '#333' }}>{t('team.copyInviteLink')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -322,15 +322,15 @@ export default function DappTeam() {
             <View className="flex-row items-center gap-2">
               <View className="w-1 h-5 rounded-full" style={{ backgroundColor: YELLOW }} />
               <View className="w-1 h-5 rounded-full" style={{ backgroundColor: YELLOW }} />
-              <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>团队成员</Text>
+              <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>{t('team.members')}</Text>
             </View>
-            <Text className="text-sm" style={{ color: TEXT_MUTED }}>{teamData.teamCount} 人</Text>
+            <Text className="text-sm" style={{ color: TEXT_MUTED }}>{teamData.teamCount} {t('common.peopleUnit')}</Text>
           </View>
 
           {teamLoading ? (
             <View className="rounded-2xl p-8 items-center" style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}>
               <ActivityIndicator size="small" color={YELLOW} />
-              <Text className="text-sm mt-2" style={{ color: TEXT_MUTED }}>加载中...</Text>
+              <Text className="text-sm mt-2" style={{ color: TEXT_MUTED }}>{t('common.loading')}</Text>
             </View>
           ) : members.length === 0 ? (
             <View
@@ -338,14 +338,14 @@ export default function DappTeam() {
               style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
             >
               <Ionicons name="people-outline" size={48} color={TEXT_MUTED} />
-              <Text className="text-base mt-4" style={{ color: TEXT_MUTED }}>暂无团队成员</Text>
-              <Text className="text-sm mt-2" style={{ color: TEXT_MUTED }}>邀请好友加入，获得推广奖励</Text>
+              <Text className="text-base mt-4" style={{ color: TEXT_MUTED }}>{t('team.noMembers')}</Text>
+              <Text className="text-sm mt-2" style={{ color: TEXT_MUTED }}>{t('team.inviteFriends')}</Text>
               <TouchableOpacity
                 className="mt-4 px-6 py-2.5 rounded-xl"
                 style={{ backgroundColor: YELLOW }}
                 onPress={handleCopyInviteCode}
               >
-                <Text className="text-sm font-semibold" style={{ color: '#333' }}>立即邀请</Text>
+                <Text className="text-sm font-semibold" style={{ color: '#333' }}>{t('team.inviteNow')}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -372,9 +372,9 @@ export default function DappTeam() {
                   <View className="items-end">
                     <Text className="text-sm font-medium" style={{ color: YELLOW }}>{member.staked} SOL</Text>
                     <View className="flex-row items-center mt-0.5 gap-1">
-                      <Text className="text-xs" style={{ color: TEXT_MUTED }}>Lv.{member.level}</Text>
+                      <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('team.lv')}{member.level}</Text>
                       <Text className="text-xs" style={{ color: TEXT_MUTED }}>|</Text>
-                      <Text className="text-xs" style={{ color: CYAN }}>第{member.depth}代</Text>
+                      <Text className="text-xs" style={{ color: CYAN }}>{t('team.generationPrefix')}{member.depth}{t('team.generationSuffix')}</Text>
                     </View>
                     <Text 
                       className="text-xs mt-0.5 px-1.5 py-0.5 rounded"
@@ -383,7 +383,7 @@ export default function DappTeam() {
                         backgroundColor: member.is_activated ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'
                       }}
                     >
-                      {member.is_activated ? '已激活' : '未激活'}
+                      {member.is_activated ? t('profile.activated') : t('profile.notActivated')}
                     </Text>
                   </View>
                 </View>

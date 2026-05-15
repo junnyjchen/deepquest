@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappUserApi } from '@/utils/api';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 // 精确匹配参考图的颜色体系
 const BG_DARK = '#0A0A12';
@@ -37,6 +38,7 @@ interface StakeRecord {
 }
 
 export default function DappStakes() {
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
@@ -131,11 +133,11 @@ export default function DappStakes() {
   const getStatusText = (status: string) => {
     switch (status) {
       case 'completed':
-        return '已完成';
+        return t('stakes.completed');
       case 'pending':
-        return '处理中';
+        return t('stakes.pending');
       case 'failed':
-        return '失败';
+        return t('stakes.failed');
       default:
         return status;
     }
@@ -157,7 +159,7 @@ export default function DappStakes() {
             <Ionicons name="arrow-down" size={16} color={CYAN} />
           </View>
           <View>
-            <Text className="text-sm font-semibold" style={{ color: TEXT_WHITE }}>质押</Text>
+            <Text className="text-sm font-semibold" style={{ color: TEXT_WHITE }}>{t('stakes.stake')}</Text>
             <Text className="text-xs" style={{ color: TEXT_MUTED }}>{formatDate(item.created_at)}</Text>
           </View>
         </View>
@@ -190,7 +192,7 @@ export default function DappStakes() {
       <Screen>
         <View className="flex-1 items-center justify-center" style={{ backgroundColor: BG_DARK }}>
           <ActivityIndicator size="large" color={YELLOW} />
-          <Text className="text-white mt-4">加载中...</Text>
+          <Text className="text-white mt-4">{t('common.loading')}</Text>
         </View>
       </Screen>
     );
@@ -204,7 +206,7 @@ export default function DappStakes() {
         {!walletAddress && (
           <View className="px-4 pb-4">
             <View className="rounded-xl p-4" style={{ backgroundColor: 'rgba(255,215,0,0.1)', borderWidth: 1, borderColor: YELLOW }}>
-              <Text className="text-sm" style={{ color: YELLOW }}>请先连接钱包查看质押记录</Text>
+              <Text className="text-sm" style={{ color: YELLOW }}>{t('stakes.pleaseConnectWalletToView')}</Text>
             </View>
           </View>
         )}
@@ -213,8 +215,8 @@ export default function DappStakes() {
         {walletAddress && stakes.length === 0 ? (
           <View className="flex-1 items-center justify-center px-4">
             <Ionicons name="time-outline" size={64} color={TEXT_MUTED} />
-            <Text className="text-base mt-4" style={{ color: TEXT_MUTED }}>暂无质押记录</Text>
-            <Text className="text-sm mt-2" style={{ color: TEXT_MUTED }}>开始质押获取收益</Text>
+            <Text className="text-base mt-4" style={{ color: TEXT_MUTED }}>{t('stakes.noRecords')}</Text>
+            <Text className="text-sm mt-2" style={{ color: TEXT_MUTED }}>{t('stakes.startStaking')}</Text>
           </View>
         ) : (
           <FlatList

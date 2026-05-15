@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappApi } from '@/utils/api';
 import { showToast } from '@/utils/toast';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   connectWallet,
   buyNodeOnChain,
@@ -62,6 +63,7 @@ interface CardData {
 }
 
 export default function DappNodes() {
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -134,12 +136,12 @@ export default function DappNodes() {
   // 购买卡牌
   const handleBuyCard = async () => {
     if (!walletAddress) {
-      showToast.info('提示', '请先连接钱包');
+      showToast.info(t('common.tips'), t('common.pleaseConnectWallet'));
       return;
     }
 
     if (!selectedCard) {
-      showToast.info('提示', '请选择要购买的卡牌');
+      showToast.info(t('common.tips'), t('nodes.selectCardToBuy'));
       return;
     }
 
@@ -147,15 +149,17 @@ export default function DappNodes() {
     if (!card) return;
 
     if (card.remaining <= 0) {
-      showToast.error('提示', '该卡牌已售罄');
+      showToast.error(t('common.tips'), t('nodes.cardSoldOut'));
       return;
     }
 
     // 显示购买确认对话框
     setConfirmDialog({
       visible: true,
-      title: '确认购买',
-      message: `您确定购买 ${card.name} 吗？\n价格: ${card.price} USDT\n\n资金分配:\n- LP质押: 60%\n- 节点(NFT): 15%\n\n注意: 购买后不可退款`,
+      title: t('nodes.confirmBuyTitle'),
+      message: t('nodes.confirmBuyMessage')
+        .replace('{name}', card.name)
+        .replace('{price}', card.price),
       type: 'warning',
       onConfirm: async () => {
         setConfirmDialog({ ...confirmDialog, visible: false });
@@ -167,7 +171,7 @@ export default function DappNodes() {
                 // 1. 获取钱包信息
                 const walletInfo = await connectWallet();
                 if (!walletInfo) {
-                  showToast.error('错误', '钱包连接失败');
+                  showToast.error(t('common.error'), t('common.walletConnectFailed'));
                   return;
                 }
 
@@ -177,7 +181,12 @@ export default function DappNodes() {
                 const usdtBalance = await getUSDTBalance(walletAddress);
                 const price = parseFloat(card.price);
                 if (parseFloat(usdtBalance) < price) {
-                  showToast.error('余额不足', `您的 USDT 余额不足\n当前余额: ${parseFloat(usdtBalance).toFixed(2)} USDT\n需要: ${card.price} USDT`);
+                  showToast.error(
+                    t('nodes.insufficientBalanceTitle'),
+                    t('nodes.insufficientUsdtBalance')
+                      .replace('{balance}', parseFloat(usdtBalance).toFixed(2))
+                      .replace('{need}', card.price)
+                  );
                   return;
                 }
 
@@ -189,15 +198,15 @@ export default function DappNodes() {
                   // 需要授权 - 显示授权确认对话框
                   setConfirmDialog({
                     visible: true,
-                    title: '需要授权',
-                    message: '为了购买节点卡片，需要先授权合约使用您的 USDT。',
+                    title: t('nodes.needApproveTitle'),
+                    message: t('nodes.needApproveMessage'),
                     type: 'info',
                     onConfirm: async () => {
                       setConfirmDialog({ ...confirmDialog, visible: false });
                       (async () => {
                       try {
                         const approveTx = await approveUSDT(signer, card.price);
-                        showToast.info('授权已提交', '请等待区块链确认...');
+                        showToast.info(t('nodes.approveSubmittedTitle'), t('nodes.waitForChainConfirm'));
 
                         // 等待授权确认
                         await approveTx.wait();
@@ -208,9 +217,9 @@ export default function DappNodes() {
                         console.error('授权或购买失败:', error);
                         let errorMsg = error.message || '授权或购买失败';
                         if (error.message && error.message.includes('insufficient funds')) {
-                          errorMsg = '余额不足，请确保有足够的 BNB 支付手续费';
+                          errorMsg = t('nodes.insufficientBnbForGas');
                         }
-                        showToast.error('失败', errorMsg);
+                        showToast.error(t('common.error'), errorMsg);
                       } finally {
                         setSubmitting(false);
                       }
@@ -224,11 +233,11 @@ export default function DappNodes() {
                 await executeBuyNode(signer, selectedCard, card);
               } else {
                 // 模拟模式
-                showToast.info('提示', '请在浏览器中使用钱包进行购买');
+                showToast.info(t('common.tips'), t('common.useWalletBrowser'));
               }
             } catch (error: any) {
               console.error('购买失败:', error);
-              showToast.error('错误', error.message || '网络错误，请重试');
+              showToast.error(t('common.error'), error.message || t('common.networkErrorRetry'));
             } finally {
               setSubmitting(false);
             }
@@ -245,11 +254,11 @@ export default function DappNodes() {
       const cardTypeNum = cardTypeMap[cardType];
 
       if (!cardTypeNum) {
-        throw new Error('无效的卡片类型');
+        throw new Error(t('nodes.invalidCardType'));
       }
 
       const buyTx = await buyNodeOnChain(signer, cardTypeNum);
-      showToast.info('购买已提交', `正在购买 ${card.name}...`);
+  showToast.info(t('nodes.purchaseSubmittedTitle'), t('nodes.purchasing').replace('{name}', card.name));
 
       // 等待交易确认
       await buyTx.wait();
@@ -264,21 +273,25 @@ export default function DappNodes() {
       }
 
       showToast.success(
-        '购买成功',
-        `恭喜您成功购买 ${card.name}！\n\n权益:\n- 每日分币: ${card.reward_rate}%\n- 赠送级别: ${card.level}\n- 手续费: ${card.fee_rate}% SOL`
+        t('nodes.purchaseSuccessTitle'),
+        t('nodes.purchaseSuccessMessage')
+          .replace('{name}', card.name)
+          .replace('{rewardRate}', String(card.reward_rate))
+          .replace('{level}', String(card.level))
+          .replace('{feeRate}', String(card.fee_rate))
       );
       loadData();
       setSelectedCard(null);
       setActiveTab('mine');
     } catch (error: any) {
       console.error('链上购买失败:', error);
-      let errorMsg = error.message || '购买失败';
+      let errorMsg = error.message || t('nodes.purchaseFailedTitle');
       if (error.message && error.message.includes('insufficient funds')) {
-        errorMsg = 'USDT 余额不足或 BNB 手续费不足';
+        errorMsg = t('nodes.insufficientUsdtOrBnb');
       } else if (error.message && error.message.includes('user rejected')) {
-        errorMsg = '您取消了交易';
+        errorMsg = t('common.transactionCancelled');
       }
-      showToast.error('购买失败', errorMsg);
+      showToast.error(t('nodes.purchaseFailedTitle'), errorMsg);
       throw error;
     }
   };
@@ -576,7 +589,7 @@ export default function DappNodes() {
                         <View style={styles.myCardStatus}>
                           <View style={[styles.statusBadge, { backgroundColor: GREEN + '20' }]}>
                             <Text style={[styles.statusText, { color: GREEN }]}>
-                              {card.status === 'active' ? '已激活' : card.status}
+                              {card.status === 'active' ? t('profile.activated') : card.status}
                             </Text>
                           </View>
                         </View>

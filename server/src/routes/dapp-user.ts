@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { ethers } from 'ethers';
 import { getSupabaseClient } from '../storage/database/supabase-client';
 import { getUserInfoFromChain } from '../utils/bsc-web3';
 
@@ -155,11 +156,12 @@ router.post('/profile/:wallet_address/refresh', async (req, res) => {
       d_level: dLevel,
       direct_count: directCount,
       valid_address_count: validAddressCount,
-      // 以下字段在表里通常为 string/decimal（依项目 schema 而定），这里先存 wei 字符串，避免精度损失
-      total_invest_wei: chainUser.totalInvest || '0',
-      team_invest_wei: chainUser.teamInvest || '0',
-      energy_wei: chainUser.energy || '0',
-      pending_sol_wei: chainUser.pendingSOL || '0',
+      // users 表字段为 NUMERIC(20,9)，链上返回的是 wei(BigInt string)，这里转换为 18 位精度的十进制字符串存库
+      total_invest: Number(ethers.formatEther(chainUser.totalInvest || '0')),
+      team_invest: Number(ethers.formatEther(chainUser.teamInvest || '0')),
+      energy: Number(ethers.formatEther(chainUser.energy || '0')),
+      // 表结构里没有 pendingSOL 字段，这里先映射到 pending_rewards（同样是 NUMERIC），避免数据丢失
+      pending_rewards: Number(ethers.formatEther(chainUser.pendingSOL || '0')),
       updated_at: new Date().toISOString(),
     };
 
