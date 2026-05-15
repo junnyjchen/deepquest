@@ -26,8 +26,9 @@ const DQ_ABI = [
   "function register(address _referrer) external",
   // Register 事件
   "event Register(address indexed user, address indexed referrer)",
-  // getUser 函数 - 返回7个值（无 lpShares 字段）
-  "function getUser(address) view returns (address, uint256, uint8, uint256, uint256, uint256, uint8)"
+  // getUser 函数 - 返回9个值（与 assets/DQMining.sol 对齐）
+  // (referrer, directCount, level, totalInvest, teamInvest, energy, dLevel, validAddressCount, pendingSOL)
+  "function getUser(address) view returns (address, uint256, uint8, uint256, uint256, uint256, uint8, uint256, uint256)"
 ];
 
 // 复用 Provider，避免重复创建连接
@@ -500,7 +501,7 @@ export async function getUserInfoFromChain(walletAddress: string) {
       `getUser(${walletAddress})`
     );
     
-    // getUser 返回数组: [referrer, directCount, level, totalInvest, teamInvest, energy, dLevel]
+    // getUser 返回数组: [referrer, directCount, level, totalInvest, teamInvest, energy, dLevel, validAddressCount, pendingSOL]
     return {
       referrer: userInfo[0],
       directCount: userInfo[1]?.toString() || '0',
@@ -509,6 +510,8 @@ export async function getUserInfoFromChain(walletAddress: string) {
       teamInvest: userInfo[4]?.toString() || '0',
       energy: userInfo[5]?.toString() || '0',
       dLevel: userInfo[6]?.toString() || '0',
+      validAddressCount: userInfo[7]?.toString() || '0',
+      pendingSOL: userInfo[8]?.toString() || '0',
     };
   } catch (error) {
     console.error(`[BSC] 获取用户信息失败:`, error);

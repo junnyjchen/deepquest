@@ -108,22 +108,16 @@ export default function DappProfile() {
         const dLevelNum = typeof chainUser?.dLevel === 'number'
           ? chainUser.dLevel
           : Number(String(prev.dLevel).replace(/^D/i, '')) || 0;
+        
+        //如果链上等级和后端接口等级不一致，异步更新后端接口等级
+        if (sLevelNum !== Number(String(prev.level).replace(/^S/i, '')) || dLevelNum !== Number(String(prev.dLevel).replace(/^D/i, ''))) {
+          // 这里可以调用一个后端接口来更新用户等级，示例：
+          dappUserApi.refreshProfileFromChain(address);
+        }
 
         next.level = `S${sLevelNum}`;
         next.dLevel = `D${dLevelNum}`;
 
-        // 这里 UI 文案写的是“SOL余额/质押SOL/…”，但链上实际：
-        // - bnbBalance: BNB 原生余额
-        // - solTokenBalance: SOL(ERC20) 余额（当前 UI 还没有字段承载，这里先用 stakeDays 之外的字段不动）
-        // 如需展示 SOL Token 余额，建议新增 userData.solBalance 字段。
-
-      // 待领取收益：这里先把定义为「LP 待领取 DQ + D 等级待领取 DQ」
-        // const pendingDQ = (parseFloat(lp.pendingReward || '0')).toString();
-        // next.pendingRewards = pendingDQ;
-
-      // 同步链上 getUser 返回的 pendingSOL（动态奖励待提现余额）。
-      // 说明：pendingSOL 在链上既可以通过 getUser 返回，也可以通过 getPendingSOL 单独读。
-      // 我们优先使用 getUser 返回值；如果没取到，则 fallback 到单独查询结果。
       const pendingSolOnChain = chainUser?.pendingSOL;
       void pendingSolOnChain;
 
@@ -191,8 +185,8 @@ export default function DappProfile() {
           dqtBalance: '0.0', // 需要从链上获取
           teamSize: response.data.team_count || 0,
           directCount: response.data.direct_count || 0,
-          level: 'S0', // 默认等级
-          dLevel: 'D0', // 默认 D 等级
+          level: 'S' + (response.data.level || 0),
+          dLevel: 'D' + (response.data.d_level || 0),
           isActivated: isActivated, // 优先使用本地激活状态
           stakeDays: 0, // 需要计算
           totalInvest: response.data.total_invest || '0.0',

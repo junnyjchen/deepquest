@@ -571,6 +571,12 @@ export const dappUserApi = {
   // 获取用户资料
   getProfile: (wallet_address: string) =>
     request<any>(`/api/v1/dapp/user/profile/${wallet_address}`),
+
+  // 从链上刷新用户资料（会写回后端 users 表）
+  refreshProfileFromChain: (wallet_address: string) =>
+    request<any>(`/api/v1/dapp/user/profile/${wallet_address}/refresh`, {
+      method: 'POST',
+    }),
   
   // 获取质押记录
   getStakes: (wallet_address: string, page?: number, limit?: number) => {

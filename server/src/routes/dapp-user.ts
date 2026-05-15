@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getSupabaseClient } from '../storage/database/supabase-client';
+import { getUserInfoFromChain } from '../utils/bsc-web3';
 
 const supabase = getSupabaseClient();
 const router = Router();
@@ -108,6 +109,85 @@ router.get('/profile/:wallet_address', async (req, res) => {
     res.status(500).json({
       code: 500,
       message: '服务器错误'
+    });
+  }
+});
+
+// 从链上刷新用户信息并写回后端
+// 目的：以链上数据为准，更新 users 表中与链上强相关字段，供 App/管理后台统一使用。
+router.post('/profile/:wallet_address/refresh', async (req, res) => {
+  try {
+    const { wallet_address } = req.params;
+
+    const normalized = wallet_address.toLowerCase();
+
+    // 先确认用户存在（避免无意义写入）
+    const { data: existing, error: existingError } = await supabase
+      .from('users')
+      .select('wallet_address')
+      .eq('wallet_address', normalized)
+      .single();
+
+    if (existingError || !existing) {
+      return res.status(404).json({
+        code: 404,
+        message: '用户不存在',
+      });
+    }
+
+    const chainUser = await getUserInfoFromChain(wallet_address);
+    if (!chainUser) {
+      return res.status(502).json({
+        code: 502,
+        message: '链上查询失败',
+      });
+    }
+
+    // 链上返回是字符串（BigInt string），这里做安全转换
+    const level = Number(chainUser.level || '0');
+    const dLevel = Number(chainUser.dLevel || '0');
+    const directCount = Number(chainUser.directCount || '0');
+    const validAddressCount = Number(chainUser.validAddressCount || '0');
+
+    const patch: Record<string, any> = {
+      referrer_address: String(chainUser.referrer || '').toLowerCase(),
+      level,
+      d_level: dLevel,
+      direct_count: directCount,
+      valid_address_count: validAddressCount,
+      // 以下字段在表里通常为 string/decimal（依项目 schema 而定），这里先存 wei 字符串，避免精度损失
+      total_invest_wei: chainUser.totalInvest || '0',
+      team_invest_wei: chainUser.teamInvest || '0',
+      energy_wei: chainUser.energy || '0',
+      pending_sol_wei: chainUser.pendingSOL || '0',
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from('users')
+      .update(patch)
+      .eq('wallet_address', normalized)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('刷新用户链上信息写库失败:', error);
+      return res.status(500).json({
+        code: 500,
+        message: '刷新用户信息失败',
+      });
+    }
+
+    return res.json({
+      code: 0,
+      data,
+      message: '刷新成功',
+    });
+  } catch (error) {
+    console.error('刷新用户链上信息失败:', error);
+    return res.status(500).json({
+      code: 500,
+      message: '服务器错误',
     });
   }
 });
