@@ -96,7 +96,7 @@ export default function DappProfile() {
           // getLPReward(address),
           getUserFromChain(address),
         ]);
-
+      console.log(chainUser);
       // 合并：链上字段优先覆盖（实时）
       setUserData(prev => {
         const next = { ...prev };

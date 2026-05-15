@@ -184,14 +184,14 @@ export const getUserFromChain = async (userAddress: string) => {
       pendingSOL,
     ] = await contract.getUser(userAddress);
 
-    const owner = await contract.owner();
+    // const owner = await contract.owner();
 
     // 未注册判定：referrer=0 且 不是 owner
-    const isRegistered =
-      referrer !== ethers.ZeroAddress || userAddress.toLowerCase() === owner.toLowerCase();
+    // const isRegistered =
+    //   referrer !== ethers.ZeroAddress;
 
-    if (!isRegistered) return null;
-
+    // if (!isRegistered) return null;
+    
     return {
       referrer,
       directCount: Number(directCount),
