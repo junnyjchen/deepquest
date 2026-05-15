@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { dappApi } from '@/utils/api';
+import { dappApi , dappUserApi } from '@/utils/api';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { showToast } from '@/utils/toast';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -303,23 +303,23 @@ export default function DappIndex() {
 
       
       // 3. 先检查本地激活状态（优先使用本地状态）
-      const localActivated = await loadLocalActivation(address);
-      if (localActivated) {
-        console.log('[DApp] 本地已激活，使用本地激活状态');
-        setIsOnChainRegistered(true);
-        // 显示成功提示
-        showToast.success('成功', `钱包已连接: ${address.slice(0, 10)}...`);
-        showToast.success(t('common.success'), t('common.walletConnected').replace('{addr}', `${address.slice(0, 10)}...`));
-        return;
-      }
+      // const localActivated = await loadLocalActivation(address);
+      // if (localActivated) {
+      //   console.log('[DApp] 本地已激活，使用本地激活状态');
+      //   setIsOnChainRegistered(true);
+      //   // 显示成功提示
+      //   showToast.success('成功', `钱包已连接: ${address.slice(0, 10)}...`);
+      //   showToast.success(t('common.success'), t('common.walletConnected').replace('{addr}', `${address.slice(0, 10)}...`));
+      //   return;   
+      // }
       
       // 4. 检查后端返回的激活状态
-      if (userData?.data?.is_activated) {
-        // 后端已激活，同步到本地并设置已激活
-        console.log('[DApp] 后端已激活，同步激活状态到本地');
-        setIsOnChainRegistered(true);
-        await saveLocalActivation(address, true);
-      } else {
+      // if (userData?.data?.is_activated) {
+      //   // 后端已激活，同步到本地并设置已激活
+      //   console.log('[DApp] 后端已激活，同步激活状态到本地');
+      //   setIsOnChainRegistered(true);
+      //   await saveLocalActivation(address, true);
+      // } else {
         // 后端未激活，再查询链上状态
         const registered = await isUserRegisteredOnChain(address);
         console.log('[DApp] 链上激活状态:', registered);
@@ -329,7 +329,7 @@ export default function DappIndex() {
           setIsOnChainRegistered(true);
           await saveLocalActivation(address, true);
           try {
-            await dappApi.register(address, '', '');
+            await dappApi.refreshProfileFromChain(address);
             console.log('[DApp] 激活状态同步到后端成功');
           } catch (err) {
             console.log('[DApp] 同步状态跳过:', err);
@@ -337,19 +337,8 @@ export default function DappIndex() {
         } else {
           // 链上也未激活，提示用户激活
           setIsOnChainRegistered(false);
-          Alert.alert(
-            t('index.accountNotActivatedTitle'),
-            t('index.accountNotActivatedMessage'),
-            [
-              { text: t('common.cancel'), style: 'cancel' },
-              { 
-                text: t('index.activateNow'), 
-                onPress: () => handleActivateClick() 
-              }
-            ]
-          );
         }
-      }
+      // }
     } catch (error: any) {
       console.error('连接钱包失败:', error);
       
@@ -363,24 +352,6 @@ export default function DappIndex() {
       } else {
         showToast.error(t('common.error'), error.message || t('common.walletConnectFailed'));
       }
-    }
-  };
-  
-  // 同步用户信息：连接钱包时检查注册状态
-  const syncUserInfo = async (address: string) => {
-    try {
-      // 检查链上注册状态
-      const registered = await isUserRegisteredOnChain(address);
-      setIsOnChainRegistered(registered);
-      console.log('[DApp] 钱包已连接，注册状态:', registered);
-
-      // 已注册则获取用户信息
-      if (registered) {
-        const userInfo = await dappApi.getUserInfo(address);
-        console.log('[DApp] 用户已注册，获取信息:', userInfo);
-      }
-    } catch (error: any) {
-      console.error('[DApp] 同步用户信息失败:', error);
     }
   };
 

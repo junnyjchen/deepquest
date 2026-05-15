@@ -406,7 +406,8 @@ export const nodeApplicationsApi = {
 export const dappApi = {
   // 获取平台统计数据
   getStats: () => request<any>('/api/v1/dapp/stats'),
-  
+  refreshProfileFromChain: (wallet_address: string) =>
+   dappUserApi.refreshProfileFromChain(wallet_address), // 直接调用用户API的链上同步方法
   // ===== 注册与入金 =====
   // 检查钱包注册状态
   checkRegistered: (wallet_address: string) =>
