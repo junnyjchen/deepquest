@@ -19,6 +19,15 @@ import * as Crypto from 'expo-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappUserApi } from '@/utils/api';
 import { showToast } from '@/utils/toast';
+import {
+  getBNBBalance,
+  getDQTokenBalance,
+  getSOLTokenBalance,
+  getPendingSOL,
+  getLPReward,
+  getDLevelReward,
+  getUserFromChain,
+} from '@/utils/web3';
 
 // 精确匹配参考图的颜色体系
 const BG_DARK = '#0A0A12';
@@ -54,6 +63,7 @@ export default function DappProfile() {
   const [loading, setLoading] = useState(true);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [userLoading, setUserLoading] = useState(false);
+  const [chainLoading, setChainLoading] = useState(false);
 
   // 用户数据
   const [userData, setUserData] = useState({
@@ -64,39 +74,89 @@ export default function DappProfile() {
     dqtBalance: '0.0',
     teamSize: 0,
     directCount: 0,
-    level: 1,
+    level: 'S0',
     isActivated: false,
     stakeDays: 0,
     totalInvest: '0.0',
     teamInvest: '0.0',
     totalReward: '0.0',
     referrerAddress: null as string | null,
+    dLevel: 'D0',
   });
 
-  useFocusEffect(
-    useCallback(() => {
-      const init = async () => {
-        try {
-          // 加载保存的钱包地址
-          const savedWallet = await AsyncStorage.getItem(WALLET_STORAGE_KEY);
-          if (savedWallet) {
-            setWalletAddress(savedWallet);
-            // 获取用户数据
-            await fetchUserData(savedWallet);
-          }
-        } catch (error) {
-          console.error('初始化失败:', error);
-        } finally {
-          setLoading(false);
+  const fetchChainData = useCallback(async (address: string) => {
+    // 链上数据属于“实时态”，允许失败：失败时只返回局部字段，不影响后端数据展示。
+    try {
+      setChainLoading(true);
+
+      const [solTokenBalance, dqtBalance, lp, chainUser] =
+        await Promise.all([
+          getDQTokenBalance(address),
+          getSOLTokenBalance(address),
+          getLPReward(address),
+          getUserFromChain(address),
+        ]);
+
+      // 合并：链上字段优先覆盖（实时）
+      setUserData(prev => {
+        const next = { ...prev };
+        next.bnbBalance = solTokenBalance;
+        next.dqtBalance = dqtBalance;
+        next.level = 'S' + (chainUser?.level ?? prev.level);
+        next.dLevel = 'D' + (chainUser?.dLevel ?? prev.dLevel);
+
+        // 这里 UI 文案写的是“SOL余额/质押SOL/…”，但链上实际：
+        // - bnbBalance: BNB 原生余额
+        // - solTokenBalance: SOL(ERC20) 余额（当前 UI 还没有字段承载，这里先用 stakeDays 之外的字段不动）
+        // 如需展示 SOL Token 余额，建议新增 userData.solBalance 字段。
+
+      // 待领取收益：这里先把定义为「LP 待领取 DQ + D 等级待领取 DQ」
+        const pendingDQ = (parseFloat(lp.pendingReward || '0')).toString();
+        next.pendingRewards = pendingDQ;
+
+      // 同步链上 getUser 返回的 pendingSOL（动态奖励待提现余额）。
+      // 说明：pendingSOL 在链上既可以通过 getUser 返回，也可以通过 getPendingSOL 单独读。
+      // 我们优先使用 getUser 返回值；如果没取到，则 fallback 到单独查询结果。
+      const pendingSolOnChain = chainUser?.pendingSOL;
+      void pendingSolOnChain;
+
+        // stakedAmount：优先用链上 totalInvest（如果能取到）
+        if (chainUser?.totalInvest) {
+          next.stakedAmount = chainUser.totalInvest;
+          next.totalInvest = chainUser.totalInvest;
         }
-      };
-      
-      init();
-    }, [])
-  );
+
+        // 推荐人地址：链上优先
+        if (chainUser?.referrer && chainUser.referrer !== '0x0000000000000000000000000000000000000000') {
+          next.referrerAddress = chainUser.referrer;
+        }
+
+        // 直推人数/等级：链上可作为更可信来源
+        if (typeof chainUser?.directCount === 'number') next.directCount = chainUser.directCount;
+
+  // validAddressCount：线下“有入金地址数量”（合约字段）
+  // 你如果希望前端把它显示成 teamSize（更贴近合约口径），可以打开下面这行。
+  // if (typeof chainUser?.validAddressCount === 'number') next.teamSize = chainUser.validAddressCount;
+
+        // 激活状态：链上存在投资即可视为激活
+        const activatedOnChain =
+          (chainUser?.totalInvest && parseFloat(chainUser.totalInvest) > 0) ||
+          false;
+        next.isActivated = prev.isActivated || activatedOnChain;
+
+  // 备注：solTokenBalance、pendingSol 当前没有直接展示在 UI；如果你希望展示，可扩展 userData 结构。
+        void solTokenBalance;
+        return next;
+      });
+    } catch (error) {
+      console.error('[Profile] 获取链上数据失败:', error);
+    } finally {
+      setChainLoading(false);
+    }
+  }, []);
 
   // 获取用户数据
-  const fetchUserData = async (address: string) => {
+  const fetchUserData = useCallback(async (address: string) => {
     try {
       setUserLoading(true);
       
@@ -110,6 +170,10 @@ export default function DappProfile() {
       
       const isActivated = localActivated || response?.data?.is_activated || parseFloat(response?.data?.total_invest || '0') > 0;
       console.log('[Profile] final isActivated:', isActivated);
+
+      // 从链上补充实时信息（不阻塞后端接口渲染）
+      // 注意：这里不 await，避免接口慢导致 UI 卡顿；链上数据会通过 fetchChainData 合并进来。
+      fetchChainData(address);
       
       if (response.code === 0 && response.data) {
         setUserData({
@@ -120,7 +184,8 @@ export default function DappProfile() {
           dqtBalance: '0.0', // 需要从链上获取
           teamSize: response.data.team_count || 0,
           directCount: response.data.direct_count || 0,
-          level: response.data.level || 1,
+          level: 'S' + (response.data.level || 1),
+          dLevel: 'D' + (response.data.d_level || 0),
           isActivated: isActivated, // 优先使用本地激活状态
           stakeDays: 0, // 需要计算
           totalInvest: response.data.total_invest || '0.0',
@@ -134,7 +199,52 @@ export default function DappProfile() {
     } finally {
       setUserLoading(false);
     }
-  };
+  }, [fetchChainData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const init = async () => {
+        try {
+          // 加载保存的钱包地址
+          const savedWallet = await AsyncStorage.getItem(WALLET_STORAGE_KEY);
+          if (savedWallet) {
+            setWalletAddress(savedWallet);
+            // 获取用户数据
+            await fetchUserData(savedWallet);
+            // 同步拉取链上实时数据
+            await fetchChainData(savedWallet);
+          }
+        } catch (error) {
+          console.error('初始化失败:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      init();
+    }, [fetchChainData, fetchUserData])
+  );
+
+  // 聚焦页面后，定时刷新链上数据（轻量，避免频繁打 RPC）
+  useFocusEffect(
+    useCallback(() => {
+      if (!walletAddress) return;
+
+      // let timer: ReturnType<typeof setInterval> | null = null;
+
+      // 先触发一次
+      fetchChainData(walletAddress);
+
+      // 每 20 秒刷新一次（可按需调整）
+      // timer = setInterval(() => {
+      //   fetchChainData(walletAddress);
+      // }, 20_000);
+
+      // return () => {
+      //   if (timer) clearInterval(timer);
+      // };
+    }, [walletAddress, fetchChainData])
+  );
 
   // 生成随机钱包地址（模拟）
   const generateMockWallet = async () => {
@@ -293,7 +403,7 @@ export default function DappProfile() {
                   </Text>
                   <TouchableOpacity onPress={handleCopyAddress} disabled={!walletAddress}>
                     <Text className="text-sm mt-1 font-mono" style={{ color: TEXT_MUTED }}>
-                      {userLoading ? '加载中...' : (walletAddress ? `${walletAddress.slice(0, 8)}...${walletAddress.slice(-6)}` : '点击连接钱包')}
+                      {(userLoading || chainLoading) ? '加载中...' : (walletAddress ? `${walletAddress.slice(0, 8)}...${walletAddress.slice(-6)}` : '点击连接钱包')}
                     </Text>
                   </TouchableOpacity>
                 </View>

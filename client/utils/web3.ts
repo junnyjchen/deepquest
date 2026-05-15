@@ -26,7 +26,8 @@ export const getBrowserProvider = (): ethers.BrowserProvider | null => {
     console.log('[Web3] 非浏览器环境');
     return null;
   }
-  return new ethers.BrowserProvider(window.ethereum);
+  // isBrowser 已保证 window.ethereum 存在，这里显式断言以满足 ethers 的 Eip1193Provider 类型要求
+  return new ethers.BrowserProvider(window.ethereum as unknown as ethers.Eip1193Provider);
 };
 
 /**
@@ -169,8 +170,19 @@ export const getUserFromChain = async (userAddress: string) => {
   const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
 
   try {
-    const [referrer, directCount, level, totalInvest, teamInvest, energy, lpShares, dLevel] =
-      await contract.getUser(userAddress);
+    // 合约 DQMining.getUser 最新返回值（务必与 assets/DQMining.sol 对齐）：
+    // (referrer, directCount, level, totalInvest, teamInvest, energy, dLevel, validAddressCount, pendingSOL)
+    const [
+      referrer,
+      directCount,
+      level,
+      totalInvest,
+      teamInvest,
+      energy,
+      dLevel,
+      validAddressCount,
+      pendingSOL,
+    ] = await contract.getUser(userAddress);
 
     const owner = await contract.owner();
 
@@ -187,8 +199,9 @@ export const getUserFromChain = async (userAddress: string) => {
       totalInvest: ethers.formatEther(totalInvest),
       teamInvest: ethers.formatEther(teamInvest),
       energy: ethers.formatEther(energy),
-      lpShares: ethers.formatEther(lpShares),
       dLevel: Number(dLevel),
+      validAddressCount: Number(validAddressCount),
+      pendingSOL: ethers.formatEther(pendingSOL),
     };
   } catch (e) {
     // 如果调用本身 revert / ABI 不匹配，也返回 null（但建议日志打出来）
