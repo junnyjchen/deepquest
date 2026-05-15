@@ -191,8 +191,8 @@ export default function DappProfile() {
           dqtBalance: '0.0', // 需要从链上获取
           teamSize: response.data.team_count || 0,
           directCount: response.data.direct_count || 0,
-          level: 'S' + (response.data.level || 1),
-          dLevel: 'D' + (response.data.d_level || 0),
+          level: 'S0', // 默认等级
+          dLevel: 'D0', // 默认 D 等级
           isActivated: isActivated, // 优先使用本地激活状态
           stakeDays: 0, // 需要计算
           totalInvest: response.data.total_invest || '0.0',
