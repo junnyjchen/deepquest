@@ -187,10 +187,9 @@ export const getUserFromChain = async (userAddress: string) => {
     // const owner = await contract.owner();
 
     // 未注册判定：referrer=0 且 不是 owner
-    // const isRegistered =
-    //   referrer !== ethers.ZeroAddress;
+    const isRegistered = referrer !== ethers.ZeroAddress;
 
-    // if (!isRegistered) return null;
+    if (!isRegistered) return null;
     
     return {
       referrer,

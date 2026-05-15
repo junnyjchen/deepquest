@@ -8,23 +8,9 @@
  * ABI 来源：assets/DQMining.sol (基于合约源码生成)
  */
 
-export const DQ_CONTRACT_ADDRESS = '0x732B7f9EF6381120458D49CF4aaaF9a4B780c008';
-export const DQSTAKE_CONTRACT_ADDRESS = '0x8F0fb2E3Dd7564C8fCa82050934A576Ecdf74006';
+export const DQ_CONTRACT_ADDRESS = '0xF5E7b93059A9EEa53191CC0ab9326cA3D87fF6a6';
+export const DQSTAKE_CONTRACT_ADDRESS = '0x29b5F72f977Fc989eC4ca8533177529315C53990';
 
-/**
- * DQ Stake 质押合约 ABI（完整定义，基于源码生成）
- * 合约地址: 0x666197e39dB9bA342De02aE969Ea76EdE6709823
- * 
- * 核心功能：
- * 1. LP 流动性挖矿奖励 (claimLP, addLP, rmLP)
- * 2. NFT 分红 (claimNft, distNFT)
- * 3. 团队奖励/分红 (claimD, distDTeam)
- * 4. 手续费分红 (claimFee)
- * 5. 合伙人奖励 (claimPdq, claimPbnb)
- * 6. 质押挖矿 (stake, unstake, clmS)
- * 7. D等级分红 (registerDLevel, claimDLevelReward, getDLevelReward)
- * 8. 销毁功能 (addPendingBurn, executeBurn)
- */
 export const DQSTAKE_ABI = [
   { "inputs": [], "stateMutability": "nonpayable", "type": "constructor" },
   { "anonymous": false, "inputs": [{ "indexed": true, "internalType": "address", "name": "u", "type": "address" }, { "indexed": false, "internalType": "uint256", "name": "a", "type": "uint256" }], "name": "ClaimLP", "type": "event" },
@@ -154,37 +140,6 @@ export const DQSTAKE_ABI = [
   { "stateMutability": "payable", "type": "receive" }
 ];
 
-/**
- * DQ 主合约 ABI（完整定义，基于源码生成）
- * 合约地址: 0x732B7f9EF6381120458D49CF4aaaF9a4B780c008
- * 
- * 核心功能：
- * 1. 用户注册与推荐关系管理 (register)
- * 2. SOL 充值与投资管理 (depositSOL)
- * 3. DQ Token 交易（买入/卖出）(swapSOLForDQ, sellDQForSOL)
- * 4. 流动性管理（添加/移除 LP）(addLiquidityForUser)
- * 5. 节点购买与升级 (buyNode)
- * 6. 收益分配与提取 (claimReward, claimLP, claimNft, claimDTeam, claimFee)
- * 7. 质押挖矿 (stakeDQ, unstakeDQ, claimStakeReward)
- * 
- * 主要事件：
- * - Register: 用户注册事件
- * - Deposit: 用户充值事件
- * - SwapSOLForDQ: SOL 兑换 DQ 事件
- * - SwapAndAddLP: 添加流动性事件
- * - SellDQ: 卖出 DQ 事件
- * - ClaimReward: 领取奖励事件
- * - DLevelUpdated: D等级更新事件
- * - MgrReward: 管理奖发放事件
- * 
- * 关键查询函数：
- * - getUser(address): 获取用户信息，返回 9 个值
- *   [referrer, directCount, level, totalInvest, teamInvest, energy, dLevel, validAddressCount, pendingSOL]
- * - allUsers(uint256): 通过索引获取用户地址
- * - getTeamSize(address): 获取团队人数
- * - getDailyLimit(): 获取每日限额
- * - getPendingSOL(address): 获取待领取SOL
- */
 export const DQ_ABI = [
   { "inputs": [], "stateMutability": "nonpayable", "type": "constructor" },
   { "anonymous": false, "inputs": [{ "indexed": true, "internalType": "address", "name": "u", "type": "address" }, { "indexed": false, "internalType": "uint256", "name": "a", "type": "uint256" }], "name": "ClaimReward", "type": "event" },

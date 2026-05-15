@@ -32,6 +32,8 @@ export default function ConfirmDialog({
   onCancel,
   type = 'info',
 }: ConfirmDialogProps) {
+  const showCancelButton = Boolean(cancelText?.trim());
+
   const getTypeColor = () => {
     switch (type) {
       case 'warning': return YELLOW;
@@ -70,13 +72,15 @@ export default function ConfirmDialog({
 
           {/* 按钮组 */}
           <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              style={[styles.button, styles.cancelButton]}
-              onPress={onCancel}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.cancelButtonText}>{cancelText}</Text>
-            </TouchableOpacity>
+            {showCancelButton ? (
+              <TouchableOpacity
+                style={[styles.button, styles.cancelButton]}
+                onPress={onCancel}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.cancelButtonText}>{cancelText}</Text>
+              </TouchableOpacity>
+            ) : null}
 
             <TouchableOpacity
               style={[styles.button, styles.confirmButton, { backgroundColor: getTypeColor() }]}

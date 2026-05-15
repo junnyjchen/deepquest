@@ -25,6 +25,8 @@ export default {
     confirmAction: 'Xác nhận',
     view: 'Xem',
     unknown: 'Không rõ',
+    initFailed: 'Khởi tạo thất bại',
+    missingRequiredInfo: 'Thiếu thông tin bắt buộc',
   },
 
   index: {
@@ -65,6 +67,18 @@ export default {
     stakeSuccessMessage: 'Stake {amount} SOL thành công!\nTx: {hash}',
     stakeFailed: 'Stake thất bại',
     stakeFailedRetry: 'Stake thất bại, vui lòng thử lại',
+  },
+
+  invite: {
+    referrerNotFound: 'Không tìm thấy người giới thiệu hoặc không hợp lệ',
+    validateReferrerFailed: 'Xác thực người giới thiệu thất bại',
+    pleaseConnectWalletThenBind: 'Vui lòng kết nối ví trước, sau đó mới liên kết quan hệ giới thiệu',
+    invalidInviteLink: 'Liên kết mời không hợp lệ',
+    bindSuccessTitle: 'Liên kết thành công',
+    bindSuccessMessage: 'Đã liên kết quan hệ giới thiệu thành công',
+    backHome: 'Về trang chủ',
+    bindFailedTitle: 'Liên kết thất bại',
+    bindFailedMessage: 'Liên kết quan hệ giới thiệu thất bại, vui lòng thử lại sau',
   },
 
   nodesNew: {

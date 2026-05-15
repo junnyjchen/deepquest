@@ -25,6 +25,8 @@ export default {
     confirmAction: 'Confirm',
     view: 'View',
     unknown: 'Unknown',
+    initFailed: 'Initialization failed',
+    missingRequiredInfo: 'Missing required information',
   },
 
   index: {
@@ -70,6 +72,18 @@ export default {
     stakeSuccessMessage: 'Staked {amount} SOL successfully!\nTx: {hash}',
     stakeFailed: 'Staking failed',
     stakeFailedRetry: 'Staking failed, please try again',
+  },
+
+  invite: {
+    referrerNotFound: 'Referrer not found or invalid',
+    validateReferrerFailed: 'Failed to validate referrer',
+    pleaseConnectWalletThenBind: 'Please connect your wallet first, then bind the referrer.',
+    invalidInviteLink: 'Invalid invite link',
+    bindSuccessTitle: 'Binding Successful',
+    bindSuccessMessage: 'Referrer has been bound successfully.',
+    backHome: 'Back to Home',
+    bindFailedTitle: 'Binding Failed',
+    bindFailedMessage: 'Failed to bind referrer. Please try again later.',
   },
 
   nodesNew: {

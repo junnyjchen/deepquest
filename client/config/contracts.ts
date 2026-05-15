@@ -2,8 +2,8 @@
  * DeepQuest 合约配置
  * 
  * 合约地址（最新）：
- * 主合约（DQMining）：0x732B7f9EF6381120458D49CF4aaaF9a4B780c008
- * 质押合约（DQMiningStake）：0x8F0fb2E3Dd7564C8fCa82050934A576Ecdf74006
+ * 主合约（DQMining）：0xF5E7b93059A9EEa53191CC0ab9326cA3D87fF6a6
+ * 质押合约（DQMiningStake）：0x29b5F72f977Fc989eC4ca8533177529315C53990
  * 
  * ABI 来源：assets/DQMining.sol (基于合约源码生成)
  */
@@ -11,11 +11,11 @@
 // 主合约地址
 export const CONTRACT_ADDRESSES = {
   DQPROJECT: {
-    address: '0x732B7f9EF6381120458D49CF4aaaF9a4B780c008',
+    address: '0xF5E7b93059A9EEa53191CC0ab9326cA3D87fF6a6',
     name: 'DQProject'
   },
   DQSTAKE: {
-    address: '0x8F0fb2E3Dd7564C8fCa82050934A576Ecdf74006',
+    address: '0x29b5F72f977Fc989eC4ca8533177529315C53990',
     name: 'DQMiningStake'
   },
   DQTOKEN: {
@@ -60,6 +60,10 @@ export const DQPROJECT_ABI = [
   { "anonymous": false, "inputs": [{ "indexed": false, "internalType": "uint256", "name": "oldPhase", "type": "uint256" }, { "indexed": false, "internalType": "uint256", "name": "newPhase", "type": "uint256" }, { "indexed": false, "internalType": "uint256", "name": "newLimit", "type": "uint256" }], "name": "PhaseAdvanced", "type": "event" },
   { "anonymous": false, "inputs": [{ "indexed": true, "internalType": "address", "name": "user", "type": "address" }, { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }, { "indexed": false, "internalType": "uint256", "name": "fee", "type": "uint256" }], "name": "ClaimReward", "type": "event" },
   { "anonymous": false, "inputs": [{ "indexed": true, "internalType": "address", "name": "partner", "type": "address" }, { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }], "name": "ClaimPartnerSOL", "type": "event" },
+  { "anonymous": false, "inputs": [{ "indexed": true, "internalType": "address", "name": "partner", "type": "address" }, { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }], "name": "ClaimPartnerBNB", "type": "event" },
+  { "anonymous": false, "inputs": [{ "indexed": true, "internalType": "address", "name": "user", "type": "address" }, { "indexed": false, "internalType": "uint8", "name": "dLevel", "type": "uint8" }, { "indexed": false, "internalType": "uint256", "name": "validCount", "type": "uint256" }], "name": "DLevelUpdated", "type": "event" },
+  { "anonymous": false, "inputs": [{ "indexed": true, "internalType": "address", "name": "u", "type": "address" }, { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }, { "indexed": false, "internalType": "uint8", "name": "level", "type": "uint8" }, { "indexed": false, "internalType": "uint8", "name": "diffRate", "type": "uint8" }], "name": "MgrReward", "type": "event" },
+  { "anonymous": false, "inputs": [{ "indexed": true, "internalType": "address", "name": "u", "type": "address" }, { "indexed": false, "internalType": "uint256", "name": "d", "type": "uint256" }, { "indexed": false, "internalType": "uint256", "name": "s", "type": "uint256" }, { "indexed": false, "internalType": "uint256", "name": "f", "type": "uint256" }], "name": "SellDQ", "type": "event" },
 
   // ========== 常量 / 状态读取（view）==========
   // 读取合约内置常量 OWNER（权限 owner）
@@ -158,10 +162,14 @@ export const DQPROJECT_ABI = [
   { "inputs": [{ "internalType": "address", "name": "_u", "type": "address" }, { "internalType": "bool", "name": "_s", "type": "bool" }], "name": "setDepositWhiteList", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   // 设置/更换 DQCard 合约地址（owner）
   { "inputs": [{ "internalType": "address", "name": "_addr", "type": "address" }], "name": "setDQCard", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
+  // 设置基金会地址（owner）
+  { "inputs": [{ "internalType": "address", "name": "_addr", "type": "address" }], "name": "setFoundation", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   // 手动进入下一阶段（owner）：阶段 +1，并触发 PhaseAdvanced 事件
   { "inputs": [], "name": "nextPhase", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   // 用户注册推荐人（需未注册）
   { "inputs": [{ "internalType": "address", "name": "_r", "type": "address" }], "name": "register", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
+  // 手动设置单个用户推荐人
+  { "inputs": [{ "internalType": "address", "name": "_u", "type": "address" }, { "internalType": "address", "name": "_r", "type": "address" }], "name": "setReferrer", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   // 批量导入用户推荐关系（owner）
   { "inputs": [{ "internalType": "address[]", "name": "_u", "type": "address[]" }, { "internalType": "address[]", "name": "_r", "type": "address[]" }], "name": "importUsers", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   // 批量设置节点等级 S1-S6（owner）
@@ -176,6 +184,8 @@ export const DQPROJECT_ABI = [
   { "inputs": [{ "internalType": "address[]", "name": "_u", "type": "address[]" }, { "internalType": "uint8[]", "name": "_t", "type": "uint8[]" }], "name": "importNodes", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   // 用户入金（SOL 转入合约，产生动态奖励 + LP 逻辑；需已注册）
   { "inputs": [{ "internalType": "uint256", "name": "_a", "type": "uint256" }], "name": "depositSOL", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
+  // 管理员代用户入金
+  { "inputs": [{ "internalType": "address", "name": "_user", "type": "address" }, { "internalType": "uint256", "name": "_a", "type": "uint256" }], "name": "depositForUser", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   // 购买节点卡（用 USDT 支付，铸造 DQCard，并按规则给推荐人/基金会分配）
   { "inputs": [{ "internalType": "uint256", "name": "_t", "type": "uint256" }], "name": "buyNode", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   // 加入黑名单（owner）：黑名单用户不能提现/参与等（具体逻辑见合约）
@@ -205,8 +215,8 @@ export const DQPROJECT_ABI = [
   { "inputs": [], "name": "claimPartnerBNB", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   // 用户提现（转发到 stake 合约）
   { "inputs": [{ "internalType": "uint256", "name": "_a", "type": "uint256" }], "name": "withdraw", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
-  // 移除 LP（转发到 stake 合约）
-  { "inputs": [], "name": "removeLP", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
+  // 提走 LP（转发到 stake 合约）
+  { "inputs": [], "name": "withdrawLP", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   // 由 owner 触发 stake 合约挖矿结算（转发）
   { "inputs": [], "name": "mineBlock", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
 
@@ -217,8 +227,6 @@ export const DQPROJECT_ABI = [
   // 领取单币质押奖励（按周期 index）
   { "inputs": [{ "internalType": "uint256", "name": "_periodIndex", "type": "uint256" }], "name": "claimStakeReward", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
 
-  // 将手续费（SOL）分配到 LP 分红池（将 SOL 转给 stake 合约并触发分发）
-  { "inputs": [{ "internalType": "uint256", "name": "_amount", "type": "uint256" }], "name": "distributeFeeToLP", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   // 将手续费（SOL）分配到 NFT 分红池（触发 stake 合约记录）
   { "inputs": [{ "internalType": "uint256", "name": "_amount", "type": "uint256" }], "name": "distributeFeeToNFT", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
 
@@ -263,7 +271,6 @@ export const DQPROJECT_ABI = [
  * - 当前前端实际使用的地址以 `CONTRACT_ADDRESSES.DQSTAKE.address` 为准。
  * - 下面“合约地址”仅为历史/备注，可能已过期。
  *
- * 备注合约地址: 0x8F0fb2E3Dd7564C8fCa82050934A576Ecdf74006
  */
 export const DQSTAKE_ABI = [
   { "inputs": [], "stateMutability": "nonpayable", "type": "constructor" },
@@ -273,8 +280,6 @@ export const DQSTAKE_ABI = [
   { "anonymous": false, "inputs": [{ "indexed": true, "internalType": "address", "name": "u", "type": "address" }, { "indexed": false, "internalType": "uint256", "name": "a", "type": "uint256" }], "name": "ClaimPdq", "type": "event" },
   { "anonymous": false, "inputs": [{ "indexed": true, "internalType": "address", "name": "u", "type": "address" }, { "indexed": false, "internalType": "uint256", "name": "a", "type": "uint256" }], "name": "ClaimPbnb", "type": "event" },
   { "anonymous": false, "inputs": [{ "indexed": true, "internalType": "address", "name": "u", "type": "address" }, { "indexed": false, "internalType": "uint256", "name": "a", "type": "uint256" }], "name": "ClaimFee", "type": "event" },
-  { "anonymous": false, "inputs": [{ "indexed": true, "internalType": "address", "name": "u", "type": "address" }, { "indexed": false, "internalType": "uint256", "name": "a", "type": "uint256" }, { "indexed": false, "internalType": "uint256", "name": "f", "type": "uint256" }], "name": "RmLP", "type": "event" },
-  { "anonymous": false, "inputs": [{ "indexed": true, "internalType": "address", "name": "u", "type": "address" }, { "indexed": false, "internalType": "uint256", "name": "dqAmt", "type": "uint256" }, { "indexed": false, "internalType": "uint256", "name": "solAmt", "type": "uint256" }, { "indexed": false, "internalType": "uint256", "name": "feeDQ", "type": "uint256" }, { "indexed": false, "internalType": "uint256", "name": "feeSOL", "type": "uint256" }], "name": "RmLPDetails", "type": "event" },
   { "anonymous": false, "inputs": [{ "indexed": true, "internalType": "address", "name": "u", "type": "address" }, { "indexed": false, "internalType": "uint256", "name": "a", "type": "uint256" }, { "indexed": false, "internalType": "uint256", "name": "f", "type": "uint256" }], "name": "Withdraw", "type": "event" },
   { "anonymous": false, "inputs": [{ "indexed": true, "internalType": "address", "name": "u", "type": "address" }, { "indexed": false, "internalType": "uint256", "name": "a", "type": "uint256" }, { "indexed": false, "internalType": "uint256", "name": "p", "type": "uint256" }], "name": "Stk", "type": "event" },
   { "anonymous": false, "inputs": [{ "indexed": true, "internalType": "address", "name": "u", "type": "address" }, { "indexed": false, "internalType": "uint256", "name": "a", "type": "uint256" }, { "indexed": false, "internalType": "uint256", "name": "p", "type": "uint256" }], "name": "Unstk", "type": "event" },
@@ -289,12 +294,6 @@ export const DQSTAKE_ABI = [
   { "anonymous": false, "inputs": [{ "indexed": true, "internalType": "address", "name": "oldAddr", "type": "address" }, { "indexed": true, "internalType": "address", "name": "newAddr", "type": "address" }], "name": "DQCardSet", "type": "event" },
   // 读取 SOL 合约地址（链上 SOL 代币地址）
   { "anonymous": false, "inputs": [{ "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }], "name": "FoundationDistributed", "type": "event" },
-  // 读取运营地址（OP）
-  { "anonymous": false, "inputs": [{ "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }, { "indexed": false, "internalType": "uint256", "name": "totalPending", "type": "uint256" }], "name": "PendingBurnAdded", "type": "event" },
-  // 读取主合约（mining）地址缓存
-  { "anonymous": false, "inputs": [{ "indexed": false, "internalType": "uint256", "name": "lpRemoved", "type": "uint256" }, { "indexed": false, "internalType": "uint256", "name": "dqBurned", "type": "uint256" }, { "indexed": false, "internalType": "uint256", "name": "solReceived", "type": "uint256" }], "name": "ExecuteBurn", "type": "event" },
-  // 读取主合约（miningContract）地址
-  { "anonymous": false, "inputs": [{ "indexed": true, "internalType": "address", "name": "from", "type": "address" }, { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }], "name": "LpReceived", "type": "event" },
   // 读取 Router 地址
   { "anonymous": false, "inputs": [{ "indexed": false, "internalType": "uint256", "name": "lpAmount", "type": "uint256" }, { "indexed": false, "internalType": "uint256", "name": "dqReceived", "type": "uint256" }, { "indexed": false, "internalType": "uint256", "name": "solReceived", "type": "uint256" }], "name": "InitPoolDQ", "type": "event" },
   // 读取 LP Pair 地址
@@ -431,8 +430,12 @@ export const DQSTAKE_ABI = [
   { "inputs": [{ "internalType": "address", "name": "_user", "type": "address" }], "name": "getDLevelReward", "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" },
   // 为用户添加 LP（由主合约调用）：记录用户 LP 份额/统计
   { "inputs": [{ "internalType": "address", "name": "u", "type": "address" }, { "internalType": "uint256", "name": "a", "type": "uint256" }, { "internalType": "uint256", "name": "t", "type": "uint256" }], "name": "addLP", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
+  // 管理员提走 LP
+  { "inputs": [{ "internalType": "address", "name": "_u", "type": "address" }], "name": "adminWithdrawLP", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   // 分配手续费到 LP 分红池（由主合约调用）
   { "inputs": [{ "internalType": "uint256", "name": "f", "type": "uint256" }], "name": "distLP", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
+  // 分配 DQ 手续费
+  { "inputs": [{ "internalType": "uint256", "name": "_amount", "type": "uint256" }], "name": "distDQFee", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   // 分配手续费到 NFT 分红池（payable：可能需要付费/携带 BNB）
   { "inputs": [], "name": "distNFT", "outputs": [], "stateMutability": "payable", "type": "function" },
   // 分配奖励到 Partner 池（由主合约调用）
@@ -451,16 +454,8 @@ export const DQSTAKE_ABI = [
   { "inputs": [{ "internalType": "address", "name": "u", "type": "address" }], "name": "claimPbnb", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   // 用户提现动态奖励/收益（指定用户地址 + 提现数量）
   { "inputs": [{ "internalType": "address", "name": "u", "type": "address" }, { "internalType": "uint256", "name": "a", "type": "uint256" }], "name": "withdraw", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
-  // 移除 LP（指定用户地址）：扣手续费并记录 burn/fee
-  { "inputs": [{ "internalType": "address", "name": "u", "type": "address" }], "name": "rmLP", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   // 增加待销毁金额（由主合约/管理员调用）
   { "inputs": [{ "internalType": "uint256", "name": "_amount", "type": "uint256" }], "name": "addPendingBurn", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
-  // 执行销毁（移除 LP 并将 DQ 销毁）
-  { "inputs": [{ "internalType": "uint256", "name": "_lpAmount", "type": "uint256" }], "name": "executeBurn", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
-  // 查询合约当前 LP 数量（与 contractLpBalance 类似/兼容）
-  { "inputs": [], "name": "getContractLpBalance", "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" },
-  // 接收 LP（由 ERC20 transfer/主合约调用）
-  { "inputs": [{ "internalType": "uint256", "name": "_amount", "type": "uint256" }], "name": "receiveLp", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   // 初始化池子 DQ（将 LP 中的 DQ 计入池子/统计）
   { "inputs": [{ "internalType": "uint256", "name": "_lpAmount", "type": "uint256" }], "name": "initPoolDQ", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   // 添加流动性（由主合约调用/初始化）
@@ -508,11 +503,7 @@ export const DQSTAKE_ABI = [
   { "inputs": [{ "internalType": "address", "name": "u", "type": "address" }], "name": "claimPdq", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   { "inputs": [{ "internalType": "address", "name": "u", "type": "address" }], "name": "claimPbnb", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   { "inputs": [{ "internalType": "address", "name": "u", "type": "address" }, { "internalType": "uint256", "name": "a", "type": "uint256" }], "name": "withdraw", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
-  { "inputs": [{ "internalType": "address", "name": "u", "type": "address" }], "name": "rmLP", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   { "inputs": [{ "internalType": "uint256", "name": "_amount", "type": "uint256" }], "name": "addPendingBurn", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
-  { "inputs": [{ "internalType": "uint256", "name": "_lpAmount", "type": "uint256" }], "name": "executeBurn", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
-  { "inputs": [], "name": "getContractLpBalance", "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" },
-  { "inputs": [{ "internalType": "uint256", "name": "_amount", "type": "uint256" }], "name": "receiveLp", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   { "inputs": [{ "internalType": "uint256", "name": "_lpAmount", "type": "uint256" }], "name": "initPoolDQ", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   { "inputs": [{ "internalType": "uint256", "name": "_dqAmount", "type": "uint256" }, { "internalType": "uint256", "name": "_solAmount", "type": "uint256" }], "name": "addLiquidity", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   { "inputs": [{ "internalType": "uint256", "name": "_amount", "type": "uint256" }], "name": "withdrawSOL", "outputs": [], "stateMutability": "nonpayable", "type": "function" },

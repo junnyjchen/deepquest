@@ -191,9 +191,6 @@ export default function DappIndex() {
           if (validation.valid) {
             setPendingInviteReferrer(pendingRef);
             setInviteModalVisible(true);
-          } else {
-            // 无效则清除
-            await AsyncStorage.removeItem('@deepquest_pending_referrer');
           }
         }
       }
@@ -208,15 +205,9 @@ export default function DappIndex() {
     
     try {
       setBindLoading(true);
-      const result = await dappApi.bindReferrer(walletAddress, pendingInviteReferrer);
-      
-      if (result.code === 0) {
-        showToast.success(t('index.bindSuccessTitle'), t('index.bindSuccessMessage'));
-        await AsyncStorage.removeItem('@deepquest_pending_referrer');
-        setPendingInviteReferrer(null);
-      } else {
-        showToast.error(t('index.bindFailedTitle'), result.message || t('index.bindFailedMessage'));
-      }
+      // 直接复用激活流程（内部会先绑定推荐人，再发起链上注册）
+      setActivationReferrer(pendingInviteReferrer);
+      await handleActivate(pendingInviteReferrer);
     } catch (error: any) {
       showToast.error(t('index.bindFailedTitle'), error.message || t('index.bindFailedMessage'));
     } finally {
@@ -227,7 +218,6 @@ export default function DappIndex() {
   
   // 跳过绑定
   const handleSkipInvite = async () => {
-    await AsyncStorage.removeItem('@deepquest_pending_referrer');
     setPendingInviteReferrer(null);
     setInviteModalVisible(false);
   };
@@ -421,7 +411,7 @@ export default function DappIndex() {
     
     // 直接打开激活弹窗（连接钱包时已查询过激活状态）
     // 填充推荐人地址
-    const pendingRef = await AsyncStorage.getItem('@deepquest_pending_referrer');
+    const pendingRef = await AsyncStorage.getItem('@deepquest_pending_referrer') ;
     const bindedRef = pendingInviteReferrer || '';
     const referrerToUse = pendingRef || bindedRef;
     if (referrerToUse) {
@@ -431,7 +421,7 @@ export default function DappIndex() {
   };
 
   // 激活账户（发起链上注册交易）
-  const handleActivate = async () => {
+  const handleActivate = async (referrerOverride?: string) => {
     if (!walletAddress) {
       showToast.info(t('common.tips'), t('common.pleaseConnectWallet'));
       return;
@@ -451,7 +441,7 @@ export default function DappIndex() {
       }
 
       // 优先使用用户输入的推荐人地址
-      let referrer = activationReferrer.trim() || '';
+      let referrer = (referrerOverride ?? activationReferrer).trim() || '';
       
       // 如果没有输入，检查本地存储的推荐人
       if (!referrer) {
@@ -1087,7 +1077,7 @@ export default function DappIndex() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.activationModalBtn, styles.activateBtn]}
-                  onPress={handleActivate}
+                  onPress={() => handleActivate()}
                   disabled={activating}
                 >
                   {activating ? (
@@ -1344,9 +1334,6 @@ export default function DappIndex() {
                 </View>
               </View>
 
-              {/* 切换按钮 - 已隐藏，仅支持 DQ 兑换 SOL */}
-
-              {/* 购买区 */}
               <View
                 className="rounded-2xl p-4"
                 style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}

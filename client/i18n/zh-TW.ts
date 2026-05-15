@@ -25,6 +25,8 @@ export default {
     confirmAction: '確認',
     view: '查看詳情',
     unknown: '未知',
+    initFailed: '初始化失敗',
+    missingRequiredInfo: '缺少必要資訊',
   },
 
   index: {
@@ -72,8 +74,31 @@ export default {
     subtitle: '節點中心',
     qualified: '已達標',
     notQualified: '未達標',
-    qualification: {
-      title: '節點達標狀態',
+    stakeFailedRetry: '質押失敗，請重試',
+    title: '節點達標狀態',
+    subtitle: '查看您的節點達標進度和領取分紅',
+    status: {
+      qualified: '已達標',
+      notQualified: '未達標',
+    },
+    actions: {
+      claim: '領取分紅',
+      claimSuccessTitle: '領取成功',
+      claimSuccessMessage: '成功領取 {amount} DQ！',
+      claimFailedTitle: '領取失敗',
+      claimFailedMessage: '領取分紅失敗，請稍後重試',
+    },
+  },
+  invite: {
+    referrerNotFound: '推薦人不存在或無效',
+    validateReferrerFailed: '驗證推薦人失敗',
+    pleaseConnectWalletThenBind: '請先連接錢包，再進行推薦關係綁定',
+    invalidInviteLink: '無效的邀請連結',
+    bindSuccessTitle: '綁定成功',
+    bindSuccessMessage: '推薦關係已綁定成功',
+    backHome: '返回首頁',
+    bindFailedTitle: '綁定失敗',
+    bindFailedMessage: '綁定推薦關係失敗，請稍後重試',
     },
     progressLines: '{qualified} / {required} 條線',
     progressHint: '達標條件：直接下級中有用戶完成入金即為1條達標線',
@@ -103,9 +128,7 @@ export default {
     empty: {
       title: '您還沒有購買節點卡',
       subtitle: '前往購買節點卡開啟DeFi之旅',
-    },
   },
-
   home: {
     title: 'DeepQuest',
     connectWallet: '連接錢包',

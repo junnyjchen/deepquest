@@ -25,6 +25,8 @@ export default {
     confirmAction: '확인',
     view: '보기',
     unknown: '알 수 없음',
+    initFailed: '초기화에 실패했습니다',
+    missingRequiredInfo: '필수 정보가 누락되었습니다',
   },
 
   index: {
@@ -65,6 +67,18 @@ export default {
     stakeSuccessMessage: '{amount} SOL 스테이킹 성공!\nTx: {hash}',
     stakeFailed: '스테이킹 실패',
     stakeFailedRetry: '스테이킹 실패, 다시 시도해 주세요',
+  },
+
+  invite: {
+    referrerNotFound: '추천인을 찾을 수 없거나 유효하지 않습니다',
+    validateReferrerFailed: '추천인 검증에 실패했습니다',
+    pleaseConnectWalletThenBind: '먼저 지갑을 연결한 뒤 추천 관계를 바인딩해 주세요',
+    invalidInviteLink: '유효하지 않은 초대 링크입니다',
+    bindSuccessTitle: '바인딩 성공',
+    bindSuccessMessage: '추천 관계가 성공적으로 바인딩되었습니다',
+    backHome: '홈으로 돌아가기',
+    bindFailedTitle: '바인딩 실패',
+    bindFailedMessage: '추천 관계 바인딩에 실패했습니다. 잠시 후 다시 시도해 주세요',
   },
 
   nodesNew: {

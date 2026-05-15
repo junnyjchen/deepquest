@@ -84,6 +84,18 @@ export default {
     stakeFailedRetry: '质押失败，请重试',
   },
 
+  invite: {
+    referrerNotFound: '推荐人不存在或无效',
+    validateReferrerFailed: '验证推荐人失败',
+    pleaseConnectWalletThenBind: '请先连接钱包，再进行推荐关系绑定',
+    invalidInviteLink: '无效的邀请链接',
+    bindSuccessTitle: '绑定成功',
+    bindSuccessMessage: '推荐关系已绑定成功',
+    backHome: '返回首页',
+    bindFailedTitle: '绑定失败',
+    bindFailedMessage: '绑定推荐关系失败，请稍后重试',
+  },
+
   nodesNew: {
     title: 'NODE CENTER',
     subtitle: '节点中心',

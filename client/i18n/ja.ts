@@ -25,6 +25,8 @@ export default {
     confirmAction: '確認',
     view: '表示',
     unknown: '不明',
+    initFailed: '初期化に失敗しました',
+    missingRequiredInfo: '必要な情報が不足しています',
   },
 
   index: {
@@ -65,6 +67,18 @@ export default {
     stakeSuccessMessage: '{amount} SOL をステークしました！\nTx: {hash}',
     stakeFailed: 'ステーク失敗',
     stakeFailedRetry: 'ステークに失敗しました。再試行してください',
+  },
+
+  invite: {
+    referrerNotFound: '紹介者が見つからないか無効です',
+    validateReferrerFailed: '紹介者の検証に失敗しました',
+    pleaseConnectWalletThenBind: '先にウォレットを接続してから、紹介関係をバインドしてください',
+    invalidInviteLink: '無効な招待リンクです',
+    bindSuccessTitle: 'バインド成功',
+    bindSuccessMessage: '紹介関係のバインドに成功しました',
+    backHome: 'ホームに戻る',
+    bindFailedTitle: 'バインド失敗',
+    bindFailedMessage: '紹介関係のバインドに失敗しました。しばらくしてから再試行してください',
   },
 
   nodesNew: {

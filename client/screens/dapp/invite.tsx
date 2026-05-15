@@ -14,6 +14,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappApi } from '@/utils/api';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { showToast } from '@/utils/toast';
+import {
+  connectWallet,
+  switchToBSC,
+  isUserRegisteredOnChain,
+  registerUserOnChain,
+} from '@/utils/web3';
 import ConfirmDialog from '@/components/ConfirmDialog';
 
 // 颜色体系
@@ -99,6 +105,38 @@ export default function InviteBinding() {
     }
   }, [referrerAddress, t]);
 
+  const handleConnectWalletAndContinue = useCallback(async () => {
+    try {
+      const walletInfo = await connectWallet();
+
+      if (!walletInfo) {
+        showToast.error(t('common.error'), t('common.walletConnectFailed'));
+        return;
+      }
+
+      await switchToBSC();
+
+      const address = walletInfo.address;
+      await AsyncStorage.setItem(WALLET_STORAGE_KEY, address);
+      setWalletAddress(address);
+
+      const bindingResult = await dappApi.checkBinding(address);
+      if (bindingResult.bound) {
+        setAlreadyBound(true);
+        return;
+      }
+
+      if (referrerAddress) {
+        await validateReferrer();
+      } else {
+        setErrorMessage(t('invite.invalidInviteLink'));
+      }
+    } catch (error: any) {
+      console.error('连接钱包失败:', error);
+      showToast.error(t('common.error'), error?.message || t('common.walletConnectFailed'));
+    }
+  }, [referrerAddress, t, validateReferrer]);
+
   const initPage = useCallback(async () => {
     try {
       // 获取钱包地址
@@ -117,7 +155,9 @@ export default function InviteBinding() {
           confirmText: t('common.confirm'),
           cancelText: '',
           type: 'info',
-          onConfirm: () => router.back(),
+          onConfirm: () => {
+            void handleConnectWalletAndContinue();
+          },
         });
         setLoading(false);
         setValidating(false);
@@ -149,7 +189,7 @@ export default function InviteBinding() {
       setLoading(false);
       setValidating(false);
     }
-  }, [referrerAddress, router, validateReferrer, t]);
+  }, [referrerAddress, validateReferrer, t, handleConnectWalletAndContinue]);
 
   useEffect(() => {
     initPage();
@@ -163,12 +203,31 @@ export default function InviteBinding() {
 
     try {
       setSubmitting(true);
-      
-      // 调用后端API绑定推荐人
-      // 注意：实际生产环境中，这里需要调用合约
-      const result = await dappApi.bindReferrer(walletAddress, referrerAddress);
+      // 1) 先连接钱包并切链，确保 signer 可用
+      const walletInfo = await connectWallet();
+      if (!walletInfo) {
+        showToast.error(t('common.error'), t('common.walletConnectFailed'));
+        return;
+      }
+
+      await switchToBSC();
+
+      const { signer, address } = walletInfo;
+      await AsyncStorage.setItem(WALLET_STORAGE_KEY, address);
+      setWalletAddress(address);
+
+      // 2) 链上注册（已注册则跳过，避免重复交易报错）
+      const alreadyRegistered = await isUserRegisteredOnChain(address);
+      if (!alreadyRegistered) {
+        const tx = await registerUserOnChain(signer, referrerAddress);
+        await tx.wait();
+      }
+
+      // 3) 后端同步推荐关系
+      const result = await dappApi.bindReferrer(address, referrerAddress);
       
       if (result.code === 0) {
+        await AsyncStorage.removeItem('@deepquest_pending_referrer');
         setConfirmDialog({
           visible: true,
           title: t('invite.bindSuccessTitle'),
@@ -190,7 +249,7 @@ export default function InviteBinding() {
   };
 
   const handleGoHome = () => {
-    router.back();
+    router.replace('/');
   };
 
   if (loading) {
