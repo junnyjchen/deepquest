@@ -100,8 +100,17 @@ export default function DappProfile() {
       // 合并：链上字段优先覆盖（实时）
       setUserData(prev => {
         const next = { ...prev };
-        next.level = 'S' + (chainUser?.level ?? prev.level);
-        next.dLevel = 'D' + (chainUser?.dLevel ?? prev.dLevel);
+        // 统一把等级存成标签字符串：S<number> / D<number>
+        // 兼容 prev.level/prev.dLevel 已经是 'Sx'/'Dx' 的情况，避免重复拼接。
+        const sLevelNum = typeof chainUser?.level === 'number'
+          ? chainUser.level
+          : Number(String(prev.level).replace(/^S/i, '')) || 0;
+        const dLevelNum = typeof chainUser?.dLevel === 'number'
+          ? chainUser.dLevel
+          : Number(String(prev.dLevel).replace(/^D/i, '')) || 0;
+
+        next.level = `S${sLevelNum}`;
+        next.dLevel = `D${dLevelNum}`;
 
         // 这里 UI 文案写的是“SOL余额/质押SOL/…”，但链上实际：
         // - bnbBalance: BNB 原生余额
@@ -303,13 +312,14 @@ export default function DappProfile() {
             dqtBalance: '0.0',
             teamSize: 0,
             directCount: 0,
-            level: 1,
+            level: 'S0',
             isActivated: false,
             stakeDays: 0,
             totalInvest: '0.0',
             teamInvest: '0.0',
             totalReward: '0.0',
             referrerAddress: null,
+            dLevel: 'D0',
           });
         }
       },
@@ -440,7 +450,24 @@ export default function DappProfile() {
               </View>
               <View className="flex-1 flex-row items-center justify-between">
                 <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('team.level')}</Text>
-                <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>Lv.{userData.level}</Text>
+                  <View className="flex-row items-center" style={{ gap: 6 }}>
+                    <View
+                      className="px-2 py-0.5 rounded-full"
+                      style={{ backgroundColor: 'rgba(0,240,255,0.12)', borderWidth: 1, borderColor: 'rgba(0,240,255,0.35)' }}
+                    >
+                      <Text className="text-xs font-medium" style={{ color: CYAN }}>
+                        {userData.level}
+                      </Text>
+                    </View>
+                    <View
+                      className="px-2 py-0.5 rounded-full"
+                      style={{ backgroundColor: 'rgba(208,32,255,0.12)', borderWidth: 1, borderColor: 'rgba(208,32,255,0.35)' }}
+                    >
+                      <Text className="text-xs font-medium" style={{ color: PURPLE }}>
+                        {userData.dLevel}
+                      </Text>
+                    </View>
+                  </View>
               </View>
             </View>
           </View>
