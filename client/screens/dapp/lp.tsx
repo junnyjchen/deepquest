@@ -37,12 +37,14 @@ import {
 // 颜色体系
 const BG_DARK = '#0A0A12';
 const BG_CARD = '#101018';
+const BG_CARD_SOLID = '#181828';
+const BG_CARD_TRANS = 'rgba(16, 16, 24, 0.8)';
 const BG_INPUT = '#1A1A2E';
 const CYAN = '#00F0FF';
 const PURPLE = '#D020FF';
 const YELLOW = '#FFD23F';
 const GREEN = '#00FF88';
-const RED = '#FF4444';
+const RED = '#FF5050';
 const TEXT_WHITE = '#F5F5F5';
 const TEXT_MUTED = '#A0A0B0';
 const BORDER_GRAY = '#303040';
@@ -651,18 +653,15 @@ export default function DappLP() {
         </View>
       </View>
 
-      <ScrollView className="flex-1 px-4 py-4">
+      <ScrollView className="flex-1 px-4 pt-2">
         {/* Tab 切换 */}
-        <View className="flex-row mb-6 rounded-xl overflow-hidden" style={{ backgroundColor: BG_CARD }}>
+        <View className="flex-row mb-4 rounded-xl overflow-hidden" style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}>
           <TouchableOpacity
             className="flex-1 py-3 items-center"
             style={{ backgroundColor: activeTab === 'add' ? CYAN : 'transparent' }}
             onPress={() => setActiveTab('add')}
           >
-            <Text
-              className="font-semibold"
-              style={{ color: activeTab === 'add' ? BG_DARK : TEXT_MUTED }}
-            >
+            <Text className="text-sm font-medium" style={{ color: activeTab === 'add' ? BG_DARK : TEXT_MUTED }}>
               {t('lp.addLP')}
             </Text>
           </TouchableOpacity>
@@ -671,72 +670,87 @@ export default function DappLP() {
             style={{ backgroundColor: activeTab === 'remove' ? RED : 'transparent' }}
             onPress={() => setActiveTab('remove')}
           >
-            <Text
-              className="font-semibold"
-              style={{ color: activeTab === 'remove' ? TEXT_WHITE : TEXT_MUTED }}
-            >
+            <Text className="text-sm font-medium" style={{ color: activeTab === 'remove' ? TEXT_WHITE : TEXT_MUTED }}>
               {t('lp.removeLP')}
             </Text>
           </TouchableOpacity>
         </View>
 
         {activeTab === 'add' ? (
-          <>
-            {/* SOL 余额卡片 */}
-            <View className="p-4 rounded-xl mb-4" style={{ backgroundColor: BG_CARD }}>
-              <View className="flex-row justify-between items-center">
-                <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                  {t('lp.solBalance')}
-                </Text>
+          <View className="gap-3">
+            {/* SOL 余额数据卡 */}
+            <View className="flex-row flex-wrap gap-2">
+              <View 
+                className="w-[calc(50%-4px)] p-3 rounded-xl"
+                style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 1, borderColor: YELLOW }}
+              >
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('lp.solBalance')}</Text>
                 <Text className="text-lg font-bold" style={{ color: YELLOW }}>
                   {parseFloat(solBalance).toFixed(4)} SOL
                 </Text>
               </View>
+              <View 
+                className="w-[calc(50%-4px)] p-3 rounded-xl"
+                style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 1, borderColor: CYAN }}
+              >
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('lp.minDeposit')}</Text>
+                <Text className="text-lg font-bold" style={{ color: CYAN }}>≥ {MIN_DEPOSIT} SOL</Text>
+              </View>
             </View>
 
-            {/* 入金输入区 */}
-            <View className="p-4 rounded-xl mb-4" style={{ backgroundColor: BG_CARD }}>
-              <Text className="text-sm mb-2" style={{ color: TEXT_MUTED }}>
-                {t('lp.depositAmount')}
-              </Text>
-              <View className="flex-row items-center mb-3">
-                <TextInput
-                  className="flex-1 text-2xl font-bold"
-                  style={{ color: TEXT_WHITE, backgroundColor: BG_INPUT, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12 }}
-                  placeholder="0.00"
-                  placeholderTextColor={TEXT_MUTED}
-                  keyboardType="decimal-pad"
-                  value={amount}
-                  onChangeText={setAmount}
-                />
-                <Text className="ml-3 text-lg font-bold" style={{ color: CYAN }}>
-                  SOL
+            {/* 入金输入区卡片 */}
+            <View 
+              className="rounded-2xl p-4"
+              style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
+            >
+              <View className="flex-row items-center justify-between mb-3">
+                <View className="flex-row items-center gap-2">
+                  <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: CYAN }}>
+                    <Ionicons name="diamond" size={16} color={BG_DARK} />
+                  </View>
+                  <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>SOL</Text>
+                </View>
+                <Text className="text-sm" style={{ color: TEXT_MUTED }}>
+                  {t('lp.solBalance')}: {parseFloat(solBalance).toFixed(4)}
                 </Text>
               </View>
 
+              <TextInput
+                className="text-xl font-semibold mb-3"
+                style={{ color: TEXT_WHITE, backgroundColor: 'transparent' }}
+                placeholder="0.00"
+                placeholderTextColor={TEXT_MUTED}
+                keyboardType="decimal-pad"
+                value={amount}
+                onChangeText={setAmount}
+              />
+
               {/* 快捷按钮 */}
-              <View className="flex-row gap-2">
+              <View className="flex-row gap-2 mb-3">
                 {[0.25, 0.5, 0.75, 1].map((pct) => (
                   <TouchableOpacity
                     key={pct}
-                    className="flex-1 py-2 rounded-lg items-center"
-                    style={{ backgroundColor: BG_INPUT }}
+                    className="flex-1 py-2.5 rounded-lg items-center"
+                    style={{
+                      backgroundColor: 'transparent',
+                      borderWidth: 1,
+                      borderColor: BORDER_GRAY,
+                    }}
                     onPress={() => setQuickAmount(pct)}
                   >
-                    <Text className="text-xs" style={{ color: TEXT_MUTED }}>
+                    <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>
                       {pct * 100}%
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
-
-              <Text className="text-xs mt-3" style={{ color: TEXT_MUTED }}>
-                {t('lp.minDeposit')}: {MIN_DEPOSIT} SOL
-              </Text>
             </View>
 
-            {/* 入金说明 */}
-            <View className="p-4 rounded-xl mb-4" style={{ backgroundColor: BG_CARD }}>
+            {/* 入金说明卡片 */}
+            <View 
+              className="rounded-2xl p-4"
+              style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
+            >
               <View className="flex-row items-start mb-2">
                 <Ionicons name="information-circle" size={16} color={CYAN} />
                 <Text className="ml-2 text-xs flex-1" style={{ color: TEXT_MUTED }}>
@@ -767,32 +781,41 @@ export default function DappLP() {
               {txPending ? (
                 <ActivityIndicator color={BG_DARK} />
               ) : (
-                <Text className="text-lg font-bold" style={{ color: BG_DARK }}>
+                <Text className="text-base font-semibold" style={{ color: BG_DARK }}>
                   {t('lp.confirmAddLP')}
                 </Text>
               )}
             </TouchableOpacity>
-          </>
+          </View>
         ) : (
-          <>
-            {/* LP 份额卡片 */}
-            <View className="p-4 rounded-xl mb-4" style={{ backgroundColor: BG_CARD }}>
-              <View className="flex-row justify-between items-center mb-3">
-                <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                  {t('lp.myLPShares')}
+          <View className="gap-3">
+            {/* LP 份额数据卡 */}
+            <View className="flex-row flex-wrap gap-2">
+              <View 
+                className="w-[calc(50%-4px)] p-3 rounded-xl"
+                style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 1, borderColor: PURPLE }}
+              >
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('lp.myLPShares')}</Text>
+                <Text className="text-lg font-bold" style={{ color: PURPLE }}>
+                  {parseFloat(lpShares).toFixed(4)} LP
                 </Text>
-                <Ionicons name="ribbon" size={20} color={PURPLE} />
               </View>
-              <Text className="text-3xl font-bold mb-1" style={{ color: PURPLE }}>
-                {parseFloat(lpShares).toFixed(4)} LP
-              </Text>
-              <Text className="text-xs" style={{ color: TEXT_MUTED }}>
-                {t('lp.lpValue')}
-              </Text>
+              <View 
+                className="w-[calc(50%-4px)] p-3 rounded-xl"
+                style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 1, borderColor: CYAN }}
+              >
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('lp.lpValue')}</Text>
+                <Text className="text-lg font-bold" style={{ color: CYAN }}>
+                  {parseFloat(lpShares).toFixed(4)} LP
+                </Text>
+              </View>
             </View>
 
-            {/* 取消 LP 说明 */}
-            <View className="p-4 rounded-xl mb-4" style={{ backgroundColor: BG_CARD }}>
+            {/* 取消 LP 说明卡片 */}
+            <View 
+              className="rounded-2xl p-4"
+              style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: YELLOW }}
+            >
               <View className="flex-row items-start mb-2">
                 <Ionicons name="warning" size={16} color={YELLOW} />
                 <Text className="ml-2 text-xs flex-1" style={{ color: TEXT_MUTED }}>
@@ -804,30 +827,32 @@ export default function DappLP() {
             {/* 取消 LP 按钮 */}
             <TouchableOpacity
               className="py-4 rounded-xl items-center"
-              style={{ backgroundColor: txPending ? TEXT_MUTED : RED }}
+              style={{ backgroundColor: txPending || parseFloat(lpShares) <= 0 ? TEXT_MUTED : RED }}
               onPress={handleRemoveLP}
               disabled={txPending || parseFloat(lpShares) <= 0}
             >
               {txPending ? (
                 <ActivityIndicator color={TEXT_WHITE} />
               ) : (
-                <Text className="text-lg font-bold" style={{ color: TEXT_WHITE }}>
+                <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>
                   {t('lp.confirmRemoveLP')}
                 </Text>
               )}
             </TouchableOpacity>
-          </>
+          </View>
         )}
 
         {/* 未连接钱包提示 */}
         {!walletAddress && (
-          <View className="mt-6 p-4 rounded-xl items-center" style={{ backgroundColor: BG_CARD }}>
-            <Ionicons name="wallet-outline" size={32} color={TEXT_MUTED} />
-            <Text className="mt-2 text-sm" style={{ color: TEXT_MUTED }}>
+          <View className="mt-4 p-6 rounded-2xl items-center" style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}>
+            <Ionicons name="wallet-outline" size={40} color={TEXT_MUTED} />
+            <Text className="mt-3 text-sm" style={{ color: TEXT_MUTED }}>
               {t('lp.connectWalletFirst')}
             </Text>
           </View>
         )}
+
+        <View className="pb-8" />
       </ScrollView>
 
       <Modal
