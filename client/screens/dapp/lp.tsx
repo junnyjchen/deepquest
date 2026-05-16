@@ -591,7 +591,7 @@ export default function DappLP() {
   if (loading) {
     return (
       <Screen>
-        <LogoHeader />
+        <LogoHeader showMenuButton={true} menuExpanded={menuVisible} onMenuPress={toggleMenu} />
         <View className="px-4 pt-2 pb-3">
           <Text className="text-xl font-bold" style={{ color: TEXT_WHITE }}>{t('lp.title')}</Text>
         </View>
@@ -604,7 +604,7 @@ export default function DappLP() {
 
   return (
     <Screen>
-      <LogoHeader />
+      <LogoHeader showMenuButton={true} menuExpanded={menuVisible} onMenuPress={toggleMenu} />
       <View className="px-4 pb-2">
         <View className="flex-row items-center gap-2 flex-wrap">
           {walletAddress ? (
