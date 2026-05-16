@@ -13,7 +13,7 @@ import {
 import { Screen } from '@/components/Screen';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { LogoHeader } from '@/components/LogoHeader';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -795,25 +795,6 @@ export default function DappLP() {
 
         {activeTab === 'add' ? (
           <View className="gap-3">
-            {/* SOL 余额数据卡 */}
-            <View className="flex-row flex-wrap gap-2">
-              <View 
-                className="w-[calc(50%-4px)] p-3 rounded-xl"
-                style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 1, borderColor: YELLOW }}
-              >
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('lp.solBalance')}</Text>
-                <Text className="text-lg font-bold" style={{ color: YELLOW }}>
-                  {parseFloat(solBalance).toFixed(4)} SOL
-                </Text>
-              </View>
-              <View 
-                className="w-[calc(50%-4px)] p-3 rounded-xl"
-                style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 1, borderColor: CYAN }}
-              >
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('lp.minDeposit')}</Text>
-                <Text className="text-lg font-bold" style={{ color: CYAN }}>≥ {MIN_DEPOSIT} SOL</Text>
-              </View>
-            </View>
 
             {/* 入金输入区卡片 */}
             <View 
@@ -906,37 +887,23 @@ export default function DappLP() {
           </View>
         ) : (
           <View className="gap-3">
-            {/* LP 份额数据卡 */}
-            <View className="flex-row flex-wrap gap-2">
-              <View 
-                className="w-[calc(50%-4px)] p-3 rounded-xl"
-                style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 1, borderColor: PURPLE }}
-              >
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('lp.myLPShares')}</Text>
-                <Text className="text-lg font-bold" style={{ color: PURPLE }}>
-                  {parseFloat(lpShares).toFixed(4)} LP
-                </Text>
-              </View>
-              <View 
-                className="w-[calc(50%-4px)] p-3 rounded-xl"
-                style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 1, borderColor: CYAN }}
-              >
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('lp.lpValue')}</Text>
-                <Text className="text-lg font-bold" style={{ color: CYAN }}>
-                  {parseFloat(lpShares).toFixed(4)} LP
-                </Text>
-              </View>
-            </View>
-
             {/* 取消 LP 说明卡片 */}
             <View 
               className="rounded-2xl p-4"
               style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: YELLOW }}
             >
-              <View className="flex-row items-start mb-2">
-                <Ionicons name="warning" size={16} color={YELLOW} />
-                <Text className="ml-2 text-xs flex-1" style={{ color: TEXT_MUTED }}>
+              <View className="flex-row items-center mb-3">
+                <Ionicons name="warning" size={18} color={YELLOW} />
+                <Text className="ml-2 text-sm font-medium" style={{ color: YELLOW }}>
                   {t('lp.removeLPTip')}
+                </Text>
+              </View>
+              <View className="flex-row items-center">
+                <Text className="text-xs" style={{ color: TEXT_MUTED }}>
+                  {t('lp.myLPShares')}: 
+                </Text>
+                <Text className="text-sm font-bold ml-2" style={{ color: PURPLE }}>
+                  {parseFloat(lpShares).toFixed(4)} LP
                 </Text>
               </View>
             </View>
