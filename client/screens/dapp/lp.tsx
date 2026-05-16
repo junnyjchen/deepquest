@@ -84,6 +84,7 @@ const saveLocalActivation = async (walletAddress: string, activated: boolean): P
 export default function DappLP() {
   const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
+  const [menuVisible, setMenuVisible] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   const [solBalance, setSolBalance] = useState('0');
@@ -135,6 +136,10 @@ export default function DappLP() {
       type: config.type ?? 'info',
       onConfirm: config.onConfirm,
     });
+  }, []);
+
+  const toggleMenu = useCallback(() => {
+    setMenuVisible((prev) => !prev);
   }, []);
 
   // 初始化
