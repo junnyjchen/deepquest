@@ -34,20 +34,18 @@ import {
   isUserRegisteredOnChain,
 } from '@/utils/web3';
 
-// 颜色体系
+// 颜色体系（与首页保持一致）
 const BG_DARK = '#0A0A12';
-const BG_CARD = '#101018';
-const BG_CARD_SOLID = '#181828';
-const BG_CARD_TRANS = 'rgba(16, 16, 24, 0.8)';
-const BG_INPUT = '#1A1A2E';
-const CYAN = '#00F0FF';
-const PURPLE = '#D020FF';
+const BG_CARD_TRANS = 'rgba(26, 26, 48, 0.95)';
+const BG_CARD_SOLID = '#101018';
 const YELLOW = '#FFD23F';
-const GREEN = '#00FF88';
-const RED = '#FF5050';
+const BORDER_GRAY = '#303040';
 const TEXT_WHITE = '#F5F5F5';
 const TEXT_MUTED = '#A0A0B0';
-const BORDER_GRAY = '#303040';
+const CYAN = '#00F0FF';
+const PURPLE = '#D020FF';
+const GREEN = '#00FF88';
+const RED = '#FF5050';
 
 const WALLET_STORAGE_KEY = '@deepquest_wallet';
 const REFERRER_STORAGE_KEY = '@deepquest_referrer';
@@ -613,7 +611,7 @@ export default function DappLP() {
             <>
               <TouchableOpacity
                 className="flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
-                style={{ backgroundColor: BG_CARD, borderWidth: 1, borderColor: BORDER_GRAY }}
+                style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
                 onPress={handleCopyAddress}
               >
                 <Ionicons name="folder-open" size={14} color={TEXT_WHITE} />
@@ -644,7 +642,7 @@ export default function DappLP() {
           ) : (
             <TouchableOpacity
               className="px-2.5 py-1.5 rounded-lg"
-              style={{ backgroundColor: BG_CARD, borderWidth: 1, borderColor: BORDER_GRAY }}
+              style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 1, borderColor: BORDER_GRAY }}
               onPress={handleConnect}
             >
               <Text className="text-sm" style={{ color: TEXT_WHITE }}>{t('home.connectWallet')}</Text>
@@ -942,7 +940,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   activationModalContent: {
-    backgroundColor: BG_CARD,
+    backgroundColor: BG_CARD_SOLID,
     borderRadius: 20,
     padding: 24,
     width: '90%',
