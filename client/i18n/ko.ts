@@ -274,6 +274,19 @@ export default {
     removeLPTip: 'LP 제거 시 투자한 SOL과 DQ 토큰이 반환됩니다',
     confirmRemoveLP: 'LP 제거 확인',
     connectWalletFirst: '먼저 지갑을 연결하세요',
+    // Alert messages
+    alert: {
+      connectWallet: '먼저 지갑을 연결하세요',
+      minDepositAmount: '입금 금액은 최소 {amount} SOL 이상이어야 합니다',
+      insufficientBalance: '잔액 부족',
+      needBrowserWallet: '브라우저에서 열고 TP 지갑 또는 MetaMask를 연결하세요',
+      referrerNotFound: '추천인 정보를 찾을 수 없습니다. 추천 링크를 통해 다시 입장하세요',
+      addLPSuccess: '입금 성공!',
+      addLPFailed: '입금 실패',
+      noLPToRemove: '제거할 LP가 없습니다',
+      removeLPSuccess: 'LP 제거 성공!',
+      removeLPFailed: '제거 실패',
+    },
   },
   help: {
     title: '고객센터',

@@ -274,6 +274,19 @@ export default {
     removeLPTip: 'Xóa LP sẽ hoàn trả SOL và DQ token đã đầu tư',
     confirmRemoveLP: 'Xác nhận xóa LP',
     connectWalletFirst: 'Vui lòng kết nối ví trước',
+    // Alert messages
+    alert: {
+      connectWallet: 'Vui lòng kết nối ví trước',
+      minDepositAmount: 'Số tiền nạp tối thiểu là {amount} SOL',
+      insufficientBalance: 'Số dư không đủ',
+      needBrowserWallet: 'Vui lòng mở trên trình duyệt và kết nối ví TP hoặc MetaMask',
+      referrerNotFound: 'Không tìm thấy thông tin người giới thiệu, vui lòng truy cập lại qua liên kết giới thiệu',
+      addLPSuccess: 'Nạp tiền thành công!',
+      addLPFailed: 'Nạp tiền thất bại',
+      noLPToRemove: 'Không có LP để xóa',
+      removeLPSuccess: 'Xóa LP thành công!',
+      removeLPFailed: 'Xóa thất bại',
+    },
   },
   help: {
     title: 'Trung tâm trợ giúp',

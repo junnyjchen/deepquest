@@ -274,6 +274,19 @@ export default {
     removeLPTip: 'LP解除で投資したSOLとDQトークンが返金されます',
     confirmRemoveLP: 'LP解除を確認',
     connectWalletFirst: '先にウォレットを接続してください',
+    // Alert messages
+    alert: {
+      connectWallet: '先にウォレットを接続してください',
+      minDepositAmount: '入金額 は {amount} SOL 以上である必要があります',
+      insufficientBalance: '残高不足',
+      needBrowserWallet: 'ブラウザで開いてTPウォレットまたはMetaMaskを接続してください',
+      referrerNotFound: '紹介者情報が見つかりません。紹介リンクから再入場してください',
+      addLPSuccess: '入金成功！',
+      addLPFailed: '入金失敗',
+      noLPToRemove: '解除するLPがありません',
+      removeLPSuccess: 'LP解除成功！',
+      removeLPFailed: '解除失敗',
+    },
   },
   help: {
     title: 'ヘルプセンター',

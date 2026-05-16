@@ -392,5 +392,18 @@ export default {
     removeLPTip: 'Removing LP will return your invested SOL and DQ tokens',
     confirmRemoveLP: 'Confirm Remove LP',
     connectWalletFirst: 'Please connect wallet first',
+    // Alert messages
+    alert: {
+      connectWallet: 'Please connect wallet first',
+      minDepositAmount: 'Deposit amount must be at least {amount} SOL',
+      insufficientBalance: 'Insufficient balance',
+      needBrowserWallet: 'Please open in browser and connect TP wallet or MetaMask',
+      referrerNotFound: 'Referrer not found, please re-enter via referral link',
+      addLPSuccess: 'Deposit successful!',
+      addLPFailed: 'Deposit failed',
+      noLPToRemove: 'No LP to remove',
+      removeLPSuccess: 'Remove LP successful!',
+      removeLPFailed: 'Remove failed',
+    },
   },
 };

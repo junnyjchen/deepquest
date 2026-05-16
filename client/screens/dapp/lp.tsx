@@ -99,25 +99,26 @@ export default function DappLP() {
   // 处理入金（添加 LP）
   const handleAddLP = async () => {
     if (!walletAddress) {
-      Alert.alert('提示', '请先连接钱包');
+      Alert.alert(t('lp.alert.connectWallet'), t('lp.alert.connectWallet'));
       return;
     }
 
     const amountNum = parseFloat(amount);
     if (isNaN(amountNum) || amountNum < parseFloat(MIN_DEPOSIT)) {
-      Alert.alert('提示', `入金金额不能少于 ${MIN_DEPOSIT} SOL`);
+      const msg = t('lp.alert.minDepositAmount').replace('{amount}', MIN_DEPOSIT);
+      Alert.alert(t('lp.alert.minDepositAmount').replace('{amount}', MIN_DEPOSIT), msg);
       return;
     }
 
     if (amountNum > parseFloat(solBalance)) {
-      Alert.alert('提示', '余额不足');
+      Alert.alert(t('lp.alert.insufficientBalance'), t('lp.alert.insufficientBalance'));
       return;
     }
 
     try {
       const provider = getBrowserProvider();
       if (!provider) {
-        Alert.alert('提示', '请在浏览器中打开并连接 TP 钱包或 MetaMask');
+        Alert.alert(t('lp.alert.needBrowserWallet'), t('lp.alert.needBrowserWallet'));
         return;
       }
 
@@ -132,7 +133,7 @@ export default function DappLP() {
         // 获取推荐人地址
         const referrer = await AsyncStorage.getItem(REFERRER_STORAGE_KEY);
         if (!referrer) {
-          Alert.alert('提示', '未找到推荐人信息，请通过推荐链接重新进入');
+          Alert.alert(t('lp.alert.referrerNotFound'), t('lp.alert.referrerNotFound'));
           setTxPending(false);
           return;
         }
@@ -161,7 +162,7 @@ export default function DappLP() {
       await addTx.wait();
       console.log('[LP] 入金成功:', addTx.hash);
 
-      Alert.alert('成功', '入金成功！');
+      Alert.alert(t('lp.alert.addLPSuccess'), t('lp.alert.addLPSuccess'));
       setAmount('');
 
       // 刷新数据
@@ -169,7 +170,7 @@ export default function DappLP() {
 
     } catch (error: any) {
       console.error('[LP] 入金失败:', error);
-      Alert.alert('入金失败', error?.message || '请重试');
+      Alert.alert(t('lp.alert.addLPFailed'), error?.message || t('lp.alert.addLPFailed'));
     } finally {
       setTxPending(false);
     }
@@ -178,27 +179,27 @@ export default function DappLP() {
   // 处理取消 LP
   const handleRemoveLP = async () => {
     if (!walletAddress) {
-      Alert.alert('提示', '请先连接钱包');
+      Alert.alert(t('lp.alert.connectWallet'), t('lp.alert.connectWallet'));
       return;
     }
 
     if (parseFloat(lpShares) <= 0) {
-      Alert.alert('提示', '没有可取消的 LP');
+      Alert.alert(t('lp.alert.noLPToRemove'), t('lp.alert.noLPToRemove'));
       return;
     }
 
     Alert.alert(
-      '确认取消 LP',
-      `将取消 ${parseFloat(lpShares).toFixed(4)} LP`,
+      t('lp.confirmRemoveLP'),
+      `${t('lp.confirmRemoveLP')} ${parseFloat(lpShares).toFixed(4)} LP`,
       [
-        { text: '取消', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: '确认',
+          text: t('common.confirm'),
           onPress: async () => {
             try {
               const provider = getBrowserProvider();
               if (!provider) {
-                Alert.alert('提示', '请在浏览器中打开并连接钱包');
+                Alert.alert(t('lp.alert.needBrowserWallet'), t('lp.alert.needBrowserWallet'));
                 return;
               }
 
@@ -211,14 +212,14 @@ export default function DappLP() {
               await removeTx.wait();
               console.log('[LP] 取消 LP 成功:', removeTx.hash);
 
-              Alert.alert('成功', '取消 LP 成功！');
+              Alert.alert(t('lp.alert.removeLPSuccess'), t('lp.alert.removeLPSuccess'));
 
               // 刷新数据
               await fetchData(await signer.getAddress());
 
             } catch (error: any) {
               console.error('[LP] 取消 LP 失败:', error);
-              Alert.alert('取消失败', error?.message || '请重试');
+              Alert.alert(t('lp.alert.removeLPFailed'), error?.message || t('lp.alert.removeLPFailed'));
             } finally {
               setTxPending(false);
             }
@@ -268,7 +269,7 @@ export default function DappLP() {
               className="font-semibold"
               style={{ color: activeTab === 'add' ? BG_DARK : TEXT_MUTED }}
             >
-              {t('addLP')}
+              {t('lp.addLP')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -280,7 +281,7 @@ export default function DappLP() {
               className="font-semibold"
               style={{ color: activeTab === 'remove' ? TEXT_WHITE : TEXT_MUTED }}
             >
-              {t('removeLP')}
+              {t('lp.removeLP')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -291,7 +292,7 @@ export default function DappLP() {
             <View className="p-4 rounded-xl mb-4" style={{ backgroundColor: BG_CARD }}>
               <View className="flex-row justify-between items-center">
                 <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                  {t('solBalance')}
+                  {t('lp.solBalance')}
                 </Text>
                 <Text className="text-lg font-bold" style={{ color: YELLOW }}>
                   {parseFloat(solBalance).toFixed(4)} SOL
@@ -302,7 +303,7 @@ export default function DappLP() {
             {/* 入金输入区 */}
             <View className="p-4 rounded-xl mb-4" style={{ backgroundColor: BG_CARD }}>
               <Text className="text-sm mb-2" style={{ color: TEXT_MUTED }}>
-                {t('depositAmount')}
+                {t('lp.depositAmount')}
               </Text>
               <View className="flex-row items-center mb-3">
                 <TextInput
@@ -336,7 +337,7 @@ export default function DappLP() {
               </View>
 
               <Text className="text-xs mt-3" style={{ color: TEXT_MUTED }}>
-                {t('minDeposit')}: {MIN_DEPOSIT} SOL
+                {t('lp.minDeposit')}: {MIN_DEPOSIT} SOL
               </Text>
             </View>
 
@@ -345,19 +346,19 @@ export default function DappLP() {
               <View className="flex-row items-start mb-2">
                 <Ionicons name="information-circle" size={16} color={CYAN} />
                 <Text className="ml-2 text-xs flex-1" style={{ color: TEXT_MUTED }}>
-                  {t('addLPTip')}
+                  {t('lp.addLPTip')}
                 </Text>
               </View>
               <View className="flex-row items-start mb-2">
                 <Ionicons name="checkmark-circle" size={16} color={GREEN} />
                 <Text className="ml-2 text-xs flex-1" style={{ color: TEXT_MUTED }}>
-                  {t('addLPBenefit1')}
+                  {t('lp.addLPBenefit1')}
                 </Text>
               </View>
               <View className="flex-row items-start">
                 <Ionicons name="checkmark-circle" size={16} color={GREEN} />
                 <Text className="ml-2 text-xs flex-1" style={{ color: TEXT_MUTED }}>
-                  {t('addLPBenefit2')}
+                  {t('lp.addLPBenefit2')}
                 </Text>
               </View>
             </View>
@@ -373,7 +374,7 @@ export default function DappLP() {
                 <ActivityIndicator color={BG_DARK} />
               ) : (
                 <Text className="text-lg font-bold" style={{ color: BG_DARK }}>
-                  {t('confirmAddLP')}
+                  {t('lp.confirmAddLP')}
                 </Text>
               )}
             </TouchableOpacity>
@@ -384,7 +385,7 @@ export default function DappLP() {
             <View className="p-4 rounded-xl mb-4" style={{ backgroundColor: BG_CARD }}>
               <View className="flex-row justify-between items-center mb-3">
                 <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                  {t('myLPShares')}
+                  {t('lp.myLPShares')}
                 </Text>
                 <Ionicons name="ribbon" size={20} color={PURPLE} />
               </View>
@@ -392,7 +393,7 @@ export default function DappLP() {
                 {parseFloat(lpShares).toFixed(4)} LP
               </Text>
               <Text className="text-xs" style={{ color: TEXT_MUTED }}>
-                {t('lpValue')}
+                {t('lp.lpValue')}
               </Text>
             </View>
 
@@ -401,7 +402,7 @@ export default function DappLP() {
               <View className="flex-row items-start mb-2">
                 <Ionicons name="warning" size={16} color={YELLOW} />
                 <Text className="ml-2 text-xs flex-1" style={{ color: TEXT_MUTED }}>
-                  {t('removeLPTip')}
+                  {t('lp.removeLPTip')}
                 </Text>
               </View>
             </View>
@@ -417,7 +418,7 @@ export default function DappLP() {
                 <ActivityIndicator color={TEXT_WHITE} />
               ) : (
                 <Text className="text-lg font-bold" style={{ color: TEXT_WHITE }}>
-                  {t('confirmRemoveLP')}
+                  {t('lp.confirmRemoveLP')}
                 </Text>
               )}
             </TouchableOpacity>
@@ -429,7 +430,7 @@ export default function DappLP() {
           <View className="mt-6 p-4 rounded-xl items-center" style={{ backgroundColor: BG_CARD }}>
             <Ionicons name="wallet-outline" size={32} color={TEXT_MUTED} />
             <Text className="mt-2 text-sm" style={{ color: TEXT_MUTED }}>
-              {t('connectWalletFirst')}
+              {t('lp.connectWalletFirst')}
             </Text>
           </View>
         )}

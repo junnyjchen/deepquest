@@ -397,5 +397,18 @@ export default {
     removeLPTip: '取消 LP 将返还您投入的 SOL 和 DQ 代币',
     confirmRemoveLP: '确认取消 LP',
     connectWalletFirst: '请先连接钱包',
+    // Alert messages
+    alert: {
+      connectWallet: '请先连接钱包',
+      minDepositAmount: '入金金额不能少于 {amount} SOL',
+      insufficientBalance: '余额不足',
+      needBrowserWallet: '请在浏览器中打开并连接 TP 钱包或 MetaMask',
+      referrerNotFound: '未找到推荐人信息，请通过推荐链接重新进入',
+      addLPSuccess: '入金成功！',
+      addLPFailed: '入金失败',
+      noLPToRemove: '没有可取消的 LP',
+      removeLPSuccess: '取消 LP 成功！',
+      removeLPFailed: '取消失败',
+    },
   },
 };

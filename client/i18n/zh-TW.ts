@@ -70,13 +70,11 @@ export default {
   },
 
   nodesNew: {
-    title: 'NODE CENTER',
-    subtitle: '節點中心',
+    title: '節點達標狀態',
+    subtitle: '查看您的節點達標進度和領取分紅',
     qualified: '已達標',
     notQualified: '未達標',
     stakeFailedRetry: '質押失敗，請重試',
-    title: '節點達標狀態',
-    subtitle: '查看您的節點達標進度和領取分紅',
     status: {
       qualified: '已達標',
       notQualified: '未達標',
@@ -284,6 +282,19 @@ export default {
     removeLPTip: '取消 LP 將返還您投入的 SOL 和 DQ 代幣',
     confirmRemoveLP: '確認取消 LP',
     connectWalletFirst: '請先連接錢包',
+    // Alert messages
+    alert: {
+      connectWallet: '請先連接錢包',
+      minDepositAmount: '入金金額不能少於 {amount} SOL',
+      insufficientBalance: '餘額不足',
+      needBrowserWallet: '請在瀏覽器中打開並連接 TP 錢包或 MetaMask',
+      referrerNotFound: '未找到推薦人信息，請通過推薦鏈接重新進入',
+      addLPSuccess: '入金成功！',
+      addLPFailed: '入金失敗',
+      noLPToRemove: '沒有可取消的 LP',
+      removeLPSuccess: '取消 LP 成功！',
+      removeLPFailed: '取消失敗',
+    },
   },
   help: {
     title: '幫助中心',
