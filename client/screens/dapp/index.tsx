@@ -898,8 +898,8 @@ export default function DappIndex() {
                   <Ionicons name="swap-horizontal" size={20} color={CYAN} />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('addLP')}</Text>
-                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('addLP.subtitle')}</Text>
+                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('lp.addLP')}</Text>
+                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('lp.subtitle')}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
               </TouchableOpacity>
