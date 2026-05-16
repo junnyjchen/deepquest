@@ -604,7 +604,7 @@ export default function DappLP() {
 
   return (
     <Screen>
-      <LogoHeader showMenuButton={true} menuExpanded={menuVisible} onMenuPress={toggleMenu} />
+      <LogoHeader />
       <View className="px-4 pb-2">
         <View className="flex-row items-center gap-2 flex-wrap">
           {walletAddress ? (
