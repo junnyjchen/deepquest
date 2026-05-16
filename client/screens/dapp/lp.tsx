@@ -656,6 +656,75 @@ export default function DappLP() {
         </View>
       </View>
 
+      {/* 快捷菜单折叠区域 */}
+      {menuVisible && (
+        <View className="px-4 pb-3">
+          <View 
+            className="rounded-2xl overflow-hidden"
+            style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}
+          >
+            <TouchableOpacity
+              className="flex-row items-center gap-3 p-4 border-b"
+              style={{ borderColor: BORDER_GRAY }}
+              onPress={() => { router.push('/profile'); setMenuVisible(false); }}
+            >
+              <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(255,215,0,0.1)' }}>
+                <Ionicons name="person" size={20} color={YELLOW} />
+              </View>
+              <View className="flex-1">
+                <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.title')}</Text>
+                <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('profile.myAssets')}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              className="flex-row items-center gap-3 p-4 border-b"
+              style={{ borderColor: BORDER_GRAY }}
+              onPress={() => { router.push('/team'); setMenuVisible(false); }}
+            >
+              <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(0,240,255,0.1)' }}>
+                <Ionicons name="people" size={20} color={CYAN} />
+              </View>
+              <View className="flex-1">
+                <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('team.title')}</Text>
+                <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('team.teamRewards')}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              className="flex-row items-center gap-3 p-4 border-b"
+              style={{ borderColor: BORDER_GRAY }}
+              onPress={() => { router.push('/rewards'); setMenuVisible(false); }}
+            >
+              <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(255,215,0,0.1)' }}>
+                <Ionicons name="gift" size={20} color={YELLOW} />
+              </View>
+              <View className="flex-1">
+                <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.rewards')}</Text>
+                <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('rewards.title')}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              className="flex-row items-center gap-3 p-4"
+              onPress={() => { router.push('/stakes'); setMenuVisible(false); }}
+            >
+              <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(208,32,255,0.1)' }}>
+                <Ionicons name="time" size={20} color={PURPLE} />
+              </View>
+              <View className="flex-1">
+                <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.stakes')}</Text>
+                <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('stakes.title')}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       <ScrollView className="flex-1 px-4 pt-2">
         {/* Tab 切换 */}
         <View className="flex-row mb-4 rounded-xl overflow-hidden" style={{ backgroundColor: BG_CARD_TRANS, borderWidth: 1, borderColor: BORDER_GRAY }}>
