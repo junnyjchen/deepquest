@@ -720,6 +720,114 @@ export const getPartnerReward = async (): Promise<{ dqReward: string; solReward:
   }
 };
 
+// ============ LP 添加/取消 LP ============
+
+/**
+ * 获取 SOL 代币授权额度（授权给主合约）
+ */
+export const getSOLAllowance = async (userAddress: string): Promise<string> => {
+  try {
+    const contract = getContract(CONTRACT_ADDRESSES.SOL.address, DQTOKEN_ABI);
+    const allowance = await contract.allowance(userAddress, CONTRACT_ADDRESSES.DQPROJECT.address);
+    return ethers.formatEther(allowance);
+  } catch (error) {
+    console.error('[Web3] 获取 SOL 授权额度失败:', error);
+    return '0';
+  }
+};
+
+/**
+ * 授权 SOL 代币给主合约
+ */
+export const approveSOL = async (
+  signer: ethers.Signer,
+  amount: string
+): Promise<ethers.TransactionResponse> => {
+  const solContract = await getSignedContract(CONTRACT_ADDRESSES.SOL.address, DQTOKEN_ABI, signer);
+  const amountInWei = ethers.parseUnits(amount, 18);
+
+  console.log('[Web3] 授权 SOL:', amount);
+
+  const tx = await solContract.approve(CONTRACT_ADDRESSES.DQPROJECT.address, amountInWei);
+  console.log('[Web3] SOL 授权交易已发送:', tx.hash);
+
+  return tx;
+};
+
+/**
+ * 添加 LP（入金）- 调用合约的 addLiquidityForUser
+ * 流程：SOL -> 一半换 DQ，一半配对加池 -> 获得 LP
+ */
+export const addLiquidityOnChain = async (
+  signer: ethers.Signer,
+  solAmount: string,
+  minLpAmount: string = '0'
+): Promise<ethers.TransactionResponse> => {
+  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+  const amountInWei = ethers.parseUnits(solAmount, 18);
+  const minLp = ethers.parseUnits(minLpAmount || '0', 18);
+
+  console.log('[Web3] 添加 LP（入金）:', solAmount, 'SOL');
+
+  const tx = await contract.addLiquidityForUser(amountInWei, minLp);
+  console.log('[Web3] LP 添加交易已发送:', tx.hash);
+
+  return tx;
+};
+
+/**
+ * 取消 LP - 调用合约的 withdrawLP
+ */
+export const withdrawLPOnChain = async (
+  signer: ethers.Signer
+): Promise<ethers.TransactionResponse> => {
+  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+
+  console.log('[Web3] 取消 LP');
+
+  const tx = await contract.withdrawLP();
+  console.log('[Web3] 取消 LP 交易已发送:', tx.hash);
+
+  return tx;
+};
+
+/**
+ * 获取用户 LP 份额
+ */
+export const getUserLPShares = async (userAddress: string): Promise<string> => {
+  try {
+    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
+    const shares = await contract.userLPShares(userAddress);
+    return ethers.formatEther(shares);
+  } catch (error) {
+    console.error('[Web3] 获取 LP 份额失败:', error);
+    return '0';
+  }
+};
+
+/**
+ * 获取用户 LP 记录
+ */
+export const getUserLPRecords = async (userAddress: string): Promise<{ amount: string; depositTime: string }[]> => {
+  try {
+    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
+    const index = await contract.userLPIndex(userAddress);
+    const records: { amount: string; depositTime: string }[] = [];
+
+    for (let i = 0; i < Number(index); i++) {
+      const record = await contract.userLPRecords(userAddress, i);
+      records.push({
+        amount: ethers.formatEther(record[0]),
+        depositTime: new Date(Number(record[1]) * 1000).toISOString(),
+      });
+    }
+    return records;
+  } catch (error) {
+    console.error('[Web3] 获取 LP 记录失败:', error);
+    return [];
+  }
+};
+
 // TypeScript 类型声明
 declare global {
   interface Window {

@@ -887,6 +887,22 @@ export default function DappIndex() {
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
               </TouchableOpacity>
+
+              {/* 添加 LP */}
+              <TouchableOpacity
+                className="flex-row items-center gap-3 p-4 border-b"
+                style={{ borderColor: BORDER_GRAY }}
+                onPress={() => { router.push('/lp'); setMenuExpanded(false); }}
+              >
+                <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(0,240,255,0.1)' }}>
+                  <Ionicons name="swap-horizontal" size={20} color={CYAN} />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('addLP')}</Text>
+                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('addLP.subtitle')}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
+              </TouchableOpacity>
             </View>
           </View>
         )}
