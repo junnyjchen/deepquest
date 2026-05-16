@@ -796,8 +796,8 @@ export const withdrawLPOnChain = async (
  */
 export const getUserLPShares = async (userAddress: string): Promise<string> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
-    const shares = await contract.userLPShares(userAddress);
+    const contract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
+    const shares = await contract.lpS(userAddress);
     return ethers.formatEther(shares);
   } catch (error) {
     console.error('[Web3] 获取 LP 份额失败:', error);

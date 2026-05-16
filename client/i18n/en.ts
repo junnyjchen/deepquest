@@ -34,10 +34,6 @@ export default {
     bindSuccessMessage: 'Referrer bound successfully.',
     bindFailedTitle: 'Bind failed',
     bindFailedMessage: 'Failed to bind referrer',
-
-    accountNotActivatedTitle: 'Account not activated',
-    accountNotActivatedMessage: 'Your account is not activated yet. Activate it to unlock full features.',
-    activateNow: 'Activate now',
     walletExtensionNotFound: 'No wallet extension detected. Please install TokenPocket or MetaMask in your browser.',
 
     accountActivated: 'Account activated!',
@@ -383,9 +379,9 @@ export default {
     solBalance: 'SOL Balance',
     depositAmount: 'Deposit Amount',
     minDeposit: 'Minimum deposit',
-    addLPTip: 'After deposit, half SOL will be swapped for DQ, the other half paired to add liquidity and earn LP',
-    addLPBenefit1: 'Hold LP to earn fee dividends',
-    addLPBenefit2: 'SOL and DQ paired to add liquidity pool',
+    addLPTip: 'Removing LP within 60 days incurs a 20% fee',
+    addLPBenefit1: 'Removing LP from day 61 to day 180 incurs a 10% fee',
+    addLPBenefit2: 'Removing LP after 181 days has zero fee',
     confirmAddLP: 'Confirm Deposit',
     myLPShares: 'My LP Shares',
     lpValue: 'Removing LP will return SOL and DQ',
