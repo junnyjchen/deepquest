@@ -243,23 +243,29 @@ export async function getChainUserInfo(userAddress: string): Promise<{
   totalInvest: string;
   teamInvest: string;
   energy: string;
-  dLevel: number;
+  pendingSOL: string;
 } | null> {
   try {
     const contract = getContract();
+    // getUser 返回: [referrer, directCount, level, totalInvest]
     const userInfo = await withRpcRetry(
       () => contract.getUser(userAddress),
       `getUser(${userAddress})`
-    );
-    
+    ) as any[];
+    // getUserStake 返回: [teamInvest, energy, pendingSOL]
+    const stakeInfo = await withRpcRetry(
+      () => contract.getUserStake(userAddress),
+      `getUserStake(${userAddress})`
+    ) as any[];
+
     return {
       referrer: userInfo[0],
       directCount: Number(userInfo[1]),
       level: Number(userInfo[2]),
       totalInvest: userInfo[3].toString(),
-      teamInvest: userInfo[4].toString(),
-      energy: userInfo[5].toString(),
-      dLevel: Number(userInfo[6]),
+      teamInvest: stakeInfo[0].toString(),
+      energy: stakeInfo[1].toString(),
+      pendingSOL: stakeInfo[2].toString(),
     };
   } catch (error) {
     console.error(`[ChainSync] 获取用户 ${userAddress} 信息失败:`, error);
@@ -282,7 +288,7 @@ async function syncUserToDatabase(
     totalInvest: string;
     teamInvest: string;
     energy: string;
-    dLevel: number;
+    pendingSOL: string;
   },
   fields?: string[]
 ): Promise<boolean> {
@@ -308,7 +314,7 @@ async function syncUserToDatabase(
       total_invest: { chainKey: 'totalInvest', dbKey: 'total_invest' },
       team_invest: { chainKey: 'teamInvest', dbKey: 'team_invest' },
       energy: { chainKey: 'energy', dbKey: 'energy' },
-      d_level: { chainKey: 'dLevel', dbKey: 'd_level' },
+      pending_sol: { chainKey: 'pendingSOL', dbKey: 'pending_sol' },
       referrer_address: { chainKey: 'referrer', dbKey: 'referrer_address' },
     };
 

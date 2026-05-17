@@ -1,0 +1,405 @@
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.17;
+import "@openzeppelin/contracts@4.9.6/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts@4.9.6/utils/structs/EnumerableSet.sol";
+import "@openzeppelin/contracts@4.9.6/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts@4.9.6/token/ERC20/utils/SafeERC20.sol";
+interface IDQToken {
+    function transfer(address to, uint256 amount) external returns (bool);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
+    function approve(address spender, uint256 amount) external returns (bool);
+    function burn(uint256 amount) external;
+    function totalSupply() external view returns (uint256);
+}
+interface IDQCard {
+    function balanceOf(address owner) external view returns (uint256);
+    function mintByOwner(address to, uint256 _type) external;
+    function getCardPrice(uint256 _type) external pure returns (uint256);
+}
+interface IPancakeRouter02 {
+    function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts);
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external;
+    function addLiquidity(address tokenA, address tokenB, uint amountADesired, uint amountBDesired, uint amountAMin, uint amountBMin, address to, uint deadline) external returns (uint amountA, uint amountB, uint liquidity);
+}
+interface IDQMiningStake {
+    function registerUser(address _u, address _r) external;
+    function importUser(address _u, address _r, uint256 _total, uint256 _team, uint8 _level, uint256 _energy) external;
+    function setEnergyMul(uint256 _m) external;
+    function addEnergy(address _u, uint256 _a) external;
+    function subEnergy(address _u, uint256 _a) external;
+    function addTeamInvest(address _u, uint256 _a) external;
+    function updateTeam(address _u, uint256 _a) external;
+    function addDirectSales(address _u, uint256 _a) external;
+    function addChild(address _p, address _c) external;
+    function addPendingSOL(address _u, uint256 _a) external;
+    function subPendingSOL(address _u, uint256 _a) external;
+    function updateValidAddress(address _u) external;
+    function distReward(address _u, uint256 _dyn) external;
+    function addLP(address _u, uint256 _a, uint256 _t) external;
+    function distLP(uint256 f) external;
+    function claimLP(address u) external;
+    function claimNft(address _u) external;
+    function claimD(address _u) external;
+    function claimFee(address _u) external;
+    function claimPdq(address _u) external;
+    function registerDLevel(address _user, uint8 _level) external;
+    function claimPbnb(address _u) external;
+    function withdraw(address _u, uint256 _a) external;
+    function withdrawLP(address _u) external;
+    function distDQFee(uint256 _amount) external;
+    function distNFT(uint256 _fee) external payable;
+    function stake(address _u, uint256 _a, uint _i) external;
+    function unstake(address _u, uint _i) external;
+    function clmS(address _u, uint _i) external;
+    function mine() external;
+    function getTeamInvest(address _u) external view returns (uint256);
+    function getEnergy(address _u) external view returns (uint256);
+    function getPendingSOL(address _u) external view returns (uint256);
+}
+contract DQMiningV3 is ReentrancyGuard {
+    using EnumerableSet for EnumerableSet.AddressSet;
+    using SafeERC20 for IERC20;
+    address public constant OWNER = 0x274aCc6397349F21179ed6258A54B2a11B28faF5;
+    address public constant SOL = 0x570A5D26f7765Ecb712C0924E4De545B89fD43dF;
+    address public constant ROUTER = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
+    address public FOUNDATION = 0xA0f045cde45ca1aeE2033356170B46A1fF3b7202;
+    address public constant OP = 0x4bE56C5390869A3236F8545462896eB1E423D0d5;
+    address public constant STAKE_OP = 0x7cc3260b1E4e1d830A6a92A3b2F77257fbab169F;
+    address public constant INS = 0x2db993B862969040Cd971Df8Fd2a2C80EC285203;
+    address public constant BUY_FEE = 0x1850933c0d64db3A56476F5Bdc4191BCFd242e30;
+    address public constant DAO = 0x27b84FC9eb5C3a19585093aD6D11292cbbaB5852;
+    IDQToken public dqToken;
+    IDQCard public dqCard;
+    address public stakeContract;
+    uint256 public constant INVEST_MIN = 1 ether;
+    uint256 public constant DAILY_LIMIT = 1 ether;
+    uint256 public currentPhase = 1;
+    uint256 public constant PHASE_STEP = 5 ether;
+    uint256[4] public nodePrices = [0, 500 ether, 1500 ether, 5000 ether];
+    uint256 public constant DIRECT_RATE = 30;
+    uint256 public constant SEE_RATE = 15;
+    uint256 public constant DAO_RATE = 10;
+    uint256 public constant INS_RATE = 7;
+    uint256 public constant OP_RATE = 8;
+    uint256 public constant ENERGY_MUL = 3;
+    uint256 public constant WITHDRAW_FEE = 10;
+    uint256 public constant FEE_NODE_RATE = 40;
+    uint256 public constant FEE_PARTNER_RATE = 30;
+    uint256 public constant FEE_FOUNDATION_RATE = 30;
+    uint256 public constant CLAIM_BNB_FEE = 0.00005 ether;
+    uint256 public constant MGR_RATE = 30;
+    uint256 public SLIPPAGE = 995;  // 可配置，默认0.5%
+    uint256 public constant BURN_STOP_THRESHOLD = 1;
+    uint256 public constant INITIAL_SUPPLY = 100000000000 * 10**18;
+    struct User {
+        address referrer;
+        uint256 directCount;
+        uint8 level;
+        uint256 totalInvest;
+        EnumerableSet.AddressSet children;
+    }
+    mapping(address => User) internal users;
+    address[] public allUsers;
+    mapping(address => bool) public isBlacklisted;
+    mapping(address => bool) public authorized;  // 授权地址
+    mapping(address => uint256) public dailyDeposit;
+    mapping(address => bool) public depositWhiteList;
+    uint256 public nftPendingSOL;
+    uint256 public partnerPendingSOL;
+    uint256 public startTime;
+    event Register(address indexed u, address indexed r);
+    event Deposit(address indexed u, uint256 a);
+    event SwapAndAddLP(address indexed u, uint256 s, uint256 d, uint256 l);
+    event SellDQ(address indexed u, uint256 d, uint256 s, uint256 b, uint256 f);
+    event ClaimReward(address indexed user, uint256 amount, uint256 fee);
+    event ReinvestSOL(address indexed user, uint256 amount, uint256 energyAdded);
+    event WithdrawBNB(address indexed to, uint256 amount);
+    modifier onlyOwner() { require(msg.sender == OWNER, "!owner"); _; }
+    modifier onlyReg() { require(users[msg.sender].referrer != address(0) || msg.sender == OWNER, "!reg"); _; }
+    constructor() { startTime = block.timestamp; users[OWNER].referrer = address(0); allUsers.push(OWNER); authorized[OWNER] = true; }
+    function grantAuth(address _auth) external onlyOwner { authorized[_auth] = true; }
+    function revokeAuth(address _auth) external onlyOwner { authorized[_auth] = false; }
+    function setDQToken(address _addr) external onlyOwner { require(_addr != address(0), "!addr"); dqToken = IDQToken(_addr); }
+    function setDQCard(address _addr) external onlyOwner { require(_addr != address(0), "!addr"); dqCard = IDQCard(_addr); }
+    function setStakeContract(address _a) external onlyOwner { require(_a != address(0), "!addr"); stakeContract = _a; IDQMiningStake(_a).setEnergyMul(ENERGY_MUL); }
+    function setFoundation(address _addr) external onlyOwner { require(_addr != address(0), "!addr"); FOUNDATION = _addr; }
+    function setSlippage(uint256 _s) external onlyOwner { require(_s <= 1000, "!"); SLIPPAGE = _s; }  // 0-1000，代表0-100%
+    function setDepositWhiteList(address _u, bool _s) external onlyOwner { depositWhiteList[_u] = _s; }
+    function addToBlacklist(address _u) external onlyOwner { isBlacklisted[_u] = true; }
+    function removeFromBlacklist(address _u) external onlyOwner { isBlacklisted[_u] = false; }
+    function register(address _r) external {
+        require(_r != msg.sender && users[msg.sender].referrer == address(0), "!inv");
+        if (_r != address(0)) {
+            require(users[_r].referrer != address(0) || _r == OWNER, "!rref");
+            users[_r].directCount++;
+            users[_r].children.add(msg.sender);
+        }
+        users[msg.sender].referrer = _r;
+        allUsers.push(msg.sender);
+        if (stakeContract != address(0)) IDQMiningStake(stakeContract).registerUser(msg.sender, _r);
+        emit Register(msg.sender, _r);
+    }
+    function importUser(address _u, address _r) external onlyOwner {
+        require(users[_u].referrer == address(0), "already");
+        users[_u].referrer = _r;
+        allUsers.push(_u);
+        if (_r != address(0) && users[_r].referrer != address(0)) {
+            users[_r].directCount++;
+            users[_r].children.add(_u);
+        }
+        if (stakeContract != address(0)) {
+            User storage u = users[_u];
+            IDQMiningStake(stakeContract).importUser(_u, _r, u.totalInvest, 0, u.level, 0);
+        }
+        emit Register(_u, _r);
+    }
+    function setUserLevel(address _u, uint8 _lvl) external onlyOwner { require(_lvl >= 1 && _lvl <= 6, "!level"); users[_u].level = _lvl; }
+    function setUserDLevel(address _u, uint8 _lvl) external onlyOwner { require(_lvl <= 8, "!Dlevel"); if (stakeContract != address(0)) IDQMiningStake(stakeContract).registerDLevel(_u, _lvl); }
+
+    // ============ 批量导入功能 ============
+    // 批量导入用户
+    function importUsers(address[] calldata _u, address[] calldata _r) external onlyOwner {
+        require(_u.length == _r.length, "!len");
+        for (uint i = 0; i < _u.length; i++) {
+            if (users[_u[i]].referrer != address(0)) continue;
+            users[_u[i]].referrer = _r[i];
+            allUsers.push(_u[i]);
+            if (_r[i] != address(0) && users[_r[i]].referrer != address(0)) {
+                users[_r[i]].directCount++;
+                users[_r[i]].children.add(_u[i]);
+            }
+            if (stakeContract != address(0)) {
+                IDQMiningStake(stakeContract).registerUser(_u[i], _r[i]);
+            }
+            emit Register(_u[i], _r[i]);
+        }
+    }
+    // 批量设置节点等级 S1-S6
+    function setNodesLevel(address[] calldata _u, uint8[] calldata _lvl) external onlyOwner {
+        require(_u.length == _lvl.length, "!len");
+        for (uint i = 0; i < _u.length; i++) {
+            require(_lvl[i] >= 1 && _lvl[i] <= 6, "!level");
+            users[_u[i]].level = _lvl[i];
+        }
+    }
+    // 批量设置 D 级 D1-D8
+    function setNodesDLevel(address[] calldata _u, uint8[] calldata _lvl) external onlyOwner {
+        require(_u.length == _lvl.length, "!len");
+        for (uint i = 0; i < _u.length; i++) {
+            require(_lvl[i] <= 8, "!Dlevel");
+            if (stakeContract != address(0)) {
+                IDQMiningStake(stakeContract).registerDLevel(_u[i], _lvl[i]);
+            }
+        }
+    }
+    // 批量导入节点（注册+铸造NFT）
+    function importNodes(address[] calldata _u, uint8[] calldata _t) external onlyOwner {
+        require(_u.length == _t.length, "!len");
+        for (uint i = 0; i < _u.length; i++) {
+            if (users[_u[i]].referrer == address(0)) {
+                users[_u[i]].referrer = OWNER;
+                allUsers.push(_u[i]);
+                emit Register(_u[i], OWNER);
+            }
+            if (_t[i] >= 1 && _t[i] <= 3) {
+                dqCard.mintByOwner(_u[i], _t[i]);
+                users[_u[i]].level = _t[i];
+            }
+        }
+    }
+    function depositSOL(uint256 _a) external nonReentrant onlyReg {
+        require(_a >= INVEST_MIN && !isBlacklisted[msg.sender], "!inv");
+        if (!depositWhiteList[msg.sender]) {
+            uint256 lim = getDailyLimit();
+            require(dailyDeposit[msg.sender] + _a <= lim, "!lim");
+            dailyDeposit[msg.sender] += _a;
+        }
+        IERC20(SOL).safeTransferFrom(msg.sender, address(this), _a);
+        _deposit(msg.sender, _a);
+    }
+    function depositForUser(address _user, uint256 _a) external onlyOwner {
+        require(_a >= INVEST_MIN && !isBlacklisted[_user], "!inv");
+        require(users[_user].referrer != address(0), "!reg");
+        IERC20(SOL).safeTransferFrom(msg.sender, address(this), _a);
+        _deposit(_user, _a);
+    }
+    function _deposit(address _user, uint256 _a) internal {
+        User storage u = users[_user];
+        bool isFirstDeposit = (u.totalInvest == 0);
+        u.totalInvest += _a;
+        uint256 dyn = _a * 50 / 100;
+        uint256 lp = _a - dyn;
+        if (stakeContract != address(0)) {
+            IDQMiningStake sk = IDQMiningStake(stakeContract);
+            sk.addEnergy(_user, _a * ENERGY_MUL);
+            sk.addTeamInvest(_user, _a * 50 / 100 * 30 / 100);
+            sk.updateTeam(_user, _a * 50 / 100 * 30 / 100);
+            sk.addDirectSales(_user, _a);
+            if (isFirstDeposit) sk.updateValidAddress(_user);
+            sk.distReward(_user, dyn);
+            sk.addPendingSOL(_user, dyn);
+        }
+        if (lp > 0) _swapAndAddLP(_user, lp);
+        emit Deposit(_user, _a);
+    }
+    function _swapAndAddLP(address _u, uint256 _a) internal {
+        require(stakeContract != address(0), "!stake");
+        uint256 halfSol = _a / 2;
+        uint256 swapSol = _a - halfSol;
+        address[] memory path = new address[](2);
+        path[0] = SOL; path[1] = address(dqToken);
+        IERC20(SOL).approve(ROUTER, _a);
+        uint256[] memory amounts = IPancakeRouter02(ROUTER).getAmountsOut(swapSol, path);
+        uint256 dBal = amounts[1] * SLIPPAGE / 1000;
+        dqToken.approve(ROUTER, dBal);
+        uint256 minA = halfSol * SLIPPAGE / 1000;  // 使用全局滑点
+        uint256 minB = dBal * SLIPPAGE / 1000;
+        IPancakeRouter02(ROUTER).addLiquidity(SOL, address(dqToken), halfSol, dBal, minA, minB, address(this), block.timestamp + 300);
+        (,,uint256 liq) = IPancakeRouter02(ROUTER).addLiquidity(SOL, address(dqToken), halfSol, dBal, minA, minB, address(this), block.timestamp + 300);
+        IDQMiningStake(stakeContract).addLP(_u, liq, block.timestamp);
+        emit SwapAndAddLP(_u, halfSol, dBal, liq);
+    }
+    function reinvest(uint256 _a) external nonReentrant onlyReg {
+        require(stakeContract != address(0), "!stake");
+        IDQMiningStake sk = IDQMiningStake(stakeContract);
+        uint256 bal = sk.getPendingSOL(msg.sender);
+        require(_a <= bal, "!bal");
+        sk.subPendingSOL(msg.sender, _a);
+        sk.addEnergy(msg.sender, _a * ENERGY_MUL);
+        emit ReinvestSOL(msg.sender, _a, _a * ENERGY_MUL);
+    }
+    function claimReward() external nonReentrant {
+        require(stakeContract != address(0), "!stake");
+        IDQMiningStake sk = IDQMiningStake(stakeContract);
+        uint256 pending = sk.getPendingSOL(msg.sender);
+        require(pending > 0, "!pending");
+        sk.subPendingSOL(msg.sender, pending);
+        uint256 fee = pending * WITHDRAW_FEE / 100;
+        uint256 net = pending - fee;
+        _distFee(fee);
+        IERC20(SOL).safeTransfer(msg.sender, net);
+        emit ClaimReward(msg.sender, net, fee);
+    }
+    function _distFee(uint256 _fee) internal {
+        if (_fee == 0) return;
+        uint256 n = _fee * FEE_NODE_RATE / 100;
+        uint256 p = _fee * FEE_PARTNER_RATE / 100;
+        nftPendingSOL += n;
+        partnerPendingSOL += p;
+        IERC20(SOL).safeTransfer(FOUNDATION, _fee - n - p);
+    }
+    function buyNode(uint256 _t) external nonReentrant {
+        require(_t >= 1 && _t <= 3, "!type");
+        require(dqCard.getCardPrice(_t) > 0, "!price");
+        uint256 price = dqCard.getCardPrice(_t);
+        require(IERC20(SOL).balanceOf(msg.sender) >= price, "!bal");
+        IERC20(SOL).safeTransferFrom(msg.sender, address(this), price);
+        uint256 half = price / 2;
+        IERC20(SOL).safeTransfer(FOUNDATION, half);
+        _swapAndAddLP(msg.sender, half);
+        dqCard.mintByOwner(msg.sender, _t);
+        users[msg.sender].level = uint8(_t);
+    }
+    function withdraw(uint256 _a) external nonReentrant {
+        require(stakeContract != address(0), "!stake");
+        IDQMiningStake(stakeContract).withdraw(msg.sender, _a);
+    }
+    function withdrawLP() external nonReentrant {
+        require(stakeContract != address(0), "!stake");
+        IDQMiningStake(stakeContract).withdrawLP(msg.sender);
+    }
+    function claimLP() external nonReentrant {
+        require(stakeContract != address(0), "!stake");
+        IDQMiningStake(stakeContract).claimLP(msg.sender);
+    }
+    function claimNft() external nonReentrant {
+        if (stakeContract != address(0)) IDQMiningStake(stakeContract).claimNft(msg.sender);
+    }
+    function claimFee() external nonReentrant {
+        if (stakeContract != address(0)) IDQMiningStake(stakeContract).claimFee(msg.sender);
+    }
+    function claimDTeam() external nonReentrant {
+        if (stakeContract != address(0)) IDQMiningStake(stakeContract).claimD(msg.sender);
+    }
+    function claimPartnerDQ() external nonReentrant {
+        if (stakeContract != address(0)) IDQMiningStake(stakeContract).claimPdq(msg.sender);
+    }
+    function claimPartnerBNB() external nonReentrant {
+        if (stakeContract != address(0)) IDQMiningStake(stakeContract).claimPbnb(msg.sender);
+    }
+    function stakeDQ(uint256 _amount, uint _periodIndex) external nonReentrant {
+        require(stakeContract != address(0), "!stake");
+        require(dqToken.balanceOf(msg.sender) >= _amount, "!bal");
+        dqToken.transferFrom(msg.sender, address(this), _amount);
+        IDQMiningStake(stakeContract).stake(msg.sender, _amount, _periodIndex);
+    }
+    function unstakeDQ(uint _periodIndex) external nonReentrant {
+        if (stakeContract != address(0)) IDQMiningStake(stakeContract).unstake(msg.sender, _periodIndex);
+    }
+    function claimStakeReward(uint _periodIndex) external nonReentrant {
+        if (stakeContract != address(0)) IDQMiningStake(stakeContract).clmS(msg.sender, _periodIndex);
+    }
+    function mineBlock() external nonReentrant onlyOwner {
+        if (stakeContract != address(0)) IDQMiningStake(stakeContract).mine();
+    }
+    function sellDQForSOL(uint256 _dq) external nonReentrant returns (uint256 solOut) {
+        require(dqToken.balanceOf(msg.sender) >= _dq, "!bal");
+        dqToken.transferFrom(msg.sender, address(this), _dq);
+        address[] memory path = new address[](2);
+        path[0] = address(dqToken); path[1] = SOL;
+        uint256 supply = dqToken.totalSupply();
+        uint256 burnAmount;
+        if (supply > INITIAL_SUPPLY * BURN_STOP_THRESHOLD / 100) {
+            burnAmount = _dq * 90 / 100;
+            dqToken.burn(burnAmount);
+        }
+        uint256 fee = _dq * WITHDRAW_FEE / 100;
+        uint256 swapAmt = _dq - fee;
+        dqToken.approve(ROUTER, swapAmt);
+        uint256[] memory amounts = IPancakeRouter02(ROUTER).getAmountsOut(swapAmt, path);
+        uint256 minOut = amounts[1] * SLIPPAGE / 1000;
+        IPancakeRouter02(ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(swapAmt, minOut, path, address(this), block.timestamp + 300);
+        solOut = IERC20(SOL).balanceOf(address(this));
+        IERC20(SOL).safeTransfer(msg.sender, solOut);
+        emit SellDQ(msg.sender, _dq, solOut, burnAmount, fee);
+    }
+    function approveRouter() external onlyOwner {
+        require(address(dqToken) != address(0), "!dq");
+        dqToken.approve(ROUTER, type(uint256).max);
+        IERC20(SOL).approve(ROUTER, type(uint256).max);
+    }
+    function distributeFeeToNFT(uint256 _amount) external {
+        if (_amount > 0 && stakeContract != address(0)) IDQMiningStake(stakeContract).distNFT(_amount);
+    }
+    function advancePhase() external onlyOwner { currentPhase++; }
+    function adminWithdrawDQ(uint256 _a) external onlyOwner { dqToken.transfer(OWNER, _a); }
+    function adminWithdrawSOL(uint256 _a) external onlyOwner { IERC20(SOL).safeTransfer(OWNER, _a); }
+    function withdrawBNB(address payable _to, uint256 _amount) external onlyOwner {
+        require(_amount > 0 && _amount <= address(this).balance, "!bal");
+        (bool success,) = _to.call{value: _amount}("");
+        require(success, "!");
+        emit WithdrawBNB(_to, _amount);
+    }
+    function getDailyLimit() public view returns (uint256) {
+        uint256 l = DAILY_LIMIT + (currentPhase - 1) * PHASE_STEP;
+        return l > 200 ether ? 200 ether : l;
+    }
+    function getUser(address _u) external view returns (address referrer, uint256 directCount, uint8 level, uint256 totalInvest) {
+        User storage us = users[_u];
+        return (us.referrer, us.directCount, us.level, us.totalInvest);
+    }
+    function getUserStake(address _u) external view returns (uint256 teamInvest, uint256 energy, uint256 pendingSOL) {
+        if (stakeContract != address(0)) {
+            IDQMiningStake sk = IDQMiningStake(stakeContract);
+            return (sk.getTeamInvest(_u), sk.getEnergy(_u), sk.getPendingSOL(_u));
+        }
+        return (0, 0, 0);
+    }
+    function getPendingSOL(address _u) external view returns (uint256) {
+        if (stakeContract != address(0)) return IDQMiningStake(stakeContract).getPendingSOL(_u);
+        return 0;
+    }
+    function getTeamSize(address _u) external view returns (uint256) { return users[_u].children.length(); }
+    function getAllUsersLength() external view returns (uint256) { return allUsers.length; }
+}

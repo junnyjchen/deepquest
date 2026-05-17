@@ -509,17 +509,13 @@ export async function getUserInfoFromChain(walletAddress: string) {
       `getUser(${walletAddress})`
     );
     
-    // getUser 返回数组: [referrer, directCount, level, totalInvest, teamInvest, energy, dLevel, validAddressCount, pendingSOL]
+    // getUser 返回数组: [referrer, directCount, level, totalInvest]
+    // 团队业绩/能量/待提现 SOL 已拆分到 getUserStake
     return {
       referrer: userInfo[0],
       directCount: userInfo[1]?.toString() || '0',
       level: userInfo[2]?.toString() || '0',
-      totalInvest: userInfo[3]?.toString() || '0',
-      teamInvest: userInfo[4]?.toString() || '0',
-      energy: userInfo[5]?.toString() || '0',
-      dLevel: userInfo[6]?.toString() || '0',
-      validAddressCount: userInfo[7]?.toString() || '0',
-      pendingSOL: userInfo[8]?.toString() || '0',
+      totalInvest: userInfo[3]?.toString() || '0'
     };
   } catch (error) {
     console.error(`[BSC] 获取用户信息失败:`, error);
