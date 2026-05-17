@@ -1,0 +1,386 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "MockDQMiningStake",
+  "sourceName": "src/mocks/DQMiningTestMocks.sol",
+  "abi": [
+    {
+      "inputs": [],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [],
+      "name": "PARTNER",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "u",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "a",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "t",
+          "type": "uint256"
+        }
+      ],
+      "name": "addLP",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "claimD",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "claimFee",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "claimLP",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "claimNft",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "claimPbnb",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "claimPdq",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "clmS",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "dLevels",
+      "outputs": [
+        {
+          "internalType": "uint8",
+          "name": "",
+          "type": "uint8"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "distDQFee",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "distLP",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "distNFT",
+      "outputs": [],
+      "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "distP",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "lpD",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "lpS",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "lpT",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "mine",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "partner",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_user",
+          "type": "address"
+        },
+        {
+          "internalType": "uint8",
+          "name": "_level",
+          "type": "uint8"
+        }
+      ],
+      "name": "registerDLevel",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "stake",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "unstake",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "withdraw",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_u",
+          "type": "address"
+        }
+      ],
+      "name": "withdrawLP",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x6080806040523461002a57600480546001600160a01b03191661beef17905561042f90816100308239f35b600080fdfe60806040818152600436101561001457600080fd5b600090813560e01c9283622e6df8146103675783630c51b88f146103525783631956c0921461031c57508263230fb41e1461016a57826324d83d031461015f57826331aedf9b1461030c578263328db0fa146102d257826353f1daa1146101f45782636ebc51e11461015f5782638652d31c1461028157826399f4b2511461026a5782639bd769aa14610235578263b1d78e0e146101ff578263be10862b14610134578263be75f46b1461015f578263c12268931461015f578263c2a672e0146101f4578263c3e98e61146101a8578263c579535a14610175578263d3c6bc4b1461016a578263e74b5b731461015f578263e8bbb75b1461015f578263ebebcf3d1461013457505063f3fef3a31461012c575b600080fd5b6101276103df565b3461015b578160031936011261015b5760045490516001600160a01b039091168152602090f35b5080fd5b5050506101276103c3565b50505061012761036f565b8190346101a55760203660031901126101a5576001600160a01b03610198610383565b1682528160205281205580f35b50fd5b3461015b578060031936011261015b576101c0610383565b906024359160ff83168093036101f0576001600160a01b0316835260036020528220805460ff1916909117905580f35b8380fd5b5050506101276103df565b3461015b57602036600319011261015b5760209181906001600160a01b03610225610383565b1681526001845220549051908152f35b3461015b57602036600319011261015b5760209181906001600160a01b0361025b610383565b16815280845220549051908152f35b503461027e578060031936011261027e5780f35b80fd5b3461015b5761028f36610399565b929160018060a01b0316908185528460205282852080549182018092116102be57558352600160205282205580f35b634e487b7160e01b86526011600452602486fd5b3461015b57602036600319011261015b5760209160ff9082906001600160a01b036102fb610383565b168152600385522054169051908152f35b50602036600319011261027e5780f35b903461034e57602036600319011261034e576020926001600160a01b03610341610383565b1681526002845220548152f35b8280fd5b823461027e5761036136610399565b50505080f35b505050506101275b503461012757602036600319011261012757005b600435906001600160a01b038216820361012757565b6060906003190112610127576004356001600160a01b038116810361012757906024359060443590565b5034610127576020366003190112610127576103dd610383565b005b5034610127576040366003190112610127576103dd61038356fea2646970667358221220cf781ebe53b628d4d4dbbcddcf37936202d3abb685fa1e0a58b780980725407464736f6c63430008110033",
+  "deployedBytecode": "0x60806040818152600436101561001457600080fd5b600090813560e01c9283622e6df8146103675783630c51b88f146103525783631956c0921461031c57508263230fb41e1461016a57826324d83d031461015f57826331aedf9b1461030c578263328db0fa146102d257826353f1daa1146101f45782636ebc51e11461015f5782638652d31c1461028157826399f4b2511461026a5782639bd769aa14610235578263b1d78e0e146101ff578263be10862b14610134578263be75f46b1461015f578263c12268931461015f578263c2a672e0146101f4578263c3e98e61146101a8578263c579535a14610175578263d3c6bc4b1461016a578263e74b5b731461015f578263e8bbb75b1461015f578263ebebcf3d1461013457505063f3fef3a31461012c575b600080fd5b6101276103df565b3461015b578160031936011261015b5760045490516001600160a01b039091168152602090f35b5080fd5b5050506101276103c3565b50505061012761036f565b8190346101a55760203660031901126101a5576001600160a01b03610198610383565b1682528160205281205580f35b50fd5b3461015b578060031936011261015b576101c0610383565b906024359160ff83168093036101f0576001600160a01b0316835260036020528220805460ff1916909117905580f35b8380fd5b5050506101276103df565b3461015b57602036600319011261015b5760209181906001600160a01b03610225610383565b1681526001845220549051908152f35b3461015b57602036600319011261015b5760209181906001600160a01b0361025b610383565b16815280845220549051908152f35b503461027e578060031936011261027e5780f35b80fd5b3461015b5761028f36610399565b929160018060a01b0316908185528460205282852080549182018092116102be57558352600160205282205580f35b634e487b7160e01b86526011600452602486fd5b3461015b57602036600319011261015b5760209160ff9082906001600160a01b036102fb610383565b168152600385522054169051908152f35b50602036600319011261027e5780f35b903461034e57602036600319011261034e576020926001600160a01b03610341610383565b1681526002845220548152f35b8280fd5b823461027e5761036136610399565b50505080f35b505050506101275b503461012757602036600319011261012757005b600435906001600160a01b038216820361012757565b6060906003190112610127576004356001600160a01b038116810361012757906024359060443590565b5034610127576020366003190112610127576103dd610383565b005b5034610127576040366003190112610127576103dd61038356fea2646970667358221220cf781ebe53b628d4d4dbbcddcf37936202d3abb685fa1e0a58b780980725407464736f6c63430008110033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

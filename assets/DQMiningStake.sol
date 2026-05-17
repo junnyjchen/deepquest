@@ -23,25 +23,11 @@ interface IDQCard {
     function getCardPrice(uint256 _type) external pure returns (uint256);
 }
 interface IPancakeRouter02 {
-    function removeLiquidity(
-        address tokenA,
-        address tokenB,
-        uint256 liquidity,
-        uint256 amountAMin,
-        uint256 amountBMin,
-        address to,
-        uint256 deadline
-    ) external returns (uint256 amountA, uint256 amountB);
-    function addLiquidity(
-        address tokenA,
-        address tokenB,
-        uint256 amountADesired,
-        uint256 amountBDesired,
-        uint256 amountAMin,
-        uint256 amountBMin,
-        address to,
-        uint256 deadline
-    ) external returns (uint256 amountA, uint256 amountB, uint256 liquidity);
+    function removeLiquidity(address tokenA, address tokenB, uint256 liquidity, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) external returns (uint256 amountA, uint256 amountB);
+    function addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) external returns (uint amountA, uint amountB, uint liquidity);
+}
+interface IDQMining {
+    function syncRemoveLP(address _u) external;
 }
 contract DQMiningStake is ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -77,9 +63,6 @@ contract DQMiningStake is ReentrancyGuard {
     uint256[8] public dLevelAccReward;
     uint256 public constant INITIAL_SUPPLY = 1000 * 10**8 * 10**18;
     uint256 public releasedSupply;
-    function setLpPair(address _pair) external onlyO {
-        lpPair = _pair;
-    }
     uint256[] public SP = [30, 90, 180, 360];
     uint256[4] public sA;
     uint256[4] public tS;
@@ -108,6 +91,10 @@ contract DQMiningStake is ReentrancyGuard {
     mapping(address => uint256[4]) public sAmt;
     mapping(address => uint256[4]) public sDebt;
     mapping(address => bool) public isB;
+    uint256 public constant FEE_60DAYS = 20;
+    uint256 public constant FEE_61_180DAYS = 10;
+    uint256 public constant FEE_180PLUS = 0;
+    uint256 public constant WITHDRAW_FEE_RATE = 10;
     event ClaimNft(address indexed u, uint256 a);
     event ClaimDTeam(address indexed u, uint256 a);
     event ClaimPdq(address indexed u, uint256 a);
@@ -123,13 +110,13 @@ contract DQMiningStake is ReentrancyGuard {
     event FoundationDistributed(uint256 amount);
     event DLevelRegistered(address indexed user, uint8 oldLevel, uint8 newLevel);
     event DLevelRewardClaimed(address indexed user, uint256 amount);
+    event WithdrawnLP(address indexed user, uint256 sol, uint256 dq, uint256 feeRate);
+    event ForceRemoveLP(address indexed user, uint256 amount);
     modifier onlyO() { require(msg.sender == OWNER, "!o"); _; }
     modifier onlyM() { require(msg.sender == mc, "!m"); _; }
     modifier onlyMining() { require(msg.sender == miningContract, "!mining"); _; }
-    constructor() {
-        lt = block.timestamp;
-        dc = IDQCard(0xA275d02a6bDc9bd79FdAAD1838a9f5b1F19d032a);
-    }
+    constructor() { lt = block.timestamp; dc = IDQCard(0x1857aCeDf9b73163D791eb2F0374a328416291a1); }
+    function setLpPair(address _pair) external onlyO { lpPair = _pair; }
     function setDLevelByOwner(address _user, uint8 _newLevel) external onlyO {
         uint8 oldLevel = userDLevel[_user];
         if (oldLevel > 0 && oldLevel <= 8) {
@@ -145,20 +132,12 @@ contract DQMiningStake is ReentrancyGuard {
         }
         emit DLevelRegistered(_user, oldLevel, _newLevel);
     }
-    function setDQCard(address _addr) external onlyO {
-        require(_addr != address(0), "!addr");
-        address oldAddr = address(dc);
-        dc = IDQCard(_addr);
-        emit DQCardSet(oldAddr, _addr);
-    }
+    function setDQCard(address _addr) external onlyO { require(_addr != address(0), "!addr"); address oldAddr = address(dc); dc = IDQCard(_addr); emit DQCardSet(oldAddr, _addr); }
     function setClaimGasFee(uint256 _fee) external onlyO { claimGasFee = _fee; }
     function setFeeRecipient(address _addr) external onlyO { require(_addr != address(0)); feeRecipient = _addr; }
     function setM(address a) external onlyO { mc = a; }
     function bl(address u, bool s) external onlyO { isB[u] = s; }
-    function setMiningContract(address _addr) external onlyO {
-        require(_addr != address(0), "!addr");
-        miningContract = _addr;
-    }
+    function setMiningContract(address _addr) external onlyO { require(_addr != address(0), "!addr"); miningContract = _addr; }
     function registerDLevel(address _user, uint8 _newLevel) external onlyMining {
         uint8 oldLevel = userDLevel[_user];
         if (oldLevel > 0 && oldLevel <= 8) {
@@ -178,13 +157,16 @@ contract DQMiningStake is ReentrancyGuard {
         uint256 amount = lpS[msg.sender];
         require(amount > 0, "!lp");
         require(lpPair != address(0), "!pair");
+        uint256 stakeDays = (block.timestamp - lpT[msg.sender]) / 86400;
+        uint256 feeRate;
+        if (stakeDays < 60) { feeRate = FEE_60DAYS; }
+        else if (stakeDays < 180) { feeRate = FEE_61_180DAYS; }
+        else { feeRate = FEE_180PLUS; }
         lpS[msg.sender] = 0;
-        IERC20(lpPair).approve(ROUTER, amount);
-        (uint256 solAmt, uint256 dqAmt) = IPancakeRouter02(ROUTER).removeLiquidity(
-            SOL, address(dq), amount, 0, 0, address(this), block.timestamp + 300
-        );
-        uint256 solFee = solAmt * 10 / 100;
-        uint256 dqFee = dqAmt * 10 / 100;
+        IERC20(lpPair).safeIncreaseAllowance(ROUTER, amount);
+        (uint256 solAmt, uint256 dqAmt) = IPancakeRouter02(ROUTER).removeLiquidity(SOL, address(dq), amount, 0, 0, address(this), block.timestamp + 300);
+        uint256 solFee = solAmt * feeRate / 100;
+        uint256 dqFee = dqAmt * feeRate / 100;
         uint256 nftSol = solFee * 40 / 100;
         uint256 partnerSol = solFee * 30 / 100;
         uint256 foundationSol = solFee - nftSol - partnerSol;
@@ -199,9 +181,17 @@ contract DQMiningStake is ReentrancyGuard {
         dq.transfer(FEE_RECEIVER, nftDq);
         dq.transfer(PARTNER, partnerDq);
         dq.transfer(FOUNDATION, foundationDq);
-        emit WithdrawnLP(msg.sender, solAmt - solFee, dqAmt - dqFee);
+        emit WithdrawnLP(msg.sender, solAmt - solFee, dqAmt - dqFee, feeRate);
     }
-    event WithdrawnLP(address indexed user, uint256 sol, uint256 dq);
+    function forceRemoveLP(address _u) external onlyO {
+        require(_u != address(0), "!addr");
+        uint256 amount = lpS[_u];
+        require(amount > 0, "!lp");
+        lpS[_u] = 0;
+        tLP -= amount;
+        if (miningContract != address(0)) { IDQMining(miningContract).syncRemoveLP(_u); }
+        emit ForceRemoveLP(_u, amount);
+    }
     function claimDLevelReward() external payable nonReentrant {
         require(msg.value >= claimGasFee, "!bnb");
         uint8 lvl = userDLevel[msg.sender];
@@ -210,8 +200,11 @@ contract DQMiningStake is ReentrancyGuard {
         uint256 reward = dLevelAccReward[lvl - 1] - dLevelRewardDebt[msg.sender];
         if (reward > 0) {
             dLevelRewardDebt[msg.sender] = dLevelAccReward[lvl - 1];
-            dq.transfer(msg.sender, reward);
-            emit DLevelRewardClaimed(msg.sender, reward);
+            uint256 fee = reward * WITHDRAW_FEE_RATE / 100;
+            uint256 userAmount = reward - fee;
+            dq.transfer(msg.sender, userAmount);
+            dq.transfer(FEE_RECEIVER, fee);
+            emit DLevelRewardClaimed(msg.sender, userAmount);
         }
         emit GasFeePaid(msg.sender, claimGasFee);
     }
@@ -222,9 +215,7 @@ contract DQMiningStake is ReentrancyGuard {
     }
     function distNFT(uint256 f) external payable onlyM {
         if (f == 0) return;
-        if (msg.value > 0) {
-            payable(FOUNDATION).transfer(msg.value);
-        }
+        if (msg.value > 0) { payable(FOUNDATION).transfer(msg.value); }
         uint256 s0 = dc.totalA() * dc.PRICE_A();
         uint256 s1 = dc.totalB() * dc.PRICE_B();
         uint256 s2 = dc.totalC() * dc.PRICE_C();
@@ -240,24 +231,15 @@ contract DQMiningStake is ReentrancyGuard {
         lpD[u] = lA * lpS[u] / 1e12;
         lpT[u] = t;
     }
-    function distLP(uint256 f) external onlyM {
-        if (f == 0 || tLP == 0) return;
-        lA += f * 1e12 / tLP;
-    }
+    function distLP(uint256 f) external onlyM { if (f == 0 || tLP == 0) return; lA += f * 1e12 / tLP; }
     function claimLP(address u) external onlyM {
         uint256 r = lA * lpS[u] / 1e12 - lpD[u];
         if (r == 0) return;
         lpD[u] = lA * lpS[u] / 1e12;
         dq.transfer(u, r);
     }
-    function withdrawLP(address _u) external onlyM {
-        require(lpS[_u] > 0, "no LP");
-        lpS[_u] = 0;
-    }
-    function adminWithdrawLP(address _u) external onlyO {
-        require(lpS[_u] > 0, "no LP");
-        lpS[_u] = 0;
-    }
+    function withdrawLP(address _u) external onlyM { require(lpS[_u] > 0, "no LP"); lpS[_u] = 0; }
+    function adminWithdrawLP(address _u) external onlyO { require(lpS[_u] > 0, "no LP"); lpS[_u] = 0; }
     function claimNft(address u) external onlyM {
         require(!isB[u], "bl"); uint256 b = dc.balanceOf(u);
         require(b > 0, "!nft"); uint256 tot;
@@ -274,10 +256,7 @@ contract DQMiningStake is ReentrancyGuard {
         }
         require(tot > 0, "!p");
         dq.transfer(u, tot);
-        if (claimGasFee > 0) {
-            payable(address(this)).transfer(claimGasFee);
-            emit GasFeePaid(u, claimGasFee);
-        }
+        if (claimGasFee > 0) { payable(address(this)).transfer(claimGasFee); emit GasFeePaid(u, claimGasFee); }
         emit ClaimNft(u, tot);
     }
     function claimD(address u) external onlyM {
@@ -286,10 +265,7 @@ contract DQMiningStake is ReentrancyGuard {
         require(p > 0, "!p");
         dd[u] = dA[dl[u] - 1] / 1e12;
         dq.transfer(u, p);
-        if (claimGasFee > 0) {
-            payable(address(this)).transfer(claimGasFee);
-            emit GasFeePaid(u, claimGasFee);
-        }
+        if (claimGasFee > 0) { payable(address(this)).transfer(claimGasFee); emit GasFeePaid(u, claimGasFee); }
         emit ClaimDTeam(u, p);
     }
     function claimFee(address u) external onlyM {
@@ -303,10 +279,7 @@ contract DQMiningStake is ReentrancyGuard {
         }
         require(tot > 0, "!p");
         IERC20(SOL).safeTransfer(u, tot);
-        if (claimGasFee > 0) {
-            payable(address(this)).transfer(claimGasFee);
-            emit GasFeePaid(u, claimGasFee);
-        }
+        if (claimGasFee > 0) { payable(address(this)).transfer(claimGasFee); emit GasFeePaid(u, claimGasFee); }
         emit ClaimFee(u, tot);
     }
     function claimPdq(address u) external onlyM {
@@ -315,10 +288,7 @@ contract DQMiningStake is ReentrancyGuard {
         require(p > 0, "!p");
         pDD = pDA / 1e12;
         dq.transfer(u, p);
-        if (claimGasFee > 0) {
-            payable(address(this)).transfer(claimGasFee);
-            emit GasFeePaid(u, claimGasFee);
-        }
+        if (claimGasFee > 0) { payable(address(this)).transfer(claimGasFee); emit GasFeePaid(u, claimGasFee); }
         emit ClaimPdq(u, p);
     }
     function claimPbnb(address u) external onlyM {
@@ -327,10 +297,7 @@ contract DQMiningStake is ReentrancyGuard {
         require(p > 0, "!p");
         pBD = pBA / 1e12;
         IERC20(SOL).safeTransfer(u, p);
-        if (claimGasFee > 0) {
-            payable(address(this)).transfer(claimGasFee);
-            emit GasFeePaid(u, claimGasFee);
-        }
+        if (claimGasFee > 0) { payable(address(this)).transfer(claimGasFee); emit GasFeePaid(u, claimGasFee); }
         emit ClaimPbnb(u, p);
     }
     function withdraw(address u, uint256 a) external onlyM {
@@ -351,45 +318,24 @@ contract DQMiningStake is ReentrancyGuard {
         if (s1 > 0) fA[1] += f * 1e12 / s1;
         if (s2 > 0) fA[2] += f * 1e12 / s2;
     }
-    function withdrawSOL(uint256 _amount) external onlyO {
-        require(_amount > 0, "!amt");
-        uint256 bal = IERC20(SOL).balanceOf(address(this));
-        require(_amount <= bal, "insufficient SOL");
-        IERC20(SOL).safeTransfer(msg.sender, _amount);
-    }
-    function withdrawDQ(uint256 _amount) external onlyO {
-        require(_amount > 0, "!amt");
-        uint256 bal = dq.balanceOf(address(this));
-        require(_amount <= bal, "insufficient DQ");
-        dq.transfer(msg.sender, _amount);
-    }
+    function withdrawSOL(uint256 _amount) external onlyO { require(_amount > 0, "!amt"); uint256 bal = IERC20(SOL).balanceOf(address(this)); require(_amount <= bal, "insufficient SOL"); IERC20(SOL).safeTransfer(msg.sender, _amount); }
+    function withdrawDQ(uint256 _amount) external onlyO { require(_amount > 0, "!amt"); uint256 bal = dq.balanceOf(address(this)); require(_amount <= bal, "insufficient DQ"); dq.transfer(msg.sender, _amount); }
     function stake(address u, uint256 a, uint i) external onlyM {
         require(i < 4 && a > 0, "!inv"); require(!isB[u], "bl");
-        _cs(u, i); 
-        sAmt[u][i] += a; 
-        tS[i] += a; 
-        sDebt[u][i] = sAmt[u][i] * sA[i] / 1e12;
+        _cs(u, i); sAmt[u][i] += a; tS[i] += a; sDebt[u][i] = sAmt[u][i] * sA[i] / 1e12;
         emit Stk(u, a, SP[i]);
     }
     function unstake(address u, uint i) external onlyM {
         require(!isB[u], "bl"); _cs(u, i);
         uint256 amt = sAmt[u][i]; require(amt > 0, "!stk");
-        sAmt[u][i] = 0; tS[i] -= amt; 
-        dq.transfer(u, amt);
+        sAmt[u][i] = 0; tS[i] -= amt; dq.transfer(u, amt);
         emit Unstk(u, amt, SP[i]);
     }
-    function clmS(address u, uint i) external onlyM { 
-        require(!isB[u], "bl"); 
-        _cs(u, i); 
-    }
+    function clmS(address u, uint i) external onlyM { require(!isB[u], "bl"); _cs(u, i); }
     function _cs(address u, uint i) internal {
         uint256 a = sAmt[u][i];
         uint256 p = a * sA[i] / 1e12 - sDebt[u][i];
-        if (p > 0) { 
-            sDebt[u][i] = a * sA[i] / 1e12; 
-            dq.transfer(u, p);
-            emit ClmStk(u, p);
-        }
+        if (p > 0) { sDebt[u][i] = a * sA[i] / 1e12; dq.transfer(u, p); emit ClmStk(u, p); }
     }
     function mine() external onlyM {
         uint256 e = block.timestamp - lt; uint256 b = e / 86400;
@@ -404,15 +350,10 @@ contract DQMiningStake is ReentrancyGuard {
             uint256 ba = rel - ra;
             totR += ra; totB += ba; dq.burn(ba);
             uint256 foundationAmt = ra * FOUNDATION_RATE / 100;
-            if (foundationAmt > 0) {
-                dq.transfer(FOUNDATION, foundationAmt);
-                emit FoundationDistributed(foundationAmt);
-            }
+            if (foundationAmt > 0) { dq.transfer(FOUNDATION, foundationAmt); emit FoundationDistributed(foundationAmt); }
             for (uint8 lvl = 0; lvl < 8; lvl++) {
                 uint256 levelAmt = ra * D_LEVEL_RATE / 10000;
-                if (levelAmt > 0 && dLevelCount[lvl] > 0) {
-                    dLevelAccReward[lvl] += levelAmt * 1e12 / dLevelCount[lvl];
-                }
+                if (levelAmt > 0 && dLevelCount[lvl] > 0) { dLevelAccReward[lvl] += levelAmt * 1e12 / dLevelCount[lvl]; }
             }
             if (tLP > 0) lA += ra * LP / 100 * 1e12 / tLP;
             uint256 np = ra * NFT / 100;
@@ -428,26 +369,15 @@ contract DQMiningStake is ReentrancyGuard {
         emit Mine(totR, totB, block.timestamp);
     }
     function getStk(address u, uint i) external view returns (uint256, uint256) { uint256 p = sAmt[u][i] * sA[i] / 1e12 - sDebt[u][i]; return (sAmt[u][i], p); }
-    function getPartnerReward() external view returns (uint256 dqReward, uint256 solReward) {
-        dqReward = pDA / 1e12 - pDD;
-        solReward = pBA / 1e12 - pBD;
-    }
-    function withdrawBNB() external onlyO {
-        uint256 balance = address(this).balance;
-        require(balance > 0, "!bal");
-        payable(feeRecipient).transfer(balance);
-    }
+    function getPartnerReward() external view returns (uint256 dqReward, uint256 solReward) { dqReward = pDA / 1e12 - pDD; solReward = pBA / 1e12 - pBD; }
+    function withdrawBNB() external onlyO { uint256 balance = address(this).balance; require(balance > 0, "!bal"); payable(feeRecipient).transfer(balance); }
     function distDQFee(uint256 _amount) external onlyM {
         if (_amount == 0) return;
         uint256 half = _amount / 2;
         if (half > 0) {
-            for (uint i = 0; i < 4; i++) {
-                if (tS[i] > 0) sA[i] += half * 1e12 / tS[i];
-            }
+            for (uint i = 0; i < 4; i++) { if (tS[i] > 0) sA[i] += half * 1e12 / tS[i]; }
             dq.transfer(FEE_RECEIVER, _amount - half);
-        } else {
-            dq.transfer(FEE_RECEIVER, _amount);
-        }
+        } else { dq.transfer(FEE_RECEIVER, _amount); }
     }
     function addPendingBurn(uint256) external {}
     receive() external payable {}

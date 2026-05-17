@@ -312,6 +312,11 @@ async function syncUserToDatabase(
       referrer_address: { chainKey: 'referrer', dbKey: 'referrer_address' },
     };
 
+    //如果用户地址是 0x0000000000000000000000000000000000000000,则 置空推荐人地址，避免数据库中出现无效地址
+    if (userAddress.toLowerCase() === '0x0000000000000000000000000000000000000000') {
+      userInfo.referrer = '';
+    }
+
     if (existingUser) {
       // 更新现有用户
       const updateData: Record<string, any> = {

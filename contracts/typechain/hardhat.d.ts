@@ -66,6 +66,26 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC165__factory>;
     getContractFactory(
+      name: "DQMining",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.DQMining__factory>;
+    getContractFactory(
+      name: "IDQCard",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IDQCard__factory>;
+    getContractFactory(
+      name: "IDQMiningStake",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IDQMiningStake__factory>;
+    getContractFactory(
+      name: "IDQToken",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IDQToken__factory>;
+    getContractFactory(
+      name: "IPancakeRouter02",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IPancakeRouter02__factory>;
+    getContractFactory(
       name: "DQCard",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.DQCard__factory>;
@@ -81,6 +101,46 @@ declare module "hardhat/types/runtime" {
       name: "IBEP20",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IBEP20__factory>;
+    getContractFactory(
+      name: "DQCard",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.DQCard__factory>;
+    getContractFactory(
+      name: "DQProject",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.DQProject__factory>;
+    getContractFactory(
+      name: "DQToken",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.DQToken__factory>;
+    getContractFactory(
+      name: "IPancakeRouter02",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IPancakeRouter02__factory>;
+    getContractFactory(
+      name: "IWETH",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IWETH__factory>;
+    getContractFactory(
+      name: "IMintableToken",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IMintableToken__factory>;
+    getContractFactory(
+      name: "MockDQCard",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockDQCard__factory>;
+    getContractFactory(
+      name: "MockDQMiningStake",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockDQMiningStake__factory>;
+    getContractFactory(
+      name: "MockERC20Token",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockERC20Token__factory>;
+    getContractFactory(
+      name: "MockPancakeRouter",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockPancakeRouter__factory>;
 
     getContractAt(
       name: "Ownable",
@@ -148,6 +208,31 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.IERC165>;
     getContractAt(
+      name: "DQMining",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.DQMining>;
+    getContractAt(
+      name: "IDQCard",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IDQCard>;
+    getContractAt(
+      name: "IDQMiningStake",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IDQMiningStake>;
+    getContractAt(
+      name: "IDQToken",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IDQToken>;
+    getContractAt(
+      name: "IPancakeRouter02",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IPancakeRouter02>;
+    getContractAt(
       name: "DQCard",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -167,6 +252,56 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.IBEP20>;
+    getContractAt(
+      name: "DQCard",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.DQCard>;
+    getContractAt(
+      name: "DQProject",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.DQProject>;
+    getContractAt(
+      name: "DQToken",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.DQToken>;
+    getContractAt(
+      name: "IPancakeRouter02",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IPancakeRouter02>;
+    getContractAt(
+      name: "IWETH",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IWETH>;
+    getContractAt(
+      name: "IMintableToken",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IMintableToken>;
+    getContractAt(
+      name: "MockDQCard",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockDQCard>;
+    getContractAt(
+      name: "MockDQMiningStake",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockDQMiningStake>;
+    getContractAt(
+      name: "MockERC20Token",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockERC20Token>;
+    getContractAt(
+      name: "MockPancakeRouter",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockPancakeRouter>;
 
     deployContract(
       name: "Ownable",
@@ -221,6 +356,26 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC165>;
     deployContract(
+      name: "DQMining",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DQMining>;
+    deployContract(
+      name: "IDQCard",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IDQCard>;
+    deployContract(
+      name: "IDQMiningStake",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IDQMiningStake>;
+    deployContract(
+      name: "IDQToken",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IDQToken>;
+    deployContract(
+      name: "IPancakeRouter02",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IPancakeRouter02>;
+    deployContract(
       name: "DQCard",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.DQCard>;
@@ -236,6 +391,46 @@ declare module "hardhat/types/runtime" {
       name: "IBEP20",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IBEP20>;
+    deployContract(
+      name: "DQCard",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DQCard>;
+    deployContract(
+      name: "DQProject",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DQProject>;
+    deployContract(
+      name: "DQToken",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DQToken>;
+    deployContract(
+      name: "IPancakeRouter02",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IPancakeRouter02>;
+    deployContract(
+      name: "IWETH",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IWETH>;
+    deployContract(
+      name: "IMintableToken",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IMintableToken>;
+    deployContract(
+      name: "MockDQCard",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockDQCard>;
+    deployContract(
+      name: "MockDQMiningStake",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockDQMiningStake>;
+    deployContract(
+      name: "MockERC20Token",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockERC20Token>;
+    deployContract(
+      name: "MockPancakeRouter",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockPancakeRouter>;
 
     deployContract(
       name: "Ownable",
@@ -303,6 +498,31 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC165>;
     deployContract(
+      name: "DQMining",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DQMining>;
+    deployContract(
+      name: "IDQCard",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IDQCard>;
+    deployContract(
+      name: "IDQMiningStake",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IDQMiningStake>;
+    deployContract(
+      name: "IDQToken",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IDQToken>;
+    deployContract(
+      name: "IPancakeRouter02",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IPancakeRouter02>;
+    deployContract(
       name: "DQCard",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -322,6 +542,56 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IBEP20>;
+    deployContract(
+      name: "DQCard",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DQCard>;
+    deployContract(
+      name: "DQProject",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DQProject>;
+    deployContract(
+      name: "DQToken",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DQToken>;
+    deployContract(
+      name: "IPancakeRouter02",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IPancakeRouter02>;
+    deployContract(
+      name: "IWETH",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IWETH>;
+    deployContract(
+      name: "IMintableToken",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IMintableToken>;
+    deployContract(
+      name: "MockDQCard",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockDQCard>;
+    deployContract(
+      name: "MockDQMiningStake",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockDQMiningStake>;
+    deployContract(
+      name: "MockERC20Token",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockERC20Token>;
+    deployContract(
+      name: "MockPancakeRouter",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockPancakeRouter>;
 
     // default types
     getContractFactory(

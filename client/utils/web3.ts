@@ -612,11 +612,20 @@ export const formatAddress = (address: string, start: number = 6, end: number = 
 export const getLPReward = async (address: string): Promise<{ lpShare: string; pendingReward: string }> => {
   try {
     const contract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
-    const result = await contract.getLP(address);
-    
-    // getLP 返回 (lpShare, pendingReward)
-    const lpShare = ethers.formatEther(result[0]); // LP份额
-    const pendingReward = ethers.formatEther(result[1]); // 可领取的DQ分红
+    const [lpShareValue, lpDebtValue, lpAccRewardValue] = await Promise.all([
+      contract.lpS(address),
+      contract.lpD(address),
+      contract.lA(),
+    ]);
+
+    const lpShareRaw = BigInt(lpShareValue.toString());
+    const lpDebtRaw = BigInt(lpDebtValue.toString());
+    const lpAccRewardRaw = BigInt(lpAccRewardValue.toString());
+    const pendingRewardRaw = (lpAccRewardRaw * lpShareRaw) / (10n ** 12n) - lpDebtRaw;
+    const lpShare = ethers.formatEther(lpShareRaw); // LP份额
+    const pendingReward = ethers.formatEther(
+      pendingRewardRaw > 0n ? pendingRewardRaw : 0n
+    ); // 可领取的DQ分红
     
     console.log('[Web3] LP分红查询:', { lpShare, pendingReward });
     return { lpShare, pendingReward };
