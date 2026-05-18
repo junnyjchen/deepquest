@@ -1,13 +1,22 @@
 /**
- * 格式化 client/config/contracts.ts 中的 ABI
- * 将展开的多行 JSON 格式压缩为每条目单行 + 中文注释
+ * 格式化 ABI：
+ * 1) client/config/contracts.ts：将 ABI 统一为“每条目单行 + 章节分组 + 注释”。
+ * 2) contracts/*.abi 与 assets/*ABI*.txt：统一 prettify 为标准 JSON（2 空格缩进）。
+ *
+ * 说明：
+ * - COMMENTS 仍可作为“人工优先注释”覆盖；未命中的条目会自动生成兜底注释。
  */
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, readdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { runInNewContext } from 'node:vm';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const filePath = path.resolve(__dirname, '../client/config/contracts.ts');
+
+const argv = new Set(process.argv.slice(2));
+const shouldFormatTs = !argv.has('--files-only');
+const shouldFormatFiles = !argv.has('--ts-only');
 
 // ─── 工具：提取变量对应的 JSON 数组字符串 ─────────────────────────────────
 function extractABIJson(content, varName) {
@@ -34,6 +43,24 @@ function extractJSDocBefore(content, varName) {
   const docStart = before.lastIndexOf('/**', docEnd);
   if (docStart === -1) return '';
   return before.slice(docStart, docEnd + 2).trimStart();
+}
+
+function extractJSDocBeforeWithRange(content, varName) {
+  const marker = `export const ${varName} = [`;
+  const idx = content.indexOf(marker);
+  if (idx === -1) return null;
+  const before = content.slice(0, idx);
+  const docEndRel = before.lastIndexOf('*/');
+  if (docEndRel === -1) return null;
+  const docStartRel = before.lastIndexOf('/**', docEndRel);
+  if (docStartRel === -1) return null;
+  const docStart = docStartRel;
+  const docEnd = docEndRel + 2;
+  return {
+    text: before.slice(docStart, docEnd).trimStart(),
+    startIndex: docStart,
+    endIndex: docEnd,
+  };
 }
 
 // ─── 注释映射（按 name:stateMutability 或 name:event）───────────────────
@@ -242,6 +269,68 @@ const COMMENTS = {
   'withdrawSOL:nonpayable_stake': '// owner 提走合约内 SOL（谨慎使用）',
 };
 
+function normalizeWhitespace(text) {
+  return String(text ?? '')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+}
+
+function formatSignature(entry) {
+  const type = entry.type;
+  const name = entry.name ?? '';
+  const inputs = Array.isArray(entry.inputs) ? entry.inputs : [];
+  const outputs = Array.isArray(entry.outputs) ? entry.outputs : [];
+
+  const fmtParams = (params) =>
+    params
+      .map((p) => {
+        const t = p.type ?? p.internalType ?? 'unknown';
+        const n = p.name ? ` ${p.name}` : '';
+        return `${t}${n}`.trim();
+      })
+      .join(', ');
+
+  if (type === 'constructor') {
+    return `constructor(${fmtParams(inputs)})`;
+  }
+  if (type === 'receive') {
+    return 'receive()';
+  }
+  if (type === 'fallback') {
+    return 'fallback()';
+  }
+  if (type === 'event') {
+    return `event ${name}(${fmtParams(inputs)})`;
+  }
+  if (type === 'function') {
+    const out = outputs.length ? ` → (${fmtParams(outputs)})` : '';
+    return `function ${name}(${fmtParams(inputs)})${out}`;
+  }
+  return `${type}${name ? ` ${name}` : ''}`.trim();
+}
+
+function generateFallbackComment(entry) {
+  const type = entry.type;
+  const mut = entry.stateMutability;
+  const sig = formatSignature(entry);
+
+  if (type === 'constructor') return '// 构造函数';
+  if (type === 'event') return `// 事件：${sig}`;
+  if (type === 'receive') return '// ========== 兜底：接收 BNB ==========';
+  if (type === 'fallback') return '// 兜底：fallback()';
+
+  if (type === 'function') {
+    const mutLabel = mut ? ` [${mut}]` : '';
+    const prefix = mut === 'view' || mut === 'pure' ? '读取' : '方法';
+    return `// ${prefix}：${sig}${mutLabel}`;
+  }
+  return `// ${sig}`;
+}
+
 // ─── 格式化单条 ABI 入口 ────────────────────────────────────────────────────
 function formatEntry(entry) {
   return JSON.stringify(entry);
@@ -265,7 +354,12 @@ function getComment(entry, abiName) {
   if (abiName === 'DQSTAKE_ABI' && name === 'withdrawBNB') key = 'withdrawBNB:nonpayable_stake';
   if (abiName === 'DQSTAKE_ABI' && name === 'withdrawSOL') key = 'withdrawSOL:nonpayable_stake';
 
-  return COMMENTS[key] ?? null;
+  const manual = COMMENTS[key];
+  if (typeof manual === 'string') return manual;
+  if (manual === null) return null;
+
+  // 未命中映射：自动生成兜底注释
+  return generateFallbackComment(entry);
 }
 
 // ─── 判断是否是 view/pure ───────────────────────────────────────────────────
@@ -317,9 +411,7 @@ function formatABI(entries, abiName) {
 
     // 条目注释
     const comment = getComment(entry, abiName);
-    if (comment && type !== 'receive') {
-      lines.push(`  ${comment}`);
-    }
+    if (comment && type !== 'receive') lines.push(`  ${comment}`);
 
     // 条目本身
     lines.push(`  ${formatEntry(entry)},`);
@@ -334,47 +426,159 @@ function formatABI(entries, abiName) {
   return lines.join('\n');
 }
 
+function tryParseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function parseAbiArrayLiteral(arrayLiteral, label) {
+  if (typeof arrayLiteral !== 'string') {
+    throw new Error(`解析 ABI 失败：${label} 不是字符串`);
+  }
+  const trimmed = arrayLiteral.trim();
+  if (!trimmed.startsWith('[') || !trimmed.endsWith(']')) {
+    throw new Error(`解析 ABI 失败：${label} 不是数组字面量`);
+  }
+  // 允许数组内存在 // 注释、尾逗号等 JS 语法
+  const code = `(function(){ return (${trimmed}); })()`;
+  const result = runInNewContext(code, Object.create(null), { timeout: 1000 });
+  if (!Array.isArray(result)) {
+    throw new Error(`解析 ABI 失败：${label} 解析结果不是数组`);
+  }
+  return result;
+}
+
+function prettifyJsonFile(absPath) {
+  const raw = readFileSync(absPath, 'utf8');
+  const trimmed = raw.trim();
+  const json = tryParseJson(trimmed);
+  if (json == null) return { ok: false, reason: 'not-json' };
+  const formatted = `${JSON.stringify(json, null, 2)}\n`;
+  if (formatted !== raw) writeFileSync(absPath, formatted, 'utf8');
+  return { ok: true, changed: formatted !== raw };
+}
+
+function listAbiFiles() {
+  const repoRoot = path.resolve(__dirname, '..');
+  const candidates = [];
+
+  const isAbiFile = (p) => p.toLowerCase().endsWith('.abi');
+  const isAbiTxt = (p) => {
+    const base = path.basename(p).toLowerCase();
+    return base.includes('abi') && base.endsWith('.txt');
+  };
+
+  const walk = (dir) => {
+    let items;
+    try {
+      items = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const item of items) {
+      const full = path.join(dir, item.name);
+      if (item.isDirectory()) {
+        walk(full);
+      } else if (isAbiFile(full) || isAbiTxt(full)) {
+        candidates.push(full);
+      }
+    }
+  };
+
+  walk(path.join(repoRoot, 'contracts'));
+  walk(path.join(repoRoot, 'assets'));
+
+  // 去重 + 排序（保证输出稳定）
+  return Array.from(new Set(candidates)).sort((a, b) => a.localeCompare(b));
+}
+
+function stripDuplicateTrailingJSDoc(header, docText) {
+  const normalizedDoc = normalizeWhitespace(docText);
+  const trimmed = header.replace(/\s+$/, '');
+  const docEnd = trimmed.lastIndexOf('*/');
+  if (docEnd === -1) return header;
+  const docStart = trimmed.lastIndexOf('/**', docEnd);
+  if (docStart === -1) return header;
+  const lastDoc = trimmed.slice(docStart, docEnd + 2);
+  if (normalizeWhitespace(lastDoc) !== normalizedDoc) return header;
+  return `${trimmed.slice(0, docStart)}\n\n`;
+}
+
 // ─── 主流程 ──────────────────────────────────────────────────────────────────
-const content = readFileSync(filePath, 'utf8');
+let dqProjectEntries = [];
+let dqStakeEntries = [];
+let tsLineCount = 0;
 
-// 提取文件头（到 DQPROJECT_ABI 之前）
-const dqProjectMarker = 'export const DQPROJECT_ABI = [';
-const dqProjectStart = content.indexOf(dqProjectMarker);
-const fileHeader = content.slice(0, dqProjectStart);
+if (shouldFormatTs) {
+  const content = readFileSync(filePath, 'utf8');
 
-// 提取 DQCARD_ABI 之前的注释 + DQCARD_ABI 的全部内容
-const dqcardMarker = '/**\n * DQCard NFT';
-const dqcardStart = content.indexOf(dqcardMarker);
-const dqcardSection = dqcardStart !== -1 ? content.slice(dqcardStart) : '';
+  const dqProjectDocInfo = extractJSDocBeforeWithRange(content, 'DQPROJECT_ABI');
+  const dqStakeDocInfo = extractJSDocBeforeWithRange(content, 'DQSTAKE_ABI');
+  if (!dqProjectDocInfo || !dqStakeDocInfo) {
+    throw new Error('未找到 DQPROJECT_ABI 或 DQSTAKE_ABI（请确认 contracts.ts 结构未变）');
+  }
 
-// 提取 DQSTAKE_ABI 的 JSDoc
-const dqstakeDoc = extractJSDocBefore(content, 'DQSTAKE_ABI');
+  // 文件头：截断到 DQPROJECT_ABI 的 JSDoc 开始，避免重复插入。
+  let fileHeader = content.slice(0, dqProjectDocInfo.startIndex);
+  fileHeader = stripDuplicateTrailingJSDoc(fileHeader, dqProjectDocInfo.text);
 
-// 解析 DQPROJECT_ABI
-const dqProjectJson = extractABIJson(content, 'DQPROJECT_ABI');
-const dqProjectDoc = extractJSDocBefore(content, 'DQPROJECT_ABI');
-const dqProjectEntries = JSON.parse(dqProjectJson);
+  // DQCARD_ABI：保持原样（该段含手写注释，JSON.parse 不安全）
+  const dqcardMarker = '/**\n * DQCard NFT';
+  const dqcardStart = content.indexOf(dqcardMarker);
+  const dqcardSection = dqcardStart !== -1 ? content.slice(dqcardStart) : '';
 
-// 解析 DQSTAKE_ABI
-const dqStakeJson = extractABIJson(content, 'DQSTAKE_ABI');
-const dqStakeEntries = JSON.parse(dqStakeJson);
+  // 解析 ABI（要求该段不含 // 注释）
+  const dqProjectJson = extractABIJson(content, 'DQPROJECT_ABI');
+  const dqStakeJson = extractABIJson(content, 'DQSTAKE_ABI');
+  if (!dqProjectJson || !dqStakeJson) {
+    throw new Error('解析 ABI 失败：未能提取 DQPROJECT_ABI / DQSTAKE_ABI 的数组文本');
+  }
+  dqProjectEntries = parseAbiArrayLiteral(dqProjectJson, 'DQPROJECT_ABI');
+  dqStakeEntries = parseAbiArrayLiteral(dqStakeJson, 'DQSTAKE_ABI');
 
-// 组装输出
-const output = [
-  fileHeader,
-  dqProjectDoc,
-  `export const DQPROJECT_ABI = [\n${formatABI(dqProjectEntries, 'DQPROJECT_ABI')}\n];\n`,
-  '\n',
-  dqstakeDoc,
-  `export const DQSTAKE_ABI = [\n${formatABI(dqStakeEntries, 'DQSTAKE_ABI')}\n];\n`,
-  '\n',
-  dqcardSection,
-].join('');
+  const output = [
+    fileHeader,
+    `${dqProjectDocInfo.text}\n`,
+    `export const DQPROJECT_ABI = [\n${formatABI(dqProjectEntries, 'DQPROJECT_ABI')}\n];\n`,
+    '\n',
+    `${dqStakeDocInfo.text}\n`,
+    `export const DQSTAKE_ABI = [\n${formatABI(dqStakeEntries, 'DQSTAKE_ABI')}\n];\n`,
+    '\n',
+    dqcardSection,
+  ].join('');
 
-writeFileSync(filePath, output, 'utf8');
+  writeFileSync(filePath, output, 'utf8');
 
-const newContent = readFileSync(filePath, 'utf8');
-const lineCount = newContent.split('\n').length;
-console.log(`✅ 格式化完成，共 ${lineCount} 行`);
-console.log(`   DQPROJECT_ABI: ${dqProjectEntries.length} 条`);
-console.log(`   DQSTAKE_ABI:   ${dqStakeEntries.length} 条`);
+  const newContent = readFileSync(filePath, 'utf8');
+  tsLineCount = newContent.split('\n').length;
+}
+
+let formattedFiles = 0;
+let changedFiles = 0;
+let skippedFiles = 0;
+
+if (shouldFormatFiles) {
+  const abiFiles = listAbiFiles();
+  for (const absPath of abiFiles) {
+    const res = prettifyJsonFile(absPath);
+    if (!res.ok) {
+      skippedFiles++;
+      continue;
+    }
+    formattedFiles++;
+    if (res.changed) changedFiles++;
+  }
+}
+
+console.log('✅ ABI 格式化完成');
+if (shouldFormatTs) {
+  console.log(`   contracts.ts: ${tsLineCount} 行`);
+  console.log(`   DQPROJECT_ABI: ${dqProjectEntries.length} 条`);
+  console.log(`   DQSTAKE_ABI:   ${dqStakeEntries.length} 条`);
+}
+if (shouldFormatFiles) {
+  console.log(`   ABI 文件：格式化 ${formattedFiles} 个，改动 ${changedFiles} 个，跳过 ${skippedFiles} 个`);
+}

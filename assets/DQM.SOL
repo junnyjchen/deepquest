@@ -37,6 +37,7 @@ interface IDQMiningStake {
     function updateValidAddress(address _u) external;
     function distReward(address _u, uint256 _dyn) external;
     function addLP(address _u, uint256 _a, uint256 _t) external;
+    function getDirectSales(address _u) external view returns (uint256);
     function distLP(uint256 f) external;
     function claimLP(address u) external;
     function claimNft(address _u) external;
@@ -90,7 +91,8 @@ contract DQMiningV3 is ReentrancyGuard {
     uint256 public constant CLAIM_BNB_FEE = 0.00005 ether;
     uint256 public constant MGR_RATE = 30;
     uint256 public SLIPPAGE = 995;  // 可配置，默认0.5%
-    uint256 public constant BURN_STOP_THRESHOLD = 1;
+    uint256 public constant SELL_FEE = 10;        // 卖出手续费 10%（6%+4%）
+    uint256 public constant BURN_STOP_THRESHOLD = 99;
     uint256 public constant INITIAL_SUPPLY = 100000000000 * 10**18;
     struct User {
         address referrer;
@@ -152,6 +154,22 @@ contract DQMiningV3 is ReentrancyGuard {
             User storage u = users[_u];
             IDQMiningStake(stakeContract).importUser(_u, _r, u.totalInvest, 0, u.level, 0);
         }
+        emit Register(_u, _r);
+    }
+    // 修改用户推荐人
+    function setReferrer(address _u, address _r) external onlyOwner {
+        require(users[_u].referrer != address(0), "!reg");
+        require(users[_u].children.length() == 0, "has children");
+        require(_r != _u, "self");
+        require(users[_r].referrer != address(0) || _r == OWNER, "!rref");
+        address oldRef = users[_u].referrer;
+        if (oldRef != address(0)) {
+            users[oldRef].directCount--;
+            users[oldRef].children.remove(_u);
+        }
+        users[_u].referrer = _r;
+        users[_r].directCount++;
+        users[_r].children.add(_u);
         emit Register(_u, _r);
     }
     function setUserLevel(address _u, uint8 _lvl) external onlyOwner { require(_lvl >= 1 && _lvl <= 6, "!level"); users[_u].level = _lvl; }
@@ -346,21 +364,39 @@ contract DQMiningV3 is ReentrancyGuard {
     function sellDQForSOL(uint256 _dq) external nonReentrant returns (uint256 solOut) {
         require(dqToken.balanceOf(msg.sender) >= _dq, "!bal");
         dqToken.transferFrom(msg.sender, address(this), _dq);
-        address[] memory path = new address[](2);
-        path[0] = address(dqToken); path[1] = SOL;
         uint256 supply = dqToken.totalSupply();
         uint256 burnAmount;
+        // 销毁逻辑：供应量 > 99% 时销毁（达到 99% 停止销毁）
         if (supply > INITIAL_SUPPLY * BURN_STOP_THRESHOLD / 100) {
             burnAmount = _dq * 90 / 100;
             dqToken.burn(burnAmount);
         }
-        uint256 fee = _dq * WITHDRAW_FEE / 100;
+        // 手续费分配：6% + 4% = 10%
+        // 6% = 3% 手续费地址 + 3% 质押合约
+        // 4% = 手续费地址
+        uint256 fee = _dq * SELL_FEE / 100;
         uint256 swapAmt = _dq - fee;
-        dqToken.approve(ROUTER, swapAmt);
+        if (fee > 0) {
+            uint256 halfFee = fee * 30 / 100;  // 6% 中的 30% = 3% 手续费地址
+            uint256 stakeFee = fee * 30 / 100;  // 6% 中的 30% = 3% 质押合约
+            uint256 addFee = fee * 40 / 100;    // 4% = 手续费地址
+            if (halfFee > 0) {
+                dqToken.transfer(FOUNDATION, halfFee);
+            }
+            if (stakeFee > 0 && stakeContract != address(0)) {
+                IDQMiningStake(stakeContract).distDQFee(stakeFee);
+            }
+            if (addFee > 0) {
+                dqToken.transfer(FOUNDATION, addFee);
+            }
+        }
+        // 按 DEX 价格计算用户应得 SOL（不实际 Swap，直接转合约余额）
+        address[] memory path = new address[](2);
+        path[0] = address(dqToken);
+        path[1] = SOL;
         uint256[] memory amounts = IPancakeRouter02(ROUTER).getAmountsOut(swapAmt, path);
-        uint256 minOut = amounts[1] * SLIPPAGE / 1000;
-        IPancakeRouter02(ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(swapAmt, minOut, path, address(this), block.timestamp + 300);
-        solOut = IERC20(SOL).balanceOf(address(this));
+        solOut = amounts[1] * SLIPPAGE / 1000;  // 按 DEX 价格计算，含滑点保护
+        require(solOut > 0, "!price");
         IERC20(SOL).safeTransfer(msg.sender, solOut);
         emit SellDQ(msg.sender, _dq, solOut, burnAmount, fee);
     }
