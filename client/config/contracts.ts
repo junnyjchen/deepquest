@@ -7,11 +7,11 @@
 // 主合约地址
 export const CONTRACT_ADDRESSES = {
   DQPROJECT: {
-    address: '0x64cAca3e27ca3Fe69c7884A93d8Be5340670F317',
+    address: '0x6BA53BBb4229C35A4E396fdCF706A22a288E55Ed',
     name: 'DQProject'
   },
   DQSTAKE: {
-    address: '0xA7dD4f6401F93F8D1B2A9fa1bd363f28DFb41a27',
+    address: '0x7B0e8669ebe055d4857FE04D2C886ea47FE0a60B',
     name: 'DQStake'
   },
   DQTOKEN: {
@@ -557,8 +557,6 @@ export const DQSTAKE_ABI = [
 
   {"stateMutability":"payable","type":"receive"}
 ];
-
-
 
 /**
  * ERC20 常用 ABI（DQToken / SOL / USDT 等）

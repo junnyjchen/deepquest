@@ -25,6 +25,7 @@ interface IPancakeRouter02 {
 interface IDQMiningStake {
     function registerUser(address _u, address _r) external;
     function importUser(address _u, address _r, uint256 _total, uint256 _team, uint8 _level, uint256 _energy) external;
+    function lpPair() external view returns (address);
     function setEnergyMul(uint256 _m) external;
     function addEnergy(address _u, uint256 _a) external;
     function subEnergy(address _u, uint256 _a) external;
@@ -48,6 +49,8 @@ interface IDQMiningStake {
     function claimPbnb(address _u) external;
     function withdraw(address _u, uint256 _a) external;
     function withdrawLP(address _u) external;
+    function getUserLPRemovalFee(address _u) external view returns (uint256);
+    function clearUserLPRemovalFee(address _u) external;
     function distDQFee(uint256 _amount) external;
     function distNFT(uint256 _fee) external payable;
     function stake(address _u, uint256 _a, uint _i) external;
@@ -57,6 +60,7 @@ interface IDQMiningStake {
     function getTeamInvest(address _u) external view returns (uint256);
     function getEnergy(address _u) external view returns (uint256);
     function getPendingSOL(address _u) external view returns (uint256);
+    function subPendingBurn(address _u, uint256 _amount) external;
 }
 contract DQMiningV3 is ReentrancyGuard {
     using EnumerableSet for EnumerableSet.AddressSet;
@@ -90,8 +94,8 @@ contract DQMiningV3 is ReentrancyGuard {
     uint256 public constant FEE_FOUNDATION_RATE = 30;
     uint256 public constant CLAIM_BNB_FEE = 0.00005 ether;
     uint256 public constant MGR_RATE = 30;
-    uint256 public SLIPPAGE = 995;  // 可配置，默认0.5%
-    uint256 public constant SELL_FEE = 10;        // 卖出手续费 10%（6%+4%）
+    uint256 public SLIPPAGE = 995;  
+    uint256 public constant SELL_FEE = 6;         
     uint256 public constant BURN_STOP_THRESHOLD = 99;
     uint256 public constant INITIAL_SUPPLY = 100000000000 * 10**18;
     struct User {
@@ -104,7 +108,7 @@ contract DQMiningV3 is ReentrancyGuard {
     mapping(address => User) internal users;
     address[] public allUsers;
     mapping(address => bool) public isBlacklisted;
-    mapping(address => bool) public authorized;  // 授权地址
+    mapping(address => bool) public authorized;  
     mapping(address => uint256) public dailyDeposit;
     mapping(address => bool) public depositWhiteList;
     uint256 public nftPendingSOL;
@@ -126,7 +130,7 @@ contract DQMiningV3 is ReentrancyGuard {
     function setDQCard(address _addr) external onlyOwner { require(_addr != address(0), "!addr"); dqCard = IDQCard(_addr); }
     function setStakeContract(address _a) external onlyOwner { require(_a != address(0), "!addr"); stakeContract = _a; IDQMiningStake(_a).setEnergyMul(ENERGY_MUL); }
     function setFoundation(address _addr) external onlyOwner { require(_addr != address(0), "!addr"); FOUNDATION = _addr; }
-    function setSlippage(uint256 _s) external onlyOwner { require(_s <= 1000, "!"); SLIPPAGE = _s; }  // 0-1000，代表0-100%
+    function setSlippage(uint256 _s) external onlyOwner { require(_s <= 1000, "!"); SLIPPAGE = _s; }  
     function setDepositWhiteList(address _u, bool _s) external onlyOwner { depositWhiteList[_u] = _s; }
     function addToBlacklist(address _u) external onlyOwner { isBlacklisted[_u] = true; }
     function removeFromBlacklist(address _u) external onlyOwner { isBlacklisted[_u] = false; }
@@ -156,7 +160,6 @@ contract DQMiningV3 is ReentrancyGuard {
         }
         emit Register(_u, _r);
     }
-    // 修改用户推荐人
     function setReferrer(address _u, address _r) external onlyOwner {
         require(users[_u].referrer != address(0), "!reg");
         require(users[_u].children.length() == 0, "has children");
@@ -174,9 +177,6 @@ contract DQMiningV3 is ReentrancyGuard {
     }
     function setUserLevel(address _u, uint8 _lvl) external onlyOwner { require(_lvl >= 1 && _lvl <= 6, "!level"); users[_u].level = _lvl; }
     function setUserDLevel(address _u, uint8 _lvl) external onlyOwner { require(_lvl <= 8, "!Dlevel"); if (stakeContract != address(0)) IDQMiningStake(stakeContract).registerDLevel(_u, _lvl); }
-
-    // ============ 批量导入功能 ============
-    // 批量导入用户
     function importUsers(address[] calldata _u, address[] calldata _r) external onlyOwner {
         require(_u.length == _r.length, "!len");
         for (uint i = 0; i < _u.length; i++) {
@@ -193,7 +193,6 @@ contract DQMiningV3 is ReentrancyGuard {
             emit Register(_u[i], _r[i]);
         }
     }
-    // 批量设置节点等级 S1-S6
     function setNodesLevel(address[] calldata _u, uint8[] calldata _lvl) external onlyOwner {
         require(_u.length == _lvl.length, "!len");
         for (uint i = 0; i < _u.length; i++) {
@@ -201,7 +200,6 @@ contract DQMiningV3 is ReentrancyGuard {
             users[_u[i]].level = _lvl[i];
         }
     }
-    // 批量设置 D 级 D1-D8
     function setNodesDLevel(address[] calldata _u, uint8[] calldata _lvl) external onlyOwner {
         require(_u.length == _lvl.length, "!len");
         for (uint i = 0; i < _u.length; i++) {
@@ -211,7 +209,6 @@ contract DQMiningV3 is ReentrancyGuard {
             }
         }
     }
-    // 批量导入节点（注册+铸造NFT）
     function importNodes(address[] calldata _u, uint8[] calldata _t) external onlyOwner {
         require(_u.length == _t.length, "!len");
         for (uint i = 0; i < _u.length; i++) {
@@ -263,20 +260,29 @@ contract DQMiningV3 is ReentrancyGuard {
     }
     function _swapAndAddLP(address _u, uint256 _a) internal {
         require(stakeContract != address(0), "!stake");
+        address lpP = IDQMiningStake(stakeContract).lpPair();
+        require(lpP != address(0), "!pair");
+        require(IERC20(SOL).balanceOf(address(this)) >= _a, "!bal");
         uint256 halfSol = _a / 2;
         uint256 swapSol = _a - halfSol;
         address[] memory path = new address[](2);
         path[0] = SOL; path[1] = address(dqToken);
         IERC20(SOL).approve(ROUTER, _a);
-        uint256[] memory amounts = IPancakeRouter02(ROUTER).getAmountsOut(swapSol, path);
-        uint256 dBal = amounts[1] * SLIPPAGE / 1000;
+        uint256[] memory expected = IPancakeRouter02(ROUTER).getAmountsOut(swapSol, path);
+        uint256 minOut = expected[1] * SLIPPAGE / 1000;
+        uint256 dqBefore = dqToken.balanceOf(address(this));
+        IPancakeRouter02(ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(swapSol, minOut, path, address(this), block.timestamp + 300);
+        uint256 dqAfter = dqToken.balanceOf(address(this));
+        uint256 dBal = dqAfter - dqBefore;
+        require(dBal > 0, "!swap");
         dqToken.approve(ROUTER, dBal);
-        uint256 minA = halfSol * SLIPPAGE / 1000;  // 使用全局滑点
+        uint256 minA = halfSol * SLIPPAGE / 1000;
         uint256 minB = dBal * SLIPPAGE / 1000;
-        IPancakeRouter02(ROUTER).addLiquidity(SOL, address(dqToken), halfSol, dBal, minA, minB, address(this), block.timestamp + 300);
-        (,,uint256 liq) = IPancakeRouter02(ROUTER).addLiquidity(SOL, address(dqToken), halfSol, dBal, minA, minB, address(this), block.timestamp + 300);
-        IDQMiningStake(stakeContract).addLP(_u, liq, block.timestamp);
-        emit SwapAndAddLP(_u, halfSol, dBal, liq);
+        (, , uint256 lpBal) = IPancakeRouter02(ROUTER).addLiquidity(SOL, address(dqToken), halfSol, dBal, minA, minB, address(this), block.timestamp + 300);
+        require(lpBal > 0, "!lp");
+        IERC20(lpP).transfer(_u, lpBal);
+        IDQMiningStake(stakeContract).addLP(_u, lpBal, block.timestamp);
+        emit SwapAndAddLP(_u, halfSol, dBal, lpBal);
     }
     function reinvest(uint256 _a) external nonReentrant onlyReg {
         require(stakeContract != address(0), "!stake");
@@ -293,11 +299,24 @@ contract DQMiningV3 is ReentrancyGuard {
         uint256 pending = sk.getPendingSOL(msg.sender);
         require(pending > 0, "!pending");
         sk.subPendingSOL(msg.sender, pending);
-        uint256 fee = pending * WITHDRAW_FEE / 100;
-        uint256 net = pending - fee;
+        uint256 lpRemovalFee = sk.getUserLPRemovalFee(msg.sender);
+        uint256 actualPending = pending;
+        if (lpRemovalFee > 0) {
+            if (lpRemovalFee >= pending) {
+                sk.clearUserLPRemovalFee(msg.sender);
+                IERC20(SOL).safeTransfer(FOUNDATION, pending);
+                emit ClaimReward(msg.sender, 0, pending);
+                return;
+            }
+            actualPending = pending - lpRemovalFee;
+            sk.clearUserLPRemovalFee(msg.sender);
+            IERC20(SOL).safeTransfer(FOUNDATION, lpRemovalFee);
+        }
+        uint256 fee = actualPending * WITHDRAW_FEE / 100;
+        uint256 net = actualPending - fee;
         _distFee(fee);
         IERC20(SOL).safeTransfer(msg.sender, net);
-        emit ClaimReward(msg.sender, net, fee);
+        emit ClaimReward(msg.sender, net, fee + lpRemovalFee);
     }
     function _distFee(uint256 _fee) internal {
         if (_fee == 0) return;
@@ -322,10 +341,6 @@ contract DQMiningV3 is ReentrancyGuard {
     function withdraw(uint256 _a) external nonReentrant {
         require(stakeContract != address(0), "!stake");
         IDQMiningStake(stakeContract).withdraw(msg.sender, _a);
-    }
-    function withdrawLP() external nonReentrant {
-        require(stakeContract != address(0), "!stake");
-        IDQMiningStake(stakeContract).withdrawLP(msg.sender);
     }
     function claimLP() external nonReentrant {
         require(stakeContract != address(0), "!stake");
@@ -366,36 +381,27 @@ contract DQMiningV3 is ReentrancyGuard {
         dqToken.transferFrom(msg.sender, address(this), _dq);
         uint256 supply = dqToken.totalSupply();
         uint256 burnAmount;
-        // 销毁逻辑：供应量 > 99% 时销毁（达到 99% 停止销毁）
         if (supply > INITIAL_SUPPLY * BURN_STOP_THRESHOLD / 100) {
             burnAmount = _dq * 90 / 100;
-            dqToken.burn(burnAmount);
+            IDQToken(address(dqToken)).burn(burnAmount);
         }
-        // 手续费分配：6% + 4% = 10%
-        // 6% = 3% 手续费地址 + 3% 质押合约
-        // 4% = 手续费地址
         uint256 fee = _dq * SELL_FEE / 100;
         uint256 swapAmt = _dq - fee;
         if (fee > 0) {
-            uint256 halfFee = fee * 30 / 100;  // 6% 中的 30% = 3% 手续费地址
-            uint256 stakeFee = fee * 30 / 100;  // 6% 中的 30% = 3% 质押合约
-            uint256 addFee = fee * 40 / 100;    // 4% = 手续费地址
+            uint256 halfFee = fee * 50 / 100;   
+            uint256 stakeFee = fee * 50 / 100;  
             if (halfFee > 0) {
                 dqToken.transfer(FOUNDATION, halfFee);
             }
             if (stakeFee > 0 && stakeContract != address(0)) {
                 IDQMiningStake(stakeContract).distDQFee(stakeFee);
             }
-            if (addFee > 0) {
-                dqToken.transfer(FOUNDATION, addFee);
-            }
         }
-        // 按 DEX 价格计算用户应得 SOL（不实际 Swap，直接转合约余额）
         address[] memory path = new address[](2);
         path[0] = address(dqToken);
         path[1] = SOL;
         uint256[] memory amounts = IPancakeRouter02(ROUTER).getAmountsOut(swapAmt, path);
-        solOut = amounts[1] * SLIPPAGE / 1000;  // 按 DEX 价格计算，含滑点保护
+        solOut = amounts[1] * SLIPPAGE / 1000;  
         require(solOut > 0, "!price");
         IERC20(SOL).safeTransfer(msg.sender, solOut);
         emit SellDQ(msg.sender, _dq, solOut, burnAmount, fee);
