@@ -228,7 +228,7 @@ contract DQMiningStakeV3 is ReentrancyGuard {
             if (cur == address(0)) break;
             uint256 curTeam = _calcSmallTeam(cur);
             uint8 curLvl = _getRequiredLevel(curTeam);
-            if (lvl >= curLvl) {
+            if (curLvl > 0 && lvl >= curLvl) {
                 uint8 curRate = rates[curLvl - 1];
                 uint8 diffRate = curRate > prevRate ? curRate - prevRate : 0;
                 uint256 mgrR = _mgrPool * diffRate / 100;

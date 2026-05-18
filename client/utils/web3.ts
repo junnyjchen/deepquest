@@ -261,6 +261,76 @@ export const getInvestRange = async (): Promise<{ min: string; max: string }> =>
   }
 };
 
+const getPanicCode = (error: unknown): number | null => {
+  const candidate = error as {
+    revert?: { args?: unknown[] };
+    info?: { error?: { data?: string } };
+    data?: string;
+    message?: string;
+  };
+
+  const rawArg = candidate?.revert?.args?.[0];
+  if (typeof rawArg === 'number') return rawArg;
+  if (typeof rawArg === 'bigint') return Number(rawArg);
+  if (typeof rawArg === 'string' && /^\d+$/.test(rawArg)) return Number(rawArg);
+
+  const rawData = candidate?.info?.error?.data || candidate?.data;
+  if (typeof rawData === 'string' && rawData.startsWith('0x4e487b71') && rawData.length >= 74) {
+    return Number(BigInt(rawData));
+  }
+
+  if (typeof candidate?.message === 'string') {
+    const match = candidate.message.match(/Panic(?: due to [^(]+)?\((\d+)\)/i);
+    if (match) return Number(match[1]);
+  }
+
+  return null;
+};
+
+const diagnoseDepositOverflow = async (
+  contract: ethers.Contract,
+  userAddress: string,
+  amountInWei: bigint
+): Promise<string> => {
+  const directReward = amountInWei * 50n / 100n * 30n / 100n;
+
+  try {
+    const [userRes, dqCardAddr, stakeInfoRes] = await Promise.all([
+      contract.getUser(userAddress),
+      contract.dqCard().catch(() => CONTRACT_ADDRESSES.DQCARD.address),
+      contract.getUserStake(userAddress).catch(() => [0n, 0n, 0n]),
+    ]);
+
+    const referrer = String(userRes?.[0] || ethers.ZeroAddress);
+    if (!referrer || referrer === ethers.ZeroAddress) {
+      return '入金失败：合约内部发生了整数下溢（Panic 0x11），但当前账户没有可用的上级关系信息。优先检查链上部署是否还是旧版 DQMining 合约。';
+    }
+
+    const cardContract = getContract(dqCardAddr, DQCARD_ABI);
+    const [referrerStake, referrerNftBalance] = await Promise.all([
+      contract.getUserStake(referrer).catch(() => [0n, 0n, 0n]),
+      cardContract.balanceOf(referrer).catch(() => 0n),
+    ]);
+
+    const referrerEnergy = BigInt(referrerStake?.[1]?.toString?.() ?? referrerStake?.[1] ?? 0);
+    const userEnergy = BigInt(stakeInfoRes?.[1]?.toString?.() ?? stakeInfoRes?.[1] ?? 0);
+    const nftCount = BigInt(referrerNftBalance?.toString?.() ?? referrerNftBalance ?? 0);
+
+    if (nftCount === 0n && referrerEnergy < directReward) {
+      return `入金失败：当前链上主合约很像仍在执行旧版分润逻辑。你的直推上级 ${referrer} 没有 NFT，且 energy=${ethers.formatEther(referrerEnergy)}，但本次入金会触发约 ${ethers.formatEther(directReward)} SOL 的直推奖励扣能量，导致整数下溢并回退（Panic 0x11）。建议先让上级补能量/先完成一笔入金，或切换到已修复的合约版本。`;
+    }
+
+    if (referrerEnergy < directReward) {
+      return `入金失败：上级 ${referrer} 的 energy=${ethers.formatEther(referrerEnergy)}，低于本次入金所需的直推奖励扣减 ${ethers.formatEther(directReward)}。链上旧版分润实现会在这里直接下溢并触发 Panic 0x11。`;
+    }
+
+    return `入金失败：合约在执行分润或加 LP 时发生整数下溢（Panic 0x11）。当前账户 energy=${ethers.formatEther(userEnergy)}，上级=${referrer}，上级 energy=${ethers.formatEther(referrerEnergy)}。最可疑的是链上仍是旧版 DQMining/DQStake 分润实现，而不是前端重复调用。`;
+  } catch (diagnoseError) {
+    console.error('[Web3] 诊断 Panic(0x11) 失败:', diagnoseError);
+    return '入金失败：合约在执行分润或加 LP 时发生整数下溢（Panic 0x11）。这通常不是前端重复调用，而是链上旧版合约内部的算术下溢。';
+  }
+};
+
 /**
  * 质押 SOL（链上）
  */
@@ -328,6 +398,13 @@ export const depositSOLOnChain = async (
   try {
     await contract.depositSOL.staticCall(amountInWei);
   } catch (e) {
+    const panicCode = getPanicCode(e);
+    if (panicCode === 0x11) {
+      const diagnosis = await diagnoseDepositOverflow(contract, userAddress, amountInWei);
+      console.error('[Web3] depositSOL 检测到 Panic(0x11):', diagnosis, e);
+      throw new Error(diagnosis);
+    }
+
     console.error('[Web3] depositSOL staticCall 失败:', e);
     throw e;
   }

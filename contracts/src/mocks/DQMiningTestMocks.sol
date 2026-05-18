@@ -145,6 +145,56 @@ contract MockPancakeRouter {
     }
 }
 
+contract MockPancakeRouterV3 {
+    address public lpToken;
+    bool private initialized;
+
+    function initialize(address _lpToken) external {
+        require(!initialized, "initialized");
+        initialized = true;
+        lpToken = _lpToken;
+    }
+
+    function getAmountsOut(uint amountIn, address[] calldata path) external pure returns (uint[] memory amounts) {
+        amounts = new uint[](path.length);
+        amounts[0] = amountIn;
+        for (uint i = 1; i < path.length; i++) {
+            amounts[i] = amountIn;
+        }
+    }
+
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        uint amountIn,
+        uint,
+        address[] calldata path,
+        address to,
+        uint
+    ) external {
+        MockERC20Token(path[0]).transferFrom(msg.sender, address(this), amountIn);
+        IMintableToken(path[1]).mint(to, amountIn);
+    }
+
+    function addLiquidity(
+        address tokenA,
+        address tokenB,
+        uint amountADesired,
+        uint amountBDesired,
+        uint,
+        uint,
+        address to,
+        uint
+    ) external returns (uint amountA, uint amountB, uint liquidity) {
+        MockERC20Token(tokenA).transferFrom(msg.sender, address(this), amountADesired);
+        MockERC20Token(tokenB).transferFrom(msg.sender, address(this), amountBDesired);
+        amountA = amountADesired;
+        amountB = amountBDesired;
+        liquidity = amountADesired < amountBDesired ? amountADesired : amountBDesired;
+        if (liquidity > 0) {
+            IMintableToken(lpToken).mint(to, liquidity);
+        }
+    }
+}
+
 contract MockDQMiningStake {
     mapping(address => uint256) public lpS;
     mapping(address => uint256) public lpT;

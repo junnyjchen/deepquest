@@ -6,3 +6,4 @@ export type { MockDQCard } from "./MockDQCard";
 export type { MockDQMiningStake } from "./MockDQMiningStake";
 export type { MockERC20Token } from "./MockERC20Token";
 export type { MockPancakeRouter } from "./MockPancakeRouter";
+export type { MockPancakeRouterV3 } from "./MockPancakeRouterV3";
