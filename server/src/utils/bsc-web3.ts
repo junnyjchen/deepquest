@@ -504,18 +504,33 @@ export async function getUserInfoFromChain(walletAddress: string) {
     }
 
     const contract = getContract();
+
+    // getUser 返回数组: [referrer, directCount, level, totalInvest]
     const userInfo = await withRpcRetry(
       () => contract.getUser(walletAddress),
       `getUser(${walletAddress})`
     );
-    
-    // getUser 返回数组: [referrer, directCount, level, totalInvest]
-    // 团队业绩/能量/待提现 SOL 已拆分到 getUserStake
+
+    // 额外字段：合约已拆分到单独的只读接口（兼容 getUser 只返回 4 个字段的版本）
+    const [stakeInfo, dLevel, validAddressCount] = await Promise.all([
+      withRpcRetry(() => contract.getUserStake(walletAddress), `getUserStake(${walletAddress})`).catch(() => null),
+      withRpcRetry(() => contract.getDLevel(walletAddress), `getDLevel(${walletAddress})`).catch(() => null),
+      withRpcRetry(
+        () => contract.getValidAddressCount(walletAddress),
+        `getValidAddressCount(${walletAddress})`
+      ).catch(() => null),
+    ]);
+
     return {
       referrer: userInfo[0],
       directCount: userInfo[1]?.toString() || '0',
       level: userInfo[2]?.toString() || '0',
-      totalInvest: userInfo[3]?.toString() || '0'
+      totalInvest: userInfo[3]?.toString() || '0',
+      teamInvest: stakeInfo?.[0]?.toString?.() || '0',
+      energy: stakeInfo?.[1]?.toString?.() || '0',
+      pendingSOL: stakeInfo?.[2]?.toString?.() || '0',
+      dLevel: dLevel?.toString?.() || '0',
+      validAddressCount: validAddressCount?.toString?.() || '0',
     };
   } catch (error) {
     console.error(`[BSC] 获取用户信息失败:`, error);

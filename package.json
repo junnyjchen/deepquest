@@ -8,9 +8,9 @@
     "start": "bash .cozeproj/scripts/prod_run.sh",
     "format:abi": "node scripts/format-abi.mjs",
     "preinstall": "npx only-allow pnpm",
-    "lint:client": "npm run lint --prefix ./client",
-    "lint:server": "npm run lint --prefix ./server",
-    "lint:all": "npm run lint --prefix ./client; npm run lint --prefix ./server"
+    "lint:client": "pnpm -C client lint",
+    "lint:server": "pnpm -C server lint",
+    "lint:all": "pnpm -C client lint && pnpm -C server lint"
   },
   "dependencies": {},
   "devDependencies": {},

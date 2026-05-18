@@ -7,7 +7,7 @@ async function main() {
     const userAddr = "0x9b23a19a5614F8777b67fF018B17AB658613b907";
 
     const mainAbi = [
-        "function getUser(address user) view returns (uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256, uint256)",
+        "function getUser(address user) view returns (address, uint256, uint8, uint256)",
         "function dailyDeposit(address user) view returns (uint256)",
         "function getDailyLimit() view returns (uint256)",
         "function depositWhiteList(address user) view returns (bool)",

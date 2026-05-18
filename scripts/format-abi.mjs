@@ -32,6 +32,33 @@ function extractABIJson(content, varName) {
   return null;
 }
 
+function extractExportArrayRange(content, varName) {
+  const marker = `export const ${varName} = [`;
+  const start = content.indexOf(marker);
+  if (start === -1) return null;
+
+  let depth = 0;
+  let i = start + marker.length - 1; // points at '['
+  while (i < content.length) {
+    if (content[i] === '[') depth++;
+    else if (content[i] === ']') {
+      depth--;
+      if (depth === 0) break;
+    }
+    i++;
+  }
+  if (i >= content.length) return null;
+
+  // Move forward to include trailing whitespace and optional semicolon
+  let exportEnd = i + 1;
+  while (exportEnd < content.length && /\s/.test(content[exportEnd])) exportEnd++;
+  if (content[exportEnd] === ';') exportEnd++;
+  // Keep trailing newline(s)
+  while (exportEnd < content.length && (content[exportEnd] === '\n' || content[exportEnd] === '\r')) exportEnd++;
+
+  return { start, exportEnd };
+}
+
 // ─── 工具：提取 export const X 之前的 JSDoc 注释块 ───────────────────────
 function extractJSDocBefore(content, varName) {
   const marker = `export const ${varName} = [`;
@@ -525,10 +552,9 @@ if (shouldFormatTs) {
   let fileHeader = content.slice(0, dqProjectDocInfo.startIndex);
   fileHeader = stripDuplicateTrailingJSDoc(fileHeader, dqProjectDocInfo.text);
 
-  // DQCARD_ABI：保持原样（该段含手写注释，JSON.parse 不安全）
-  const dqcardMarker = '/**\n * DQCard NFT';
-  const dqcardStart = content.indexOf(dqcardMarker);
-  const dqcardSection = dqcardStart !== -1 ? content.slice(dqcardStart) : '';
+  // 保留 DQSTAKE_ABI 之后的所有内容（例如：DQTOKEN_ABI / DQCARD_ABI 等额外导出）
+  const dqStakeRange = extractExportArrayRange(content, 'DQSTAKE_ABI');
+  const tailSection = dqStakeRange ? content.slice(dqStakeRange.exportEnd) : '';
 
   // 解析 ABI（要求该段不含 // 注释）
   const dqProjectJson = extractABIJson(content, 'DQPROJECT_ABI');
@@ -547,7 +573,7 @@ if (shouldFormatTs) {
     `${dqStakeDocInfo.text}\n`,
     `export const DQSTAKE_ABI = [\n${formatABI(dqStakeEntries, 'DQSTAKE_ABI')}\n];\n`,
     '\n',
-    dqcardSection,
+    tailSection,
   ].join('');
 
   writeFileSync(filePath, output, 'utf8');

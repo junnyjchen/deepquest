@@ -44,7 +44,7 @@ export const DQPROJECT_ABI = [
   "function INVEST_MIN() pure returns (uint256)",
   
   // 用户信息
-  "function getUser(address) view returns (address, uint256, uint8, uint8, uint256, uint256, uint256, uint256, bool, bool, uint256, bool)",
+  "function getUser(address) view returns (address, uint256, uint8, uint256)",
   "function getNodeInfo(address) view returns (uint256, uint256, uint256, uint256, bool)",
   "function checkNodeQualified(address) view returns (bool, uint256, uint256)",
   "function canDeposit(address) view returns (bool)",

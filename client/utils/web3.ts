@@ -170,18 +170,14 @@ export const getUserFromChain = async (userAddress: string) => {
   const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
 
   try {
-    // 合约 DQMining.getUser 最新返回值（务必与 assets/DQMining.sol 对齐）：
-    // (referrer, directCount, level, totalInvest, teamInvest, energy, dLevel, validAddressCount, pendingSOL)
+    // getUser 当前仅返回 4 个字段（与 assets/DQM.SOL 对齐）：
+    // (referrer, directCount, level, totalInvest)
+    // 其余信息需分别从 getUserStake 获取。
     const [
       referrer,
       directCount,
       level,
       totalInvest,
-      teamInvest,
-      energy,
-      dLevel,
-      validAddressCount,
-      pendingSOL,
     ] = await contract.getUser(userAddress);
 
     // const owner = await contract.owner();
@@ -190,17 +186,29 @@ export const getUserFromChain = async (userAddress: string) => {
     const isRegistered = referrer !== ethers.ZeroAddress;
 
     if (!isRegistered) return null;
+
+    let teamInvest = '0.0';
+    let energy = '0.0';
+    let pendingSOL = '0.0';
+
+    const [stakeRes] = await Promise.allSettled([
+      contract.getUserStake(userAddress),
+    ]);
+
+    if (stakeRes.status === 'fulfilled') {
+      teamInvest = ethers.formatEther(stakeRes.value[0]);
+      energy = ethers.formatEther(stakeRes.value[1]);
+      pendingSOL = ethers.formatEther(stakeRes.value[2]);
+    }
     
     return {
       referrer,
       directCount: Number(directCount),
       level: Number(level),
       totalInvest: ethers.formatEther(totalInvest),
-      teamInvest: ethers.formatEther(teamInvest),
-      energy: ethers.formatEther(energy),
-      dLevel: Number(dLevel),
-      validAddressCount: Number(validAddressCount),
-      pendingSOL: ethers.formatEther(pendingSOL),
+      teamInvest,
+      energy,
+      pendingSOL,
     };
   } catch (e) {
     // 如果调用本身 revert / ABI 不匹配，也返回 null（但建议日志打出来）
