@@ -270,8 +270,67 @@ export const depositSOLOnChain = async (
 ): Promise<ethers.TransactionResponse> => {
   const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
   const amountInWei = ethers.parseEther(amount);
+  const userAddress = (await signer.getAddress()).toLowerCase();
 
   console.log('[Web3] 链上质押:', amount, 'SOL');
+
+  // ── 预检查：把常见 require/transferFrom 失败原因提前暴露出来 ──
+  try {
+    const [stakeAddr, minInvest, isBlacklisted, isWhitelisted] = await Promise.all([
+      contract.stakeContract().catch(() => ethers.ZeroAddress),
+      contract.INVEST_MIN().catch(() => 0n),
+      contract.isBlacklisted(userAddress).catch(() => false),
+      contract.depositWhiteList(userAddress).catch(() => false),
+    ]);
+
+    if (isBlacklisted) {
+      throw new Error('入金失败：地址被拉黑（!inv）');
+    }
+    if (typeof minInvest === 'bigint' && minInvest > 0n && amountInWei < minInvest) {
+      throw new Error(`入金失败：金额小于最小入金（min=${ethers.formatEther(minInvest)}）`);
+    }
+    if (stakeAddr === ethers.ZeroAddress) {
+      // DQMiningV3.depositSOL 会在 swapAndAddLP 时 require(!stake)
+      throw new Error('入金失败：stakeContract 未设置（!stake），需管理员先 setStakeContract');
+    }
+
+    if (!isWhitelisted) {
+      const [daily, limit] = await Promise.all([
+        contract.dailyDeposit(userAddress).catch(() => 0n),
+        contract.getDailyLimit().catch(() => 0n),
+      ]);
+      if (typeof daily === 'bigint' && typeof limit === 'bigint' && daily + amountInWei > limit) {
+        throw new Error(
+          `入金失败：超过当日限额（!lim），已入金=${ethers.formatEther(daily)}，限额=${ethers.formatEther(limit)}`
+        );
+      }
+    }
+
+    // ERC20: balance/allowance
+    const solContract = await getSignedContract(CONTRACT_ADDRESSES.SOL.address, DQTOKEN_ABI, signer);
+    const [balance, allowance] = await Promise.all([
+      solContract.balanceOf(userAddress).catch(() => 0n),
+      solContract.allowance(userAddress, CONTRACT_ADDRESSES.DQPROJECT.address).catch(() => 0n),
+    ]);
+
+    if (typeof balance === 'bigint' && balance < amountInWei) {
+      throw new Error(`入金失败：SOL 余额不足（bal=${ethers.formatEther(balance)}）`);
+    }
+    if (typeof allowance === 'bigint' && allowance < amountInWei) {
+      throw new Error(`入金失败：SOL 授权额度不足，请先授权（allow=${ethers.formatEther(allowance)}）`);
+    }
+  } catch (preflightError) {
+    console.error('[Web3] 入金预检查失败:', preflightError);
+    throw preflightError;
+  }
+
+  // 静态调用再兜底一次（有些 RPC 不回传 revert reason，但能挡住明显 revert）
+  try {
+    await contract.depositSOL.staticCall(amountInWei);
+  } catch (e) {
+    console.error('[Web3] depositSOL staticCall 失败:', e);
+    throw e;
+  }
 
   const tx = await contract.depositSOL(amountInWei);
   console.log('[Web3] 交易已发送:', tx.hash);

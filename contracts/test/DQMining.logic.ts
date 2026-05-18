@@ -99,6 +99,45 @@ describe("DQMining asset logic", function () {
     expect(await dqMining.dailyDeposit(await user.getAddress())).to.equal(ONE);
   });
 
+  it("depositSOL：未注册用户入金会被 !reg 拒绝", async function () {
+    await solToken.connect(user).approve(await dqMining.getAddress(), ONE);
+    await expect(dqMining.connect(user).depositSOL(ONE)).to.be.revertedWith("!reg");
+  });
+
+  it("depositSOL：入金金额小于 INVEST_MIN 会被 !inv 拒绝", async function () {
+    await dqMining.connect(user).register(ADDRS.OWNER);
+    await solToken.connect(user).approve(await dqMining.getAddress(), HALF);
+    await expect(dqMining.connect(user).depositSOL(HALF)).to.be.revertedWith("!inv");
+  });
+
+  it("depositSOL：黑名单用户入金会被 !inv 拒绝", async function () {
+    const userAddr = await user.getAddress();
+    await dqMining.connect(user).register(ADDRS.OWNER);
+    await dqMining.connect(ownerSigner).addToBlacklist(userAddr);
+
+    await solToken.connect(user).approve(await dqMining.getAddress(), ONE);
+    await expect(dqMining.connect(user).depositSOL(ONE)).to.be.revertedWith("!inv");
+  });
+
+  it("depositSOL：白名单用户不受日限额限制，dailyDeposit 不累计", async function () {
+    const userAddr = await user.getAddress();
+
+    await dqMining.connect(referrer).register(ADDRS.OWNER);
+    await dqMining.connect(user).register(await referrer.getAddress());
+    await dqMining.connect(ownerSigner).setDepositWhiteList(userAddr, true);
+
+    // 为了避免上级 energy=0 导致的下溢，先让上级完成入金拿到 energy
+    await approveAndDeposit(ownerSigner);
+    await approveAndDeposit(referrer);
+
+    await approveAndDeposit(user);
+    await approveAndDeposit(user);
+
+    expect(await dqMining.dailyDeposit(userAddr)).to.equal(0n);
+    const userData = await dqMining.getUser(userAddr);
+    expect(userData[3]).to.equal(ONE + ONE); // totalInvest
+  });
+
   it("能复现合约逻辑问题：上级无 NFT 且 energy 为 0 时，首笔下级入金会触发 Panic(0x11)", async function () {
     await dqMining.connect(referrer).register(ADDRS.OWNER);
     await dqMining.connect(user).register(await referrer.getAddress());
@@ -106,6 +145,26 @@ describe("DQMining asset logic", function () {
     await solToken.connect(user).approve(await dqMining.getAddress(), ONE);
 
     await expect(dqMining.connect(user).depositSOL(ONE)).to.be.revertedWithPanic(0x11);
+  });
+
+  it("depositSOL：未设置 stakeContract 也能入金，但不会记录 LP", async function () {
+    const miningFactory = await ethers.getContractFactory("DQMining");
+    const dqMining2 = await miningFactory.deploy();
+    await dqMining2.waitForDeployment();
+
+    // 先让 owner 入金，保证后续分润扣 energy 不会下溢
+    await solToken.connect(ownerSigner).approve(await dqMining2.getAddress(), ONE);
+    await dqMining2.connect(ownerSigner).depositSOL(ONE);
+
+    // user 注册并入金
+    await dqMining2.connect(user).register(ADDRS.OWNER);
+    await solToken.connect(user).approve(await dqMining2.getAddress(), ONE);
+    await dqMining2.connect(user).depositSOL(ONE);
+
+    // dqMining2 没有 setStakeContract，所以不会调用 stake.addLP
+    expect(await stake.lpS(await user.getAddress())).to.equal(0n);
+    const userData = await dqMining2.getUser(await user.getAddress());
+    expect(userData[3]).to.equal(ONE);
   });
 
   it("严格按日限额逻辑：同一地址当天第二次入金 1 SOL 会被 !lim 拒绝", async function () {
