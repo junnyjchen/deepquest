@@ -28,6 +28,7 @@ export interface IDQMiningStakeInterface extends Interface {
       | "addDirectSales"
       | "addEnergy"
       | "addLP"
+      | "addPendingBurn"
       | "addPendingSOL"
       | "addTeamInvest"
       | "claimD"
@@ -79,6 +80,10 @@ export interface IDQMiningStakeInterface extends Interface {
   encodeFunctionData(
     functionFragment: "addLP",
     values: [AddressLike, BigNumberish, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "addPendingBurn",
+    values: [BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "addPendingSOL",
@@ -223,6 +228,10 @@ export interface IDQMiningStakeInterface extends Interface {
   decodeFunctionResult(functionFragment: "addEnergy", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "addLP", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "addPendingBurn",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "addPendingSOL",
     data: BytesLike
   ): Result;
@@ -363,6 +372,8 @@ export interface IDQMiningStake extends BaseContract {
     [void],
     "nonpayable"
   >;
+
+  addPendingBurn: TypedContractMethod<[_a: BigNumberish], [void], "nonpayable">;
 
   addPendingSOL: TypedContractMethod<
     [_u: AddressLike, _a: BigNumberish],
@@ -535,6 +546,9 @@ export interface IDQMiningStake extends BaseContract {
     [void],
     "nonpayable"
   >;
+  getFunction(
+    nameOrSignature: "addPendingBurn"
+  ): TypedContractMethod<[_a: BigNumberish], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "addPendingSOL"
   ): TypedContractMethod<

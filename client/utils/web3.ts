@@ -532,11 +532,37 @@ export const sellDQForSOL = async (
 ): Promise<ethers.TransactionResponse> => {
   const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
   const dqAmountInWei = ethers.parseEther(dqAmount);
-  const minSolAmountInWei = ethers.parseEther(minSolAmount);
+  const userAddress = (await signer.getAddress()).toLowerCase();
 
-  console.log('[Web3] 链上兑换 DQ 为 SOL:', dqAmount, 'DQ, 最小获得:', minSolAmount, 'SOL');
+  console.log('[Web3] 链上兑换 DQ 为 SOL:', dqAmount, 'DQ, 最小获得(前端兼容参数，当前合约未使用):', minSolAmount, 'SOL');
 
-  const tx = await contract.sellDQForSOL(dqAmountInWei, minSolAmountInWei);
+  try {
+    const dqTokenAddress = await contract.dqToken().catch(() => CONTRACT_ADDRESSES.DQTOKEN.address);
+    const dqContract = getContract(dqTokenAddress, DQTOKEN_ABI);
+    const [balance, allowance] = await Promise.all([
+      dqContract.balanceOf(userAddress).catch(() => 0n),
+      dqContract.allowance(userAddress, CONTRACT_ADDRESSES.DQPROJECT.address).catch(() => 0n),
+    ]);
+
+    if (typeof balance === 'bigint' && balance < dqAmountInWei) {
+      throw new Error(`兑换失败：DQ 余额不足（bal=${ethers.formatEther(balance)}）`);
+    }
+    if (typeof allowance === 'bigint' && allowance < dqAmountInWei) {
+      throw new Error(`兑换失败：DQ 授权额度不足，请先授权（allow=${ethers.formatEther(allowance)}）`);
+    }
+  } catch (preflightError) {
+    console.error('[Web3] sellDQForSOL 预检查失败:', preflightError);
+    throw preflightError;
+  }
+
+  try {
+    await contract.sellDQForSOL.staticCall(dqAmountInWei);
+  } catch (error) {
+    console.error('[Web3] sellDQForSOL staticCall 失败:', error);
+    throw error;
+  }
+
+  const tx = await contract.sellDQForSOL(dqAmountInWei);
   console.log('[Web3] 交易已发送:', tx.hash);
 
   return tx;

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.17;
-import "@openzeppelin/contracts@4.9.6/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts@4.9.6/utils/structs/EnumerableSet.sol";
-import "@openzeppelin/contracts@4.9.6/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts@4.9.6/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 interface IDQToken {
     function transfer(address to, uint256 amount) external returns (bool);
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
@@ -228,7 +228,7 @@ contract DQMiningStakeV3 is ReentrancyGuard {
             if (cur == address(0)) break;
             uint256 curTeam = _calcSmallTeam(cur);
             uint8 curLvl = _getRequiredLevel(curTeam);
-            if (lvl >= curLvl) {
+            if (curLvl > 0 && lvl >= curLvl) {
                 uint8 curRate = rates[curLvl - 1];
                 uint8 diffRate = curRate > prevRate ? curRate - prevRate : 0;
                 uint256 mgrR = _mgrPool * diffRate / 100;

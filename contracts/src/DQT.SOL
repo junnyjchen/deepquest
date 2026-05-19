@@ -42,10 +42,10 @@ contract DQToken is ERC20("DQ Token", "DQ") {
         emit OwnershipTransferred(owner, newOwner);
         owner = newOwner;
     }
-    function _update(address from, address to, uint256 amount) internal override {
+    function _transfer(address from, address to, uint256 amount) internal override {
         require(!isBlacklisted[from] && !isBlacklisted[to], "Blacklisted");
         if (isExcluded[from] || isExcluded[to]) {
-            super._update(from, to, amount);
+            super._transfer(from, to, amount);
             return;
         }
         if (isPair[from] && buyFeeEnabled) {
@@ -56,26 +56,26 @@ contract DQToken is ERC20("DQ Token", "DQ") {
             _processSellTransfer(from, to, amount);
             return;
         }
-        super._update(from, to, amount);
+        super._transfer(from, to, amount);
     }
     function _processBuyTransfer(address from, address to, uint256 amount) internal {
         uint256 burnAmount = amount * BUY_BURN_RATE / 100;
         uint256 feeAmount = amount * BUY_FEE_RATE / 100;
         uint256 netAmount = amount - burnAmount - feeAmount;
-        if (netAmount > 0) super._update(from, to, netAmount);
+        if (netAmount > 0) super._transfer(from, to, netAmount);
         if (burnAmount > 0 && burnedSupply < BURN_TARGET) {
-            super._update(from, BURN_ADDRESS, burnAmount);
+            super._transfer(from, BURN_ADDRESS, burnAmount);
             burnedSupply += burnAmount;
         } else if (burnAmount > 0) {
-            super._update(from, buyFeeReceiver, burnAmount);
+            super._transfer(from, buyFeeReceiver, burnAmount);
         }
-        if (feeAmount > 0) super._update(from, buyFeeReceiver, feeAmount);
+        if (feeAmount > 0) super._transfer(from, buyFeeReceiver, feeAmount);
     }
     function _processSellTransfer(address from, address to, uint256 amount) internal {
         uint256 feeAmount = amount * SELL_FEE_RATE / 100;
         uint256 pairAmount = amount * SELL_TO_PAIR_RATE / 100;
-        if (pairAmount > 0) super._update(from, to, pairAmount);
-        if (feeAmount > 0) super._update(from, sellFeeReceiver, feeAmount);
+        if (pairAmount > 0) super._transfer(from, to, pairAmount);
+        if (feeAmount > 0) super._transfer(from, sellFeeReceiver, feeAmount);
     }
     function setPair(address _pair, bool _status) external onlyOwner { isPair[_pair] = _status; }
     function setExcluded(address _account, bool _status) external onlyOwner { isExcluded[_account] = _status; }

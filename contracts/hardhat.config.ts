@@ -12,14 +12,27 @@ const BSCSCAN_API_KEY = process.env.BSCSCAN_API_KEY || "";
 
 const config: HardhatUserConfig = {
   solidity: {
-    version: "0.8.17",
-    settings: {
-      optimizer: {
-        enabled: true,
-        runs: 200
+    compilers: [
+      {
+        version: "0.8.17",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200
+          },
+          viaIR: true
+        }
       },
-      viaIR: true
-    }
+      {
+        version: "0.8.20",
+        settings: {
+          optimizer: {
+            enabled: true,
+            runs: 200
+          }
+        }
+      }
+    ]
   },
   paths: {
     sources: "./src",
@@ -29,7 +42,8 @@ const config: HardhatUserConfig = {
   },
   networks: {
     hardhat: {
-      chainId: 56
+      chainId: 56,
+      allowUnlimitedContractSize: true
     },
     bscTestnet: {
       url: BSC_TESTNET_RPC,

@@ -89,6 +89,19 @@ const _abi = [
   {
     inputs: [
       {
+        internalType: "uint256",
+        name: "_a",
+        type: "uint256",
+      },
+    ],
+    name: "addPendingBurn",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
         internalType: "address",
         name: "_u",
         type: "address",
