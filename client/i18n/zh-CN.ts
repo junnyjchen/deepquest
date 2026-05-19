@@ -78,8 +78,8 @@ export default {
     insufficientAllowance: 'DQ 授权不足，请重新授权',
 
     pleaseInputStakeAmount: '请输入质押数量',
-    stakeSubmittedMessage: '质押 {amount} SOL 成功！\n交易哈希: {hash}',
-    stakeSuccessMessage: '质押 {amount} SOL 成功！\n交易哈希: {hash}',
+    stakeSubmittedMessage: '质押 {amount} DQ 成功！\n交易哈希: {hash}',
+    stakeSuccessMessage: '质押 {amount} DQ 成功！\n交易哈希: {hash}',
     stakeFailed: '质押失败',
     stakeFailedRetry: '质押失败，请重试',
   },

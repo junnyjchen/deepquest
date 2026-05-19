@@ -7,11 +7,11 @@ import {
   TextInput,
   Linking,
   ActivityIndicator,
-  Alert,
   Modal,
   StyleSheet,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { Screen } from '@/components/Screen';
 import { LogoHeader } from '@/components/LogoHeader';
 import { useFocusEffect } from 'expo-router';
@@ -35,6 +35,7 @@ import {
   approveDQToken,
   checkDQAllowance,
   depositSOLOnChain,
+  stakeDQOnChain,
 } from '@/utils/web3';
 import { CONTRACT_ADDRESSES } from '@/config/contracts';
 
@@ -47,6 +48,17 @@ interface UserInfo {
   totalInvest?: string;
   teamInvest?: string;
   directSales?: string;
+}
+
+interface DialogState {
+  visible: boolean;
+  title: string;
+  message: string;
+  confirmText: string;
+  cancelText: string;
+  type: 'info' | 'warning' | 'danger';
+  onConfirm?: () => void | Promise<void>;
+  onCancel?: () => void | Promise<void>;
 }
 
 // 精确匹配参考图的颜色体系
@@ -115,6 +127,14 @@ export default function DappIndex() {
   const [pendingInviteReferrer, setPendingInviteReferrer] = useState<string | null>(null);
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [bindLoading, setBindLoading] = useState(false);
+  const [dialogState, setDialogState] = useState<DialogState>({
+    visible: false,
+    title: '',
+    message: '',
+    confirmText: t('common.confirm'),
+    cancelText: '',
+    type: 'info',
+  });
 
   // 质押周期配置
   const stakePeriods = [
@@ -146,6 +166,48 @@ export default function DappIndex() {
     totalReward: 0,
     dqtPrice: '0.15224',
   });
+
+  const closeDialog = () => {
+    setDialogState((prev) => ({
+      ...prev,
+      visible: false,
+    }));
+  };
+
+  const openDialog = (config: Omit<DialogState, 'visible'>) => {
+    setDialogState({
+      visible: true,
+      ...config,
+    });
+  };
+
+  const openTxDialog = (title: string, message: string, txHash: string) => {
+    openDialog({
+      title,
+      message,
+      confirmText: t('common.view'),
+      cancelText: t('common.confirm'),
+      type: 'info',
+      onConfirm: () => Linking.openURL(`https://bscscan.com/tx/${txHash}`),
+      onCancel: () => undefined,
+    });
+  };
+
+  const handleDialogConfirm = async () => {
+    const action = dialogState.onConfirm;
+    closeDialog();
+    if (action) {
+      await action();
+    }
+  };
+
+  const handleDialogCancel = async () => {
+    const action = dialogState.onCancel;
+    closeDialog();
+    if (action) {
+      await action();
+    }
+  };
 
   // 加载保存的钱包地址
   useFocusEffect(
@@ -344,11 +406,15 @@ export default function DappIndex() {
       
       // 如果 MetaMask 不可用，提供模拟选项
       if (typeof window !== 'undefined' && !window.ethereum) {
-        Alert.alert(
-          t('common.tips'),
-          t('index.walletExtensionNotFound'),
-          [{ text: t('common.confirm') }]
-        );
+        openDialog({
+          title: t('common.tips'),
+          message: t('index.walletExtensionNotFound'),
+          confirmText: t('common.confirm'),
+          cancelText: '',
+          type: 'warning',
+          onConfirm: () => undefined,
+          onCancel: () => undefined,
+        });
       } else {
         showToast.error(t('common.error'), error.message || t('common.walletConnectFailed'));
       }
@@ -452,13 +518,10 @@ export default function DappIndex() {
       const { provider, signer } = walletInfo;
       const tx = await registerUserOnChain(signer, referrer);
 
-      Alert.alert(
+      openTxDialog(
         t('index.txSubmittedTitle'),
         t('index.activationTxSubmittedMessage'),
-        [
-          { text: t('common.confirm') },
-          { text: t('common.view'), onPress: () => Linking.openURL(`https://bscscan.com/tx/${tx.hash}`) }
-        ]
+        tx.hash
       );
 
       // 监听交易确认
@@ -496,6 +559,7 @@ export default function DappIndex() {
       showToast.error(t('index.activateFailedTitle'), errorMsg);
     } finally {
       setActivating(false);
+      setActivationModalVisible(false);
     }
   };
 
@@ -561,70 +625,61 @@ export default function DappIndex() {
 
         if (parseFloat(allowance) < sellAmountNum) {
           // 需要授权
-          Alert.alert(
-            t('index.needApproveTitle'),
-            t('index.needApproveMessage'),
-            [
-              { text: t('common.cancel'), style: 'cancel' },
-              {
-                text: t('index.approveAction'),
-                onPress: async () => {
-                  try {
-                    const approveTx = await approveDQToken(signer, sellAmount);
-                    Alert.alert(t('index.approveSubmittedTitle'), t('index.waitForChainConfirm'), [
-                      { text: t('common.confirm') },
-                      { text: t('common.view'), onPress: () => Linking.openURL(`https://bscscan.com/tx/${approveTx.hash}`) }
-                    ]);
+          openDialog({
+            title: t('index.needApproveTitle'),
+            message: t('index.needApproveMessage'),
+            confirmText: t('index.approveAction'),
+            cancelText: t('common.cancel'),
+            type: 'warning',
+            onCancel: () => {
+              setSubmitting(false);
+            },
+            onConfirm: async () => {
+              try {
+                const approveTx = await approveDQToken(signer, sellAmount);
+                openTxDialog(t('index.approveSubmittedTitle'), t('index.waitForChainConfirm'), approveTx.hash);
 
-                    // 等待授权确认
-                    await approveTx.wait();
+                // 等待授权确认
+                await approveTx.wait();
 
-                    // 授权完成后，执行兑换
-                    const swapTx = await sellDQForSOL(signer, sellAmount, '0');
-                    Alert.alert(
-                      t('index.swapSubmittedTitle'),
-                      t('index.swappingMessage').replace('{amount}', sellAmount),
-                      [
-                        { text: t('common.confirm') },
-                        { text: t('common.view'), onPress: () => Linking.openURL(`https://bscscan.com/tx/${swapTx.hash}`) }
-                      ]
-                    );
+                // 授权完成后，执行兑换
+                const swapTx = await sellDQForSOL(signer, sellAmount, '0');
+                openTxDialog(
+                  t('index.swapSubmittedTitle'),
+                  t('index.swappingMessage').replace('{amount}', sellAmount),
+                  swapTx.hash
+                );
 
-                    // 等待兑换确认
-                    await swapTx.wait();
+                // 等待兑换确认
+                await swapTx.wait();
 
-                    // 刷新余额
-                    const [newSolBal, newDqBal] = await Promise.all([
-                      getSOLTokenBalance(walletAddress),
-                      getDQTokenBalance(walletAddress)
-                    ]);
-                    setSolBalance(parseFloat(newSolBal).toFixed(4));
-                    setDqtBalance(parseFloat(newDqBal).toFixed(2));
+                // 刷新余额
+                const [newSolBal, newDqBal] = await Promise.all([
+                  getSOLTokenBalance(walletAddress),
+                  getDQTokenBalance(walletAddress)
+                ]);
+                setSolBalance(parseFloat(newSolBal).toFixed(4));
+                setDqtBalance(parseFloat(newDqBal).toFixed(2));
 
-                    showToast.success(t('index.swapSuccessTitle'), t('index.swapSuccessMessage').replace('{amount}', sellAmount));
-                    setSellAmount('');
-                  } catch (error: any) {
-                    console.error('授权或兑换失败:', error);
-                    showToast.error(t('common.error'), error.message || t('index.approveOrSwapFailed'));
-                  } finally {
-                    setSubmitting(false);
-                  }
-                }
+                showToast.success(t('index.swapSuccessTitle'), t('index.swapSuccessMessage').replace('{amount}', sellAmount));
+                setSellAmount('');
+              } catch (error: any) {
+                console.error('授权或兑换失败:', error);
+                showToast.error(t('common.error'), error.message || t('index.approveOrSwapFailed'));
+              } finally {
+                setSubmitting(false);
               }
-            ]
-          );
+            },
+          });
           return;
         }
 
         // 3. 已有足够授权，直接兑换
         const swapTx = await sellDQForSOL(signer, sellAmount, '0');
-        Alert.alert(
+        openTxDialog(
           t('index.swapSubmittedTitle'),
           t('index.swappingMessage').replace('{amount}', sellAmount),
-          [
-            { text: t('common.confirm') },
-            { text: t('common.view'), onPress: () => Linking.openURL(`https://bscscan.com/tx/${swapTx.hash}`) }
-          ]
+          swapTx.hash
         );
 
         // 等待交易确认
@@ -682,19 +737,58 @@ export default function DappIndex() {
         }
 
         const { signer } = walletInfo;
+        const periodIndex = stakePeriods.findIndex((period) => period.days === stakePeriod);
+
+        if (periodIndex < 0) {
+          throw new Error(t('index.stakeFailedRetry'));
+        }
+
+        const allowance = await checkDQAllowance(walletAddress);
+        if (parseFloat(allowance) < parseFloat(stakeAmount)) {
+          openDialog({
+            title: t('index.needApproveTitle'),
+            message: t('index.needApproveMessage'),
+            confirmText: t('index.approveAction'),
+            cancelText: t('common.cancel'),
+            type: 'warning',
+            onCancel: () => {
+              setSubmitting(false);
+            },
+            onConfirm: async () => {
+              try {
+                const approveTx = await approveDQToken(signer, stakeAmount);
+                openTxDialog(t('index.approveSubmittedTitle'), t('index.waitForChainConfirm'), approveTx.hash);
+                await approveTx.wait();
+
+                const tx = await stakeDQOnChain(signer, stakeAmount, periodIndex);
+                openTxDialog(
+                  t('index.txSubmittedTitle'),
+                  t('index.stakeSubmittedMessage')
+                    .replace('{amount}', stakeAmount)
+                    .replace('{hash}', `${tx.hash.slice(0, 20)}...`),
+                  tx.hash
+                );
+                setStakeAmount('');
+              } catch (error: any) {
+                console.error('授权或质押失败:', error);
+                showToast.error(t('common.error'), error.message || t('index.stakeFailedRetry'));
+              } finally {
+                setSubmitting(false);
+              }
+            },
+          });
+          return;
+        }
         
-        // 调用链上质押
-        const tx = await depositSOLOnChain(signer, stakeAmount);
-        
-        Alert.alert(
+        // 调用链上 DQ 质押
+        const tx = await stakeDQOnChain(signer, stakeAmount, periodIndex);
+
+        openTxDialog(
           t('index.txSubmittedTitle'),
           t('index.stakeSubmittedMessage')
             .replace('{amount}', stakeAmount)
             .replace('{hash}', `${tx.hash.slice(0, 20)}...`),
-          [
-            { text: t('common.confirm') },
-            { text: t('common.view'), onPress: () => Linking.openURL(`https://bscscan.com/tx/${tx.hash}`) }
-          ]
+          tx.hash
         );
         setStakeAmount('');
       } else {
@@ -778,6 +872,16 @@ export default function DappIndex() {
 
   return (
     <Screen>
+      <ConfirmDialog
+        visible={dialogState.visible}
+        title={dialogState.title}
+        message={dialogState.message}
+        confirmText={dialogState.confirmText}
+        cancelText={dialogState.cancelText}
+        type={dialogState.type}
+        onConfirm={handleDialogConfirm}
+        onCancel={handleDialogCancel}
+      />
       <ScrollView
         className="flex-1"
         style={{ backgroundColor: BG_DARK }}

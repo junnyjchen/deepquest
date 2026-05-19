@@ -64,8 +64,8 @@ export default {
     insufficientAllowance: 'Insufficient DQ allowance, please approve again',
 
     pleaseInputStakeAmount: 'Please enter a stake amount',
-    stakeSubmittedMessage: 'Staked {amount} SOL successfully!\nTx: {hash}',
-    stakeSuccessMessage: 'Staked {amount} SOL successfully!\nTx: {hash}',
+    stakeSubmittedMessage: 'Staked {amount} DQ successfully!\nTx: {hash}',
+    stakeSuccessMessage: 'Staked {amount} DQ successfully!\nTx: {hash}',
     stakeFailed: 'Staking failed',
     stakeFailedRetry: 'Staking failed, please try again',
   },

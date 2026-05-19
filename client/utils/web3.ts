@@ -416,6 +416,63 @@ export const depositSOLOnChain = async (
 };
 
 /**
+ * 质押 DQ（链上）
+ */
+export const stakeDQOnChain = async (
+  signer: ethers.Signer,
+  amount: string,
+  periodIndex: number
+): Promise<ethers.TransactionResponse> => {
+  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+  const amountInWei = ethers.parseEther(amount);
+  const userAddress = (await signer.getAddress()).toLowerCase();
+
+  console.log('[Web3] 链上质押 DQ:', amount, 'periodIndex:', periodIndex);
+
+  try {
+    const [stakeAddr, balance, allowance] = await Promise.all([
+      contract.stakeContract().catch(() => ethers.ZeroAddress),
+      contract.dqToken().then(async (dqAddr: string) => {
+        const dqContract = getContract(dqAddr, DQTOKEN_ABI);
+        return dqContract.balanceOf(userAddress).catch(() => 0n);
+      }).catch(() => 0n),
+      contract.dqToken().then(async (dqAddr: string) => {
+        const dqContract = getContract(dqAddr, DQTOKEN_ABI);
+        return dqContract.allowance(userAddress, CONTRACT_ADDRESSES.DQPROJECT.address).catch(() => 0n);
+      }).catch(() => 0n),
+    ]);
+
+    if (stakeAddr === ethers.ZeroAddress) {
+      throw new Error('质押失败：stakeContract 未设置（!stake）');
+    }
+    if (periodIndex < 0 || periodIndex > 3) {
+      throw new Error('质押失败：质押周期索引无效（!i）');
+    }
+    if (typeof balance === 'bigint' && balance < amountInWei) {
+      throw new Error(`质押失败：DQ 余额不足（bal=${ethers.formatEther(balance)}）`);
+    }
+    if (typeof allowance === 'bigint' && allowance < amountInWei) {
+      throw new Error(`质押失败：DQ 授权额度不足，请先授权（allow=${ethers.formatEther(allowance)}）`);
+    }
+  } catch (preflightError) {
+    console.error('[Web3] 质押 DQ 预检查失败:', preflightError);
+    throw preflightError;
+  }
+
+  try {
+    await contract.stakeDQ.staticCall(amountInWei, periodIndex);
+  } catch (error) {
+    console.error('[Web3] stakeDQ staticCall 失败:', error);
+    throw error;
+  }
+
+  const tx = await contract.stakeDQ(amountInWei, periodIndex);
+  console.log('[Web3] 交易已发送:', tx.hash);
+
+  return tx;
+};
+
+/**
  * 领取 LP 奖励（链上）
  */
 export const claimLPOnChain = async (
