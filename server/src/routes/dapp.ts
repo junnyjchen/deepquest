@@ -194,12 +194,20 @@ router.get('/stats', async (req, res) => {
 // 质押操作 - 创建质押记录
 router.post('/stake', async (req, res) => {
   try {
-    const { wallet_address, amount, tx_hash } = req.body;
+    const { wallet_address, amount, tx_hash, stake_days } = req.body;
 
-    if (!wallet_address || !amount || !tx_hash) {
+    if (!wallet_address || !amount || !tx_hash || !stake_days) {
       return res.status(400).json({
         code: 400,
         message: '缺少必要参数'
+      });
+    }
+
+    const normalizedStakeDays = Number(stake_days);
+    if (![30, 90, 180, 360].includes(normalizedStakeDays)) {
+      return res.status(400).json({
+        code: 400,
+        message: '无效的质押天数'
       });
     }
 
@@ -217,14 +225,20 @@ router.post('/stake', async (req, res) => {
       });
     }
 
+    const now = new Date();
+    const endTime = new Date(now.getTime() + normalizedStakeDays * 24 * 60 * 60 * 1000);
+
     // 创建质押记录
-    const { data: deposit, error: insertError } = await supabase
-      .from('deposits')
+    const { data: stakeRecord, error: insertError } = await supabase
+      .from('lp_stakes')
       .insert({
         user_address: wallet_address.toLowerCase(),
         amount: amount,
-        tx_hash: tx_hash,
-        status: 'pending'
+        stake_days: normalizedStakeDays,
+        start_time: now.toISOString(),
+        end_time: endTime.toISOString(),
+        reward_amount: '0',
+        is_claimed: false,
       })
       .select()
       .single();
@@ -238,7 +252,11 @@ router.post('/stake', async (req, res) => {
 
     res.json({
       code: 0,
-      data: deposit,
+      data: {
+        ...stakeRecord,
+        tx_hash,
+        status: 'pending'
+      },
       message: '质押提交成功'
     });
   } catch (error) {
@@ -1502,6 +1520,70 @@ router.post('/deposit', async (req, res) => {
     });
   } catch (error) {
     console.error('入金失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 记录 LP 入金/取消操作
+router.post('/lp-action-record', async (req, res) => {
+  try {
+    const { wallet_address, amount, tx_hash, action_type, action_time, action_date } = req.body;
+
+    if (!wallet_address || !amount || !action_type) {
+      return res.status(400).json({
+        code: 400,
+        message: '缺少必要参数'
+      });
+    }
+
+    if (!['deposit', 'cancel'].includes(action_type)) {
+      return res.status(400).json({
+        code: 400,
+        message: '无效的操作类型'
+      });
+    }
+
+    const actionTime = action_time ? new Date(action_time) : new Date();
+    if (Number.isNaN(actionTime.getTime())) {
+      return res.status(400).json({
+        code: 400,
+        message: '无效的操作时间'
+      });
+    }
+
+    const normalizedActionDate = action_date || actionTime.toISOString().slice(0, 10);
+
+    const { data: record, error } = await supabase
+      .from('lp_action_records')
+      .insert({
+        user_address: wallet_address.toLowerCase(),
+        amount,
+        action_type,
+        tx_hash: tx_hash || null,
+        action_time: actionTime.toISOString(),
+        action_date: normalizedActionDate,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('记录 LP 操作失败:', error);
+      return res.status(500).json({
+        code: 500,
+        message: '记录 LP 操作失败'
+      });
+    }
+
+    res.json({
+      code: 0,
+      message: '记录成功',
+      data: record,
+    });
+  } catch (error) {
+    console.error('记录 LP 操作失败:', error);
     res.status(500).json({
       code: 500,
       message: '服务器错误'

@@ -180,7 +180,9 @@ function getSupabaseClient(token?: string): SupabaseClient {
 const REQUIRED_TABLES = [
   'users',
   'deposits',
+  'lp_action_records',
   'rewards',
+  'sol_rewards',
   'withdrawals',
   'lp_stakes',
   'block_rewards',
@@ -307,6 +309,21 @@ async function initializeDatabase(): Promise<boolean> {
       )`,
       `CREATE INDEX IF NOT EXISTS deposits_user_idx ON deposits(user_address)`,
 
+      // LP操作记录表
+      `CREATE TABLE IF NOT EXISTS lp_action_records (
+        id SERIAL PRIMARY KEY,
+        user_address VARCHAR(64) NOT NULL,
+        amount NUMERIC(20, 9) NOT NULL,
+        action_type VARCHAR(20) NOT NULL,
+        tx_hash VARCHAR(128),
+        action_time TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+        action_date DATE DEFAULT CURRENT_DATE NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS lp_action_records_user_idx ON lp_action_records(user_address)`,
+      `CREATE INDEX IF NOT EXISTS lp_action_records_action_date_idx ON lp_action_records(action_date)`,
+      `CREATE INDEX IF NOT EXISTS lp_action_records_action_type_idx ON lp_action_records(action_type)`,
+
       // 奖励记录表
       `CREATE TABLE IF NOT EXISTS rewards (
         id SERIAL PRIMARY KEY,
@@ -316,6 +333,17 @@ async function initializeDatabase(): Promise<boolean> {
         from_address VARCHAR(64),
         level INTEGER,
         tx_hash VARCHAR(128),
+        created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+      )`,
+
+      `CREATE TABLE IF NOT EXISTS sol_rewards (
+        id SERIAL PRIMARY KEY,
+        user_address VARCHAR(64) NOT NULL,
+        amount NUMERIC(20, 9) NOT NULL,
+        lp_amount NUMERIC(20, 9) NOT NULL,
+        tx_hash VARCHAR(128) NOT NULL,
+        stake_days INTEGER,
+        block_number BIGINT,
         created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
       )`,
 
@@ -598,6 +626,22 @@ CREATE TABLE IF NOT EXISTS deposits (
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
+-- LP action records table
+CREATE TABLE IF NOT EXISTS lp_action_records (
+  id SERIAL PRIMARY KEY,
+  user_address VARCHAR(64) NOT NULL,
+  amount NUMERIC(20, 9) NOT NULL,
+  action_type VARCHAR(20) NOT NULL,
+  tx_hash VARCHAR(128),
+  action_time TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+  action_date DATE DEFAULT CURRENT_DATE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS lp_action_records_user_idx ON lp_action_records(user_address);
+CREATE INDEX IF NOT EXISTS lp_action_records_action_date_idx ON lp_action_records(action_date);
+CREATE INDEX IF NOT EXISTS lp_action_records_action_type_idx ON lp_action_records(action_type);
+
 -- Rewards table
 CREATE TABLE IF NOT EXISTS rewards (
     id SERIAL PRIMARY KEY,
@@ -608,6 +652,18 @@ CREATE TABLE IF NOT EXISTS rewards (
     level INTEGER,
     tx_hash VARCHAR(128),
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+
+-- SOL rewards table
+CREATE TABLE IF NOT EXISTS sol_rewards (
+  id SERIAL PRIMARY KEY,
+  user_address VARCHAR(64) NOT NULL,
+  amount NUMERIC(20, 9) NOT NULL,
+  lp_amount NUMERIC(20, 9) NOT NULL,
+  tx_hash VARCHAR(128) NOT NULL,
+  stake_days INTEGER,
+  block_number BIGINT,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
 -- Withdrawals table

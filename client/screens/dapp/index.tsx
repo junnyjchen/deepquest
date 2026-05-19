@@ -768,6 +768,9 @@ export default function DappIndex() {
                     .replace('{hash}', `${tx.hash.slice(0, 20)}...`),
                   tx.hash
                 );
+                await tx.wait();
+                await dappApi.stake(walletAddress, stakeAmount, tx.hash, stakePeriod);
+                showToast.success(t('common.success'), t('index.stakeSuccess') || '质押成功');
                 setStakeAmount('');
               } catch (error: any) {
                 console.error('授权或质押失败:', error);
@@ -790,11 +793,14 @@ export default function DappIndex() {
             .replace('{hash}', `${tx.hash.slice(0, 20)}...`),
           tx.hash
         );
+        await tx.wait();
+        await dappApi.stake(walletAddress, stakeAmount, tx.hash, stakePeriod);
+        showToast.success(t('common.success'), t('index.stakeSuccess') || '质押成功');
         setStakeAmount('');
       } else {
         // 模拟模式 - 调用后端 API
         const txHash = '0x' + Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('');
-        const response = await dappApi.stake(walletAddress, stakeAmount, txHash);
+        const response = await dappApi.stake(walletAddress, stakeAmount, txHash, stakePeriod);
         
         if (response.code === 0) {
           showToast.success(

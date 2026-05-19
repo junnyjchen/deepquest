@@ -475,6 +475,25 @@ export default function DappLP() {
       await addTx.wait();
       console.log('[LP] 入金成功:', addTx.hash);
 
+      const actionTime = new Date();
+      const actionDate = actionTime.toISOString().slice(0, 10);
+
+      try {
+        await Promise.all([
+          dappApi.deposit(userAddress, amount, addTx.hash),
+          dappApi.recordLPAction(
+            userAddress,
+            amount,
+            'deposit',
+            addTx.hash,
+            actionTime.toISOString(),
+            actionDate
+          ),
+        ]);
+      } catch (syncError) {
+        console.error('[LP] 入金记录同步失败:', syncError);
+      }
+
       openConfirmDialog({
         title: t('lp.alert.addLPSuccess'),
         message: t('lp.alert.addLPSuccess'),
@@ -553,6 +572,22 @@ export default function DappLP() {
           const removeTx = await withdrawLPOnChain(signer);
           await removeTx.wait();
           console.log('[LP] 取消 LP 成功:', removeTx.hash);
+
+          const actionTime = new Date();
+          const actionDate = actionTime.toISOString().slice(0, 10);
+
+          try {
+            await dappApi.recordLPAction(
+              await signer.getAddress(),
+              lpShares,
+              'cancel',
+              removeTx.hash,
+              actionTime.toISOString(),
+              actionDate
+            );
+          } catch (syncError) {
+            console.error('[LP] 取消 LP 记录同步失败:', syncError);
+          }
 
           openConfirmDialog({
             title: t('lp.alert.removeLPSuccess'),

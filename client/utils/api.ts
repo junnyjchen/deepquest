@@ -433,16 +433,29 @@ export const dappApi = {
       method: 'POST',
       body: JSON.stringify({ wallet_address, amount, tx_hash }),
     }),
+
+  recordLPAction: (
+    wallet_address: string,
+    amount: string,
+    action_type: 'deposit' | 'cancel',
+    tx_hash?: string,
+    action_time?: string,
+    action_date?: string
+  ) =>
+    request<any>('/api/v1/dapp/lp-action-record', {
+      method: 'POST',
+      body: JSON.stringify({ wallet_address, amount, tx_hash, action_type, action_time, action_date }),
+    }),
   
   // 获取入金限制信息
   getInvestLimit: (wallet_address: string) =>
     request<any>(`/api/v1/dapp/invest-limit/${wallet_address}`),
   
   // ===== 质押操作 =====
-  stake: (wallet_address: string, amount: string, tx_hash: string) =>
+  stake: (wallet_address: string, amount: string, tx_hash: string, stake_days?: number) =>
     request<any>('/api/v1/dapp/stake', {
       method: 'POST',
-      body: JSON.stringify({ wallet_address, amount, tx_hash }),
+      body: JSON.stringify({ wallet_address, amount, tx_hash, stake_days }),
     }),
   
   // ===== 领取奖励 =====
@@ -578,6 +591,14 @@ export const dappUserApi = {
     if (page) query.append('page', String(page));
     if (limit) query.append('limit', String(limit));
     return request<any>(`/api/v1/dapp/user/stakes/${wallet_address}?${query.toString()}`);
+  },
+
+  // 获取 LP 操作记录
+  getLPRecords: (wallet_address: string, page?: number, limit?: number) => {
+    const query = new URLSearchParams();
+    if (page) query.append('page', String(page));
+    if (limit) query.append('limit', String(limit));
+    return request<any>(`/api/v1/dapp/user/lp-records/${wallet_address}?${query.toString()}`);
   },
   
   // 获取奖励记录

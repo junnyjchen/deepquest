@@ -1,4 +1,4 @@
-import { pgTable, serial, timestamp, varchar, integer, numeric, boolean, text, jsonb, index } from "drizzle-orm/pg-core"
+import { pgTable, serial, timestamp, varchar, integer, numeric, boolean, text, jsonb, index, date } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 // ============ 管理员表 ============
@@ -151,6 +151,45 @@ export const lpStakes = pgTable(
   (table) => [
     index("lp_stakes_user_idx").on(table.user_address),
     index("lp_stakes_claimed_idx").on(table.is_claimed),
+  ]
+);
+
+// ============ LP操作记录表 ============
+export const lpActionRecords = pgTable(
+  "lp_action_records",
+  {
+    id: serial().primaryKey(),
+    user_address: varchar("user_address", { length: 64 }).notNull(),
+    amount: numeric("amount", { precision: 20, scale: 9 }).notNull(),
+    action_type: varchar("action_type", { length: 20 }).notNull(), // deposit, cancel
+    tx_hash: varchar("tx_hash", { length: 128 }),
+    action_time: timestamp("action_time", { withTimezone: true }).defaultNow().notNull(),
+    action_date: date("action_date").default(sql`CURRENT_DATE`).notNull(),
+    created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("lp_action_records_user_idx").on(table.user_address),
+    index("lp_action_records_date_idx").on(table.action_date),
+    index("lp_action_records_type_idx").on(table.action_type),
+  ]
+);
+
+// ============ SOL奖励记录表 ============
+export const solRewards = pgTable(
+  "sol_rewards",
+  {
+    id: serial().primaryKey(),
+    user_address: varchar("user_address", { length: 64 }).notNull(),
+    amount: numeric("amount", { precision: 20, scale: 9 }).notNull(),
+    lp_amount: numeric("lp_amount", { precision: 20, scale: 9 }).notNull(),
+    tx_hash: varchar("tx_hash", { length: 128 }).notNull(),
+    stake_days: integer("stake_days"),
+    block_number: numeric("block_number", { precision: 20, scale: 0 }),
+    created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("sol_rewards_user_idx").on(table.user_address),
+    index("sol_rewards_block_idx").on(table.block_number),
   ]
 );
 

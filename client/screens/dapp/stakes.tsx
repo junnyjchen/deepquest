@@ -32,9 +32,10 @@ const WALLET_STORAGE_KEY = '@deepquest_wallet';
 interface StakeRecord {
   id: number;
   amount: string;
+  stake_days?: number;
   status: string;
   created_at: string;
-  tx_hash: string;
+  tx_hash?: string;
 }
 
 export default function DappStakes() {
@@ -165,6 +166,9 @@ export default function DappStakes() {
         </View>
         <View className="items-end">
           <Text className="text-base font-bold" style={{ color: YELLOW }}>{item.amount} SOL</Text>
+          {item.stake_days ? (
+            <Text className="text-xs mt-1" style={{ color: CYAN }}>{item.stake_days} 天</Text>
+          ) : null}
           <View className="px-2 py-0.5 rounded-full mt-1" style={{ backgroundColor: `${getStatusColor(item.status)}20` }}>
             <Text className="text-xs" style={{ color: getStatusColor(item.status) }}>{getStatusText(item.status)}</Text>
           </View>
@@ -175,7 +179,7 @@ export default function DappStakes() {
         <TouchableOpacity 
           className="flex-row items-center gap-2 p-2 rounded-lg"
           style={{ backgroundColor: 'rgba(0,240,255,0.05)' }}
-          onPress={() => handleCopyTx(item.tx_hash)}
+          onPress={() => handleCopyTx(item.tx_hash ?? '')}
         >
           <Ionicons name="link" size={14} color={CYAN} />
           <Text className="text-xs font-mono flex-1" style={{ color: CYAN }} numberOfLines={1}>

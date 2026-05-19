@@ -199,34 +199,113 @@ router.get('/stakes/:wallet_address', async (req, res) => {
   try {
     const { wallet_address } = req.params;
     const { page = 1, limit = 10 } = req.query;
+    const from = (Number(page) - 1) * Number(limit);
+    const to = Number(page) * Number(limit) - 1;
 
     let query = supabase
-      .from('deposits')
+      .from('lp_stakes')
       .select('*', { count: 'exact' })
       .eq('user_address', wallet_address.toLowerCase())
       .order('created_at', { ascending: false })
-      .range((Number(page) - 1) * Number(limit), Number(page) * Number(limit) - 1);
+      .range(from, to);
 
     const { data: stakes, count, error } = await query;
 
-    if (error) {
+    if (error && error.code !== '42P01') {
       return res.status(500).json({
         code: 500,
         message: '查询质押记录失败'
       });
     }
 
+    if (!error && (stakes || []).length > 0) {
+      const formattedStakes = (stakes || []).map((stake: any) => ({
+        ...stake,
+        status: stake.is_claimed ? 'completed' : 'pending',
+        tx_hash: stake.tx_hash || '',
+      }));
+
+      return res.json({
+        code: 0,
+        data: {
+          list: formattedStakes,
+          total: count || 0,
+          page: Number(page),
+          limit: Number(limit)
+        }
+      });
+    }
+
+    const { data: legacyStakes, count: legacyCount, error: legacyError } = await supabase
+      .from('deposits')
+      .select('*', { count: 'exact' })
+      .eq('user_address', wallet_address.toLowerCase())
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (legacyError) {
+      return res.status(500).json({
+        code: 500,
+        message: '查询质押记录失败'
+      });
+    }
+
+    const formattedStakes = (legacyStakes || []).map((stake: any) => ({
+      ...stake,
+      stake_days: stake.stake_days || null,
+    }));
+
     res.json({
       code: 0,
       data: {
-        list: stakes || [],
-        total: count || 0,
+        list: formattedStakes,
+        total: legacyCount || 0,
         page: Number(page),
         limit: Number(limit)
       }
     });
   } catch (error) {
     console.error('获取质押记录失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: '服务器错误'
+    });
+  }
+});
+
+// 获取用户 LP 操作记录
+router.get('/lp-records/:wallet_address', async (req, res) => {
+  try {
+    const { wallet_address } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+    const from = (Number(page) - 1) * Number(limit);
+    const to = Number(page) * Number(limit) - 1;
+
+    const { data: records, count, error } = await supabase
+      .from('lp_action_records')
+      .select('*', { count: 'exact' })
+      .eq('user_address', wallet_address.toLowerCase())
+      .order('action_time', { ascending: false })
+      .range(from, to);
+
+    if (error) {
+      return res.status(500).json({
+        code: 500,
+        message: '查询 LP 操作记录失败'
+      });
+    }
+
+    res.json({
+      code: 0,
+      data: {
+        list: records || [],
+        total: count || 0,
+        page: Number(page),
+        limit: Number(limit)
+      }
+    });
+  } catch (error) {
+    console.error('获取 LP 操作记录失败:', error);
     res.status(500).json({
       code: 500,
       message: '服务器错误'
