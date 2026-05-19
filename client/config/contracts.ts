@@ -7,11 +7,11 @@
 // 主合约地址
 export const CONTRACT_ADDRESSES = {
   DQPROJECT: {
-    address: '0x662A86A10e2b01403F3d5Ec80cf352f87ed33E95',
+    address: '0x126Ede55c37790a084389077c1bb89ECB882407F',
     name: 'DQProject'
   },
   DQSTAKE: {
-    address: '0x41632c8598780d96653ab543C4a2CB0c5Eb8267c',
+    address: '0x084D53c0A3CaC456e45FF245aFc7F637cBF92Ec6',
     name: 'DQStake'
   },
   DQTOKEN: {
@@ -19,7 +19,7 @@ export const CONTRACT_ADDRESSES = {
     name: 'DQToken'
   },
   DQCARD: {
-    address: '0x5dCe053D791A319AD5f4c352A3A630139Bd55B01',
+    address: '0xc2940605A7F49EBE4e0A4936499a3f33893160C6',
     name: 'DQCard'
   },
   SOL: {

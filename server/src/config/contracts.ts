@@ -7,8 +7,8 @@
  * ABI 来源：assets/DQMining.sol (基于合约源码生成)
  */
 
-export const DQ_CONTRACT_ADDRESS = '0x662A86A10e2b01403F3d5Ec80cf352f87ed33E95';
-export const DQSTAKE_CONTRACT_ADDRESS = '0x41632c8598780d96653ab543C4a2CB0c5Eb8267c';
+export const DQ_CONTRACT_ADDRESS = '0x126Ede55c37790a084389077c1bb89ECB882407F';
+export const DQSTAKE_CONTRACT_ADDRESS = '0x084D53c0A3CaC456e45FF245aFc7F637cBF92Ec6';
 
 
 export const DQ_ABI = [
@@ -641,4 +641,4 @@ export const AVE_PAIR_ABI = [{"inputs":[],"payable":false,"stateMutability":"non
 // 补充导出：交易对地址、代币地址、Card地址（需从链上或配置获取）
 export const AVE_PAIR_ADDRESS = '0x0ff62e392ee9582a84f73f3a37b387d8efd58e2d'; // PancakeSwap Pair 地址（需配置）
 export const DQTOKEN_CONTRACT_ADDRESS = '0x58eb34119dC1c5631e74DEeAAf8e6cF120F9D0b8'; // DQToken 地址（需配置）
-export const DQCARD_CONTRACT_ADDRESS = '0x5dCe053D791A319AD5f4c352A3A630139Bd55B01'; // DQCard 地址（需配置）
+export const DQCARD_CONTRACT_ADDRESS = '0xc2940605A7F49EBE4e0A4936499a3f33893160C6'; // DQCard 地址（需配置）
