@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+
+interface IDQMiningBurn {
+    function onDQSell(address seller, uint256 sellAmount) external;
+}
+
 contract DQToken is ERC20("DQ Token", "DQ") {
     uint256 public constant TOTAL_SUPPLY = 100_000_000_000 * 10**18;
     uint256 public constant BUY_BURN_RATE = 90;
     uint256 public constant BUY_FEE_RATE = 6;
     uint256 public constant SELL_FEE_RATE = 6;
-    uint256 public constant SELL_TO_PAIR_RATE = 94;
     uint256 public burnedSupply;
     uint256 public constant BURN_TARGET = TOTAL_SUPPLY * 99 / 100;
     bool public buyFeeEnabled = true;
@@ -19,7 +23,9 @@ contract DQToken is ERC20("DQ Token", "DQ") {
     mapping(address => bool) public isPair;
     mapping(address => bool) public isExcluded;
     mapping(address => bool) public isBlacklisted;
+    
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    
     constructor(address _owner, address _buyFeeReceiver, address _sellFeeReceiver) {
         require(_owner != address(0), "owner is zero");
         require(_buyFeeReceiver != address(0), "buyFeeReceiver is zero");
@@ -33,64 +39,123 @@ contract DQToken is ERC20("DQ Token", "DQ") {
         isExcluded[_sellFeeReceiver] = true;
         isExcluded[address(this)] = true;
     }
+    
     modifier onlyOwner() {
         require(msg.sender == owner, "!owner");
         _;
     }
+    
     function transferOwnership(address newOwner) external onlyOwner {
         require(newOwner != address(0));
         emit OwnershipTransferred(owner, newOwner);
         owner = newOwner;
     }
-    function _update(address from, address to, uint256 amount) internal override {
+    
+    // 重写 transfer 实现买卖税逻辑
+    function transfer(address to, uint256 amount) public override returns (bool) {
+        address from = _msgSender();
+        _checkAndProcessFee(from, to, amount);
+        return true;
+    }
+    
+    // 重写 transferFrom 实现买卖税逻辑
+    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
+        address spender = _msgSender();
+        _spendAllowance(from, spender, amount);
+        _checkAndProcessFee(from, to, amount);
+        return true;
+    }
+    
+    // 检查并处理买卖税
+    function _checkAndProcessFee(address from, address to, uint256 amount) internal {
+        // 检查黑名单
         require(!isBlacklisted[from] && !isBlacklisted[to], "Blacklisted");
+        
+        // 免税地址直接转账
         if (isExcluded[from] || isExcluded[to]) {
-            super._update(from, to, amount);
+            _transfer(from, to, amount);
             return;
         }
+        
+        // 买入（从交易对转出）
         if (isPair[from] && buyFeeEnabled) {
             _processBuyTransfer(from, to, amount);
             return;
         }
+        
+        // 卖出（转入交易对）
         if (isPair[to] && sellFeeEnabled) {
             _processSellTransfer(from, to, amount);
             return;
         }
-        super._update(from, to, amount);
+        
+        // 普通转账
+        _transfer(from, to, amount);
     }
+    
     function _processBuyTransfer(address from, address to, uint256 amount) internal {
         uint256 burnAmount = amount * BUY_BURN_RATE / 100;
         uint256 feeAmount = amount * BUY_FEE_RATE / 100;
         uint256 netAmount = amount - burnAmount - feeAmount;
-        if (netAmount > 0) super._update(from, to, netAmount);
+        
+        if (netAmount > 0) _transfer(from, to, netAmount);
+        
         if (burnAmount > 0 && burnedSupply < BURN_TARGET) {
-            super._update(from, BURN_ADDRESS, burnAmount);
+            _transfer(from, BURN_ADDRESS, burnAmount);
             burnedSupply += burnAmount;
         } else if (burnAmount > 0) {
-            super._update(from, buyFeeReceiver, burnAmount);
+            _transfer(from, buyFeeReceiver, burnAmount);
         }
-        if (feeAmount > 0) super._update(from, buyFeeReceiver, feeAmount);
+        
+        if (feeAmount > 0) _transfer(from, buyFeeReceiver, feeAmount);
     }
+    
     function _processSellTransfer(address from, address to, uint256 amount) internal {
         uint256 feeAmount = amount * SELL_FEE_RATE / 100;
-        uint256 pairAmount = amount * SELL_TO_PAIR_RATE / 100;
-        if (pairAmount > 0) super._update(from, to, pairAmount);
-        if (feeAmount > 0) super._update(from, sellFeeReceiver, feeAmount);
+        // 卖出时只扣6%手续费，DQ正常进入底池
+        if (feeAmount > 0) _transfer(from, sellFeeReceiver, feeAmount);
+        _transfer(from, to, amount - feeAmount);
+        
+        // 通知主合约销毁交易额的94% DQ
+        if (miningStake != address(0)) {
+            IDQMiningBurn(miningStake).onDQSell(from, amount);
+        }
     }
-    function setPair(address _pair, bool _status) external onlyOwner { isPair[_pair] = _status; }
-    function setExcluded(address _account, bool _status) external onlyOwner { isExcluded[_account] = _status; }
-    function setBlacklisted(address _account, bool _status) external onlyOwner { isBlacklisted[_account] = _status; }
-    function setBuyFeeReceiver(address _addr) external onlyOwner { buyFeeReceiver = _addr; }
-    function setSellFeeReceiver(address _addr) external onlyOwner { sellFeeReceiver = _addr; }
-    function setMiningStake(address _addr) external onlyOwner { miningStake = _addr; }
+    
+    function setPair(address _pair, bool _status) external onlyOwner { 
+        isPair[_pair] = _status; 
+    }
+    
+    function setExcluded(address _account, bool _status) external onlyOwner { 
+        isExcluded[_account] = _status; 
+    }
+    
+    function setBlacklisted(address _account, bool _status) external onlyOwner { 
+        isBlacklisted[_account] = _status; 
+    }
+    
+    function setBuyFeeReceiver(address _addr) external onlyOwner { 
+        buyFeeReceiver = _addr; 
+    }
+    
+    function setSellFeeReceiver(address _addr) external onlyOwner { 
+        sellFeeReceiver = _addr; 
+    }
+    
+    function setMiningStake(address _addr) external onlyOwner { 
+        miningStake = _addr; 
+    }
+    
     function setFeeStatus(bool _buyFee, bool _sellFee) external onlyOwner {
         buyFeeEnabled = _buyFee;
         sellFeeEnabled = _sellFee;
     }
+    
     function burn(uint256 amount) external {
         _burn(msg.sender, amount);
         burnedSupply += amount;
     }
+    
     function circulatingSupply() external view returns (uint256) {
         return totalSupply() - balanceOf(BURN_ADDRESS);
     }

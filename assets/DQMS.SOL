@@ -4,6 +4,7 @@ import "@openzeppelin/contracts@4.9.6/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts@4.9.6/utils/structs/EnumerableSet.sol";
 import "@openzeppelin/contracts@4.9.6/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts@4.9.6/token/ERC20/utils/SafeERC20.sol";
+
 interface IDQToken {
     function transfer(address to, uint256 amount) external returns (bool);
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
@@ -12,6 +13,7 @@ interface IDQToken {
     function burn(uint256 amount) external;
     function totalSupply() external view returns (uint256);
 }
+
 interface IDQCard {
     function balanceOf(address owner) external view returns (uint256);
     function tokenOfOwnerByIndex(address owner, uint256 index) external view returns (uint256);
@@ -23,13 +25,11 @@ interface IDQCard {
     function PRICE_B() external pure returns (uint256);
     function PRICE_C() external pure returns (uint256);
 }
-interface IPancakeRouter02 {
-    function removeLiquidity(address tokenA, address tokenB, uint256 liquidity, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) external returns (uint amountA, uint amountB);
-    function addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to, uint256 deadline) external returns (uint amountA, uint amountB, uint liquidity);
-}
-contract DQMiningStakeV3 is ReentrancyGuard {
+
+contract DQMiningStakeCore is ReentrancyGuard {
     using EnumerableSet for EnumerableSet.AddressSet;
     using SafeERC20 for IERC20;
+
     address public constant OWNER = 0x274aCc6397349F21179ed6258A54B2a11B28faF5;
     address public constant SOL = 0x570A5D26f7765Ecb712C0924E4De545B89fD43dF;
     address public constant ROUTER = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
@@ -40,26 +40,20 @@ contract DQMiningStakeV3 is ReentrancyGuard {
     address public mc;
     address public miningContract;
     address public lpPair;
-    address public feeRecipient;
     IDQToken public dq;
     IDQCard public dc;
-    uint256 public constant FOUNDATION_RATE = 5;
-    uint256 public constant LP_RATE = 60;
-    uint256 public constant NFT_RATE = 15;
-    uint256 public constant D_LEVEL_RATE = 175;
+
     uint256 public constant RT = 13;
     uint256 public constant IB = 8000;
     uint256 public constant MB = 3000;
     uint256 public constant BD = 50;
     uint256 public constant F60 = 20;
     uint256 public constant F180 = 10;
-    uint256 public constant CLAIM_GAS_FEE = 0.00005 ether;
-    uint256 public claimGasFee = CLAIM_GAS_FEE;
     uint256 public constant INITIAL_SUPPLY = 1000 * 10**8 * 10**18;
     uint256 public releasedSupply;
-    uint256[] public SP = [30, 90, 180, 360];
-    uint256[4] public sA;
-    uint256[4] public tS;
+
+    uint256[4] public sA;           // 各周期累计奖励（DQ）
+    uint256[4] public tS;           // 各周期总质押量
     uint256 public lA;
     uint256 public tLP;
     mapping(address => uint256) public lpS;
@@ -79,157 +73,117 @@ contract DQMiningStakeV3 is ReentrancyGuard {
     mapping(address => uint256) public nD0;
     mapping(address => uint256) public nD1;
     mapping(address => uint256) public nD2;
-    mapping(address => uint256) public dd;
-    mapping(address => uint8) public dl;
     uint256 public br = IB;
     uint256 public lt;
-    mapping(address => uint256) public lF;
-    uint256 public fp;
     mapping(address => uint256) public userEnergy;
     mapping(address => uint256) public userTeamInvest;
-    mapping(address => uint256) public userValidAddressCount;
     mapping(address => uint256) public userPendingSOL;
     mapping(address => uint256) public userDirectSales;
-    mapping(address => uint256) public userLPRemovalFee;  
+    mapping(address => uint256) public userLPRemovalFee;
     mapping(address => address) public userReferrer;
-    mapping(address => uint256) public userTotalInvest;
-    mapping(address => uint8) public userLevel;
     mapping(address => EnumerableSet.AddressSet) internal userChildren;
     mapping(address => bool) public isB;
     uint256 public energyMul = 3;
     uint256[6] public mgrThresh = [100, 200, 600, 2000, 6000, 20000];
     uint8[6] public mgrRates = [5, 10, 15, 20, 25, 30];
-    uint256[4] public nodePrices = [0, 500 ether, 1500 ether, 5000 ether];
-    uint256[4] public nodeReq = [0, 5, 10, 20];
-    modifier onlyMining() { require(msg.sender == miningContract, "!mining"); _; }
-    modifier onlyOwner() { require(msg.sender == OWNER, "!owner"); _; }
+    mapping(address => mapping(uint => uint256)) public sAmt;
+    mapping(address => mapping(uint => uint256)) public sDebt;
+
+    // ============ 质押记录单独追踪 ============
+    struct StakeRecord {
+        uint256 amount;       // 质押金额
+        uint256 startTime;    // 质押开始时间
+        uint256 duration;     // 质押周期（秒）
+        uint256 rewardDebt;   // 奖励债务
+        bool active;          // 是否有效
+    }
+    mapping(address => StakeRecord[]) public stakeRecords;  // 用户 -> 质押记录列表
+    mapping(address => mapping(uint256 => uint256)) public userPendingDQ;  // 用户待领取DQ奖励
+    
+    // 质押周期配置（秒）：0=30天，1=90天，2=180天，3=360天
+    // 奖励权重：5%、10%、15%、20%
+    uint256[4] public stakeDurations = [30 days, 90 days, 180 days, 360 days];
+    uint256[4] public stakeWeights = [5, 10, 15, 20];  // 百分比
+
+    modifier onlyMining() { require(msg.sender == miningContract, "!m"); _; }
+    modifier onlyOwner() { require(msg.sender == OWNER, "!o"); _; }
     modifier onlyM() { require(msg.sender == mc, "!op"); _; }
+
     event EnergyChanged(address indexed u, uint256 e);
     event TeamInvestChanged(address indexed u, uint256 v);
-    event Deposit(address indexed u, uint256 a);
     event Stake(address indexed u, uint256 a, uint i);
-    event LPRemoved(address indexed u, uint256 a);
     event Unstake(address indexed u, uint256 a, uint i);
-    event ClaimReward(address indexed u, uint256 a);
-    constructor() {
-        feeRecipient = OWNER;
-    }
+    event LPRemoved(address indexed u, uint256 a);
+
+    constructor() {}
+
+    // ============ 设置函数 ============
     function setLpPair(address _pair) external onlyOwner {
-        require(lpPair == address(0), "already set");
-        require(_pair != address(0), "!0");
+        require(lpPair == address(0), "set");
         lpPair = _pair;
     }
     function setAddresses(address _dq, address _dc, address _lpPair) external onlyOwner {
-        if (_dq != address(0)) {
-            dq = IDQToken(_dq);
-            DQ_TOKEN = _dq;
-        }
-        if (_dc != address(0)) {
-            dc = IDQCard(_dc);
-            DQ_CARD = _dc;
-        }
-        if (lpPair == address(0) && _lpPair != address(0)) {
-            lpPair = _lpPair;
-        }
+        if (_dq != address(0)) { dq = IDQToken(_dq); DQ_TOKEN = _dq; }
+        if (_dc != address(0)) { dc = IDQCard(_dc); DQ_CARD = _dc; }
+        if (lpPair == address(0) && _lpPair != address(0)) lpPair = _lpPair;
     }
     function setMiningContract(address _addr) external onlyOwner { miningContract = _addr; }
     function setM(address a) external onlyOwner { mc = a; }
-    function setFeeRecipient(address _addr) external onlyOwner { feeRecipient = _addr; }
-    function setClaimGasFee(uint256 _fee) external onlyOwner { claimGasFee = _fee; }
     function setEnergyMul(uint256 _m) external { require(msg.sender == miningContract || msg.sender == OWNER, "!auth"); energyMul = _m; }
     function bl(address u, bool s) external onlyOwner { isB[u] = s; }
-    function setDQCard(address _addr) external onlyOwner {
-        require(_addr != address(0), "!addr");
-        dc = IDQCard(_addr);
-        DQ_CARD = _addr;
-    }
-    function setDLevelByOwner(address _user, uint8 _newLevel) external onlyOwner {
-        uint8 oldLevel = userDLevel[_user];
-        if (oldLevel > 0 && oldLevel <= 8) {
-            if (isDLevel[oldLevel][_user]) {
-                isDLevel[oldLevel][_user] = false;
-                dLevelCount[oldLevel - 1]--;
-            }
-        }
-        if (_newLevel > 0 && _newLevel <= 8) {
-            isDLevel[_newLevel][_user] = true;
-            dLevelCount[_newLevel - 1]++;
-            userDLevel[_user] = _newLevel;
-        }
-    }
-    function updateValidAddress(address _u) external onlyMining {
-        uint256 cnt = dc.balanceOf(_u);
-        if (cnt == 0) return;
-        uint256 maxT = 0;
-        for (uint256 i = 0; i < cnt; i++) {
-            uint256 t = dc.cardType(dc.tokenOfOwnerByIndex(_u, i));
-            if (t > maxT) maxT = t;
-        }
-        if (maxT > 0 && userValidAddressCount[_u] < nodeReq[maxT]) {
-            userValidAddressCount[_u] = nodeReq[maxT];
-        }
-    }
-    function updateTeam(address _u, uint256 _a) external onlyMining { userTeamInvest[_u] = _a; }
+
+    // ============ 用户管理 ============
     function registerUser(address _u, address _r) external onlyMining {
         userReferrer[_u] = _r;
         if (_r != address(0)) userChildren[_r].add(_u);
     }
-    function importUser(address _u, address _r, uint256 _total, uint256 _team, uint8 _level, uint256 _energy) external onlyMining {
+    function importUser(address _u, address _r, uint256, uint256, uint8, uint256) external onlyMining {
         userReferrer[_u] = _r;
-        userTotalInvest[_u] = _total;
-        userTeamInvest[_u] = _team;
-        userLevel[_u] = _level;
-        userEnergy[_u] = _energy;
         if (_r != address(0)) userChildren[_r].add(_u);
     }
+    function updateTeam(address _u, uint256 _a) external onlyMining { userTeamInvest[_u] = _a; }
     function setEnergy(address _u, uint256 _e) external onlyMining { userEnergy[_u] = _e; emit EnergyChanged(_u, _e); }
     function addEnergy(address _u, uint256 _a) external onlyMining { userEnergy[_u] += _a; emit EnergyChanged(_u, userEnergy[_u]); }
-    function subEnergy(address _u, uint256 _a) external onlyMining { if (_a > userEnergy[_u]) userEnergy[_u] = 0; else userEnergy[_u] -= _a; emit EnergyChanged(_u, userEnergy[_u]); }
+    function subEnergy(address _u, uint256 _a) external onlyMining { userEnergy[_u] = _a > userEnergy[_u] ? 0 : userEnergy[_u] - _a; emit EnergyChanged(_u, userEnergy[_u]); }
     function getEnergy(address _u) external view returns (uint256) { return userEnergy[_u]; }
-    function setTeamInvest(address _u, uint256 _v) external onlyMining { userTeamInvest[_u] = _v; emit TeamInvestChanged(_u, _v); }
     function addTeamInvest(address _u, uint256 _a) external onlyMining { userTeamInvest[_u] += _a; emit TeamInvestChanged(_u, userTeamInvest[_u]); }
     function getTeamInvest(address _u) external view returns (uint256) { return userTeamInvest[_u]; }
-    function setValidAddress(address _u, uint256 _c) external onlyMining { userValidAddressCount[_u] = _c; }
-    function getValidAddressCount(address _u) external view returns (uint256) { return userValidAddressCount[_u]; }
     function getDLevel(address _u) external view returns (uint8) { return userDLevel[_u]; }
     function setPendingSOL(address _u, uint256 _p) external onlyMining { userPendingSOL[_u] = _p; }
     function addPendingSOL(address _u, uint256 _a) external onlyMining { userPendingSOL[_u] += _a; }
-    function subPendingSOL(address _u, uint256 _a) external onlyMining { if (_a > userPendingSOL[_u]) userPendingSOL[_u] = 0; else userPendingSOL[_u] -= _a; }
+    function subPendingSOL(address _u, uint256 _a) external onlyMining { userPendingSOL[_u] = _a > userPendingSOL[_u] ? 0 : userPendingSOL[_u] - _a; }
     function getPendingSOL(address _u) external view returns (uint256) { return userPendingSOL[_u]; }
     function addDirectSales(address _u, uint256 _a) external onlyMining { userDirectSales[_u] += _a; }
     function getDirectSales(address _u) external view returns (uint256) { return userDirectSales[_u]; }
     function addChild(address _p, address _c) external onlyMining { userChildren[_p].add(_c); }
-    function removeChild(address _p, address _c) external onlyMining { userChildren[_p].remove(_c); }
     function getChildCount(address _u) external view returns (uint256) { return userChildren[_u].length(); }
     function getChild(address _u, uint256 _i) external view returns (address) { return userChildren[_u].at(_i); }
+
+    // ============ 动态分币 ============
     function distReward(address _u, uint256 _a) external onlyMining {
         if (_a == 0) return;
         address ref = userReferrer[_u];
         if (ref == address(0)) return;
-        uint256 dyn = _a * 50 / 100;
-        _distDirect(ref, _u, dyn);
-        uint256 mgrPool = dyn * 30 / 100;
-        _distMgr(_u, mgrPool);
-        uint256 seePool = dyn * 15 / 100;
-        _distSee(_u, ref, seePool, 1);
+        _distDirect(ref, _a);
+        _distMgr(_u, _a * 30 / 100);
+        _distSee(_u, ref, _a * 15 / 100, 1);
     }
-    function _distDirect(address _ref, address _u, uint256 _dyn) internal {
+    // 直推奖励：不需要考核，有能量就能拿
+    function _distDirect(address _ref, uint256 _dyn) internal {
         uint256 direct = _dyn * 30 / 100;
-        if (_canClaim(_ref) && userEnergy[_ref] >= direct) {
+        if (userEnergy[_ref] >= direct) {
             userEnergy[_ref] -= direct;
             userPendingSOL[_ref] += direct;
         }
     }
     function _distMgr(address _u, uint256 _mgrPool) internal {
         address cur = userReferrer[_u];
-        uint8[6] memory rates = mgrRates;
-        uint8 prevRate = 0;
+        uint8 prevRate;
         for (uint8 lvl = 1; lvl <= 6; lvl++) {
             if (cur == address(0)) break;
-            uint256 curTeam = _calcSmallTeam(cur);
-            uint8 curLvl = _getRequiredLevel(curTeam);
+            uint8 curLvl = _getRequiredLevel(_calcSmallTeam(cur));
             if (curLvl > 0 && lvl >= curLvl) {
-                uint8 curRate = rates[curLvl - 1];
+                uint8 curRate = mgrRates[curLvl - 1];
                 uint8 diffRate = curRate > prevRate ? curRate - prevRate : 0;
                 uint256 mgrR = _mgrPool * diffRate / 100;
                 if (mgrR > 0 && userEnergy[cur] >= mgrR) {
@@ -243,126 +197,75 @@ contract DQMiningStakeV3 is ReentrancyGuard {
     }
     function _distSee(address _u, address _ref, uint256 _seePool, uint8 _d) internal {
         if (_d > 15 || _ref == address(0)) return;
-        uint256 see = _seePool;
-        if (userDirectSales[_ref] >= 1 && _d <= 3 && _canClaim(_ref) && userEnergy[_ref] >= see) {
-            userEnergy[_ref] -= see;
-            userPendingSOL[_ref] += see;
-        } else if (userDirectSales[_ref] >= 2 && _d <= 6 && _canClaim(_ref) && userEnergy[_ref] >= see) {
-            userEnergy[_ref] -= see;
-            userPendingSOL[_ref] += see;
-        } else if (userDirectSales[_ref] >= 3 && _d <= 9 && _canClaim(_ref) && userEnergy[_ref] >= see) {
-            userEnergy[_ref] -= see;
-            userPendingSOL[_ref] += see;
-        } else if (userDirectSales[_ref] >= 4 && _d <= 12 && _canClaim(_ref) && userEnergy[_ref] >= see) {
-            userEnergy[_ref] -= see;
-            userPendingSOL[_ref] += see;
-        } else if (userDirectSales[_ref] >= 5 && _d <= 15 && _canClaim(_ref) && userEnergy[_ref] >= see) {
-            userEnergy[_ref] -= see;
-            userPendingSOL[_ref] += see;
+        uint256 ds = userDirectSales[_ref];
+        // V5: 取消有效地址考核，只检查直推数和能量
+        if (ds >= 1 && _d <= 3 && userEnergy[_ref] >= _seePool) {
+            userEnergy[_ref] -= _seePool;
+            userPendingSOL[_ref] += _seePool;
+        } else if (ds >= 2 && _d <= 6 && userEnergy[_ref] >= _seePool) {
+            userEnergy[_ref] -= _seePool;
+            userPendingSOL[_ref] += _seePool;
+        } else if (ds >= 3 && _d <= 9 && userEnergy[_ref] >= _seePool) {
+            userEnergy[_ref] -= _seePool;
+            userPendingSOL[_ref] += _seePool;
+        } else if (ds >= 4 && _d <= 12 && userEnergy[_ref] >= _seePool) {
+            userEnergy[_ref] -= _seePool;
+            userPendingSOL[_ref] += _seePool;
+        } else if (ds >= 5 && _d <= 15 && userEnergy[_ref] >= _seePool) {
+            userEnergy[_ref] -= _seePool;
+            userPendingSOL[_ref] += _seePool;
         }
         _distSee(_u, userReferrer[_ref], _seePool, _d + 1);
     }
-    function _canClaim(address _u) internal view returns (bool) {
-        uint256 count = dc.balanceOf(_u);
-        if (count == 0) return false;
-        uint256 maxT = 0;
-        for (uint256 i = 0; i < count; i++) {
-            uint256 t = dc.cardType(dc.tokenOfOwnerByIndex(_u, i));
-            if (t > maxT) maxT = t;
-        }
-        return userValidAddressCount[_u] >= nodeReq[maxT];
-    }
     function _calcSmallTeam(address _u) internal view returns (uint256) {
         uint256 total = userTeamInvest[_u];
-        uint256 maxChild = 0;
-        for (uint256 i = 0; i < userChildren[_u].length(); i++) {
+        uint256 maxChild;
+        for (uint256 i; i < userChildren[_u].length(); i++) {
             uint256 child = userTeamInvest[userChildren[_u].at(i)];
             if (child > maxChild) maxChild = child;
         }
         return total > maxChild ? total - maxChild : 0;
     }
     function _getRequiredLevel(uint256 _team) internal view returns (uint8) {
-        uint256[6] memory thresh = mgrThresh;
         for (uint8 i = 6; i >= 1; i--) {
-            if (_team >= thresh[i - 1]) return i;
+            if (_team >= mgrThresh[i - 1]) return i;
         }
         return 0;
     }
+
+    // ============ LP管理 ============
     function addLP(address _u, uint256 _a, uint256 _t) external onlyM {
         lpS[_u] += _a;
         lpT[_u] = _t > lpT[_u] ? _t : lpT[_u];
         tLP += _a;
     }
-    function distLP(uint256 _f) external onlyM { if (_f == 0 || tLP == 0) return; lA += _f * 1e12 / tLP; }
+    function distLP(uint256 _f) external onlyM { if (_f != 0 && tLP != 0) lA += _f * 1e12 / tLP; }
     function claimLP(address _u) external onlyM {
         if (lpS[_u] == 0) return;
         uint256 r = lA * lpS[_u] / 1e12 - lpD[_u];
-        if (r > 0) {
-            lpD[_u] = lA * lpS[_u] / 1e12;
-            userPendingSOL[_u] += r;
-        }
-    }
-    function withdrawLPByM(address _u) external onlyM {
-        require(lpS[_u] > 0, "no LP");
-        lpS[_u] = 0;
-        lpD[_u] = 0;
-        lpT[_u] = 0;
-    }
-    function notifyLPRemoved(address _u, uint256 _amount) external onlyOwner {
-        require(_u != address(0), "!addr");
-        require(_amount > 0, "!amt");
-        require(lpS[_u] >= _amount, "!balance");
-        uint256 fee = _calcLPFeeAmount(_u, _amount);  
-        lpS[_u] -= _amount;
-        if (fee > 0) userLPRemovalFee[_u] += fee;
-        if (lpS[_u] == 0) {
-            lpD[_u] = 0;
-            lpT[_u] = 0;
-        }
-        emit LPRemoved(_u, _amount);
-    }
-    function _calcLPFeeAmount(address _u, uint256 _amount) internal view returns (uint256) {
-        uint256 t = lpT[_u];
-        if (t == 0) return _amount * F60 / 100;
-        if (block.timestamp - t < 60 days) return _amount * F60 / 100;
-        if (block.timestamp - t < 180 days) return _amount * F180 / 100;
-        return 0;
-    }
-    function subPendingBurn(address _u, uint256 _amount) external onlyMining {
-        if (_amount > 0 && userPendingSOL[_u] >= _amount) {
-            userPendingSOL[_u] -= _amount;
-        }
-    }
-    function getUserLPRemovalFee(address _u) external view returns (uint256) {
-        return userLPRemovalFee[_u];
-    }
-    function clearUserLPRemovalFee(address _u) external onlyMining {
-        userLPRemovalFee[_u] = 0;
+        if (r > 0) { lpD[_u] = lA * lpS[_u] / 1e12; userPendingSOL[_u] += r; }
     }
     function withdrawLP(address _u) external onlyM {
-        require(!isB[_u], "bl");
-        require(lpS[_u] > 0, "no LP");
-        lpS[_u] = 0;
-        lpD[_u] = 0;
-        lpT[_u] = 0;
+        require(!isB[_u] && lpS[_u] > 0, "!lp");
+        lpS[_u] = 0; lpD[_u] = 0; lpT[_u] = 0;
+    }
+    function getLP(address _u) external view returns (uint256) {
+        return lpS[_u];
+    }
+    function subTotalLP(uint256 _a) external onlyM {
+        require(tLP >= _a, "!tLP");
+        tLP -= _a;
     }
     function forceRemoveLP(address _u) external onlyOwner {
-        require(_u != address(0), "!addr");
         uint256 amount = lpS[_u];
         require(amount > 0, "!lp");
-        lpS[_u] = 0;
-        lpD[_u] = 0;
-        lpT[_u] = 0;
+        lpS[_u] = 0; lpD[_u] = 0; lpT[_u] = 0;
         tLP -= amount;
     }
-    function adminWithdrawLP(address _u) external onlyOwner { require(lpS[_u] > 0, "no LP"); lpS[_u] = 0; lpD[_u] = 0; lpT[_u] = 0; }
-    function _calcLPFee(address _u) internal view returns (uint256) {
-        uint256 t = lpT[_u];
-        if (t == 0) return lpS[_u] * F60 / 100;
-        if (block.timestamp - t < 60 days) return lpS[_u] * F60 / 100;
-        if (block.timestamp - t < 180 days) return lpS[_u] * F180 / 100;
-        return 0;
-    }
+    function getUserLPRemovalFee(address _u) external view returns (uint256) { return userLPRemovalFee[_u]; }
+    function clearUserLPRemovalFee(address _u) external onlyMining { userLPRemovalFee[_u] = 0; }
+
+    // ============ NFT奖励 ============
     function distNFT(uint256 _f) external payable onlyM {
         if (_f == 0) return;
         uint256 s0 = dc.totalA() * dc.PRICE_A();
@@ -374,46 +277,31 @@ contract DQMiningStakeV3 is ReentrancyGuard {
     }
     function claimNft(address _u) external onlyM {
         uint256 cnt = dc.balanceOf(_u);
-        uint256 reward = 0;
-        for (uint256 i = 0; i < cnt; i++) {
+        uint256 reward;
+        for (uint256 i; i < cnt; i++) {
             uint256 t = dc.cardType(dc.tokenOfOwnerByIndex(_u, i));
             if (t == 1) reward += nA[0] - userNftF[_u][0];
             else if (t == 2) reward += nA[1] - userNftF[_u][1];
             else if (t == 3) reward += nA[2] - userNftF[_u][2];
         }
         if (reward > 0) {
-            userNftF[_u][0] = nA[0];
-            userNftF[_u][1] = nA[1];
-            userNftF[_u][2] = nA[2];
+            userNftF[_u][0] = nA[0]; userNftF[_u][1] = nA[1]; userNftF[_u][2] = nA[2];
             userPendingSOL[_u] += reward;
         }
     }
     function claimFee(address _u) external onlyM {
         uint256 cnt = dc.balanceOf(_u);
-        uint256 reward = 0;
-        for (uint256 i = 0; i < cnt; i++) {
+        uint256 reward;
+        for (uint256 i; i < cnt; i++) {
             uint256 t = dc.cardType(dc.tokenOfOwnerByIndex(_u, i));
             if (t == 1) reward += nD0[_u];
             else if (t == 2) reward += nD1[_u];
             else if (t == 3) reward += nD2[_u];
         }
-        if (reward > 0) {
-            nD0[_u] = 0;
-            nD1[_u] = 0;
-            nD2[_u] = 0;
-            userPendingSOL[_u] += reward;
-        }
+        if (reward > 0) { nD0[_u] = 0; nD1[_u] = 0; nD2[_u] = 0; userPendingSOL[_u] += reward; }
     }
-    function distP(uint256 _f) external onlyM { if (_f == 0) return; pDA += _f * 1e12; }
-    function claimD(address _u) external onlyM {
-        uint8 lvl = userDLevel[_u];
-        if (lvl == 0 || dLevelCount[lvl - 1] == 0) return;
-        uint256 reward = dLevelAccReward[lvl - 1] - dLevelRewardDebt[_u];
-        if (reward > 0) {
-            dLevelRewardDebt[_u] = dLevelAccReward[lvl - 1];
-            userPendingSOL[_u] += reward;
-        }
-    }
+
+    // ============ D等级奖励 ============
     function registerDLevel(address _user, uint8 _newLevel) external onlyM {
         if (_newLevel == 0) return;
         if (userDLevel[_user] > 0) isDLevel[userDLevel[_user]][_user] = false;
@@ -421,124 +309,222 @@ contract DQMiningStakeV3 is ReentrancyGuard {
         isDLevel[_newLevel][_user] = true;
         dLevelCount[_newLevel - 1]++;
     }
-    function claimDLevelReward() external payable nonReentrant {
-        require(!isB[msg.sender], "bl");
-        uint8 lvl = userDLevel[msg.sender];
-        require(lvl > 0, "!d");
-        require(msg.value >= claimGasFee, "!fee");
-        uint256 reward = dLevelAccReward[lvl - 1] - dLevelRewardDebt[msg.sender];
-        if (reward > 0) {
-            dLevelRewardDebt[msg.sender] = dLevelAccReward[lvl - 1];
-            userPendingSOL[msg.sender] += reward;
-        }
+    function claimD(address _u) external onlyM {
+        uint8 lvl = userDLevel[_u];
+        if (lvl == 0 || dLevelCount[lvl - 1] == 0) return;
+        uint256 reward = dLevelAccReward[lvl - 1] - dLevelRewardDebt[_u];
+        if (reward > 0) { dLevelRewardDebt[_u] = dLevelAccReward[lvl - 1]; userPendingSOL[_u] += reward; }
     }
     function getDLevelReward(address _u) external view returns (uint256) {
         uint8 lvl = userDLevel[_u];
-        if (lvl == 0) return 0;
-        return dLevelAccReward[lvl - 1] - dLevelRewardDebt[_u];
+        return lvl == 0 ? 0 : dLevelAccReward[lvl - 1] - dLevelRewardDebt[_u];
     }
-    function distDQFee(uint256 _amount) external onlyM {
-        if (_amount == 0) return;
-        uint256 half = _amount / 2;
-        for (uint256 i = 0; i < 4; i++) {
-            if (tS[i] > 0) sA[i] += half * 1e12 / tS[i];
-        }
-        IERC20(DQ_TOKEN).safeTransfer(PARTNER, _amount - half);
-    }
-    function claimPdq(address _u) external onlyM {
-        uint256 r = pDA / 1e12 - userPDD[_u];
-        if (r > 0) {
-            userPDD[_u] = pDA / 1e12;
-            userPendingSOL[_u] += r;
-        }
-    }
-    function claimPbnb(address _u) external onlyM {
-        uint256 r = pBA / 1e12 - userPBD[_u];
-        if (r > 0) {
-            userPBD[_u] = pBA / 1e12;
-            userPendingSOL[_u] += r;
-        }
-    }
+
+    // ============ 质押 ============
+    // 质押DQ，创建单独记录
     function stake(address _u, uint256 _a, uint _i) external onlyM {
         require(_i < 4, "!i");
+        require(_a > 0, "!a");
+        
+        // 更新汇总数据
         sAmt[_u][_i] += _a;
         tS[_i] += _a;
+        
+        // 创建单独质押记录
+        stakeRecords[_u].push(StakeRecord({
+            amount: _a,
+            startTime: block.timestamp,
+            duration: stakeDurations[_i],
+            rewardDebt: sAmt[_u][_i] * sA[_i] / 1e12,
+            active: true
+        }));
+        
         emit Stake(_u, _a, _i);
     }
-    function unstake(address _u, uint _i) external onlyM {
-        require(_i < 4, "!i");
-        uint256 amt = sAmt[_u][_i];
-        require(amt > 0, "!amt");
-        sAmt[_u][_i] = 0;
-        tS[_i] -= amt;
+    
+    // 解押：只能解押已到期的记录
+    function unstake(address _u, uint _recordIndex) external onlyM {
+        require(_recordIndex < stakeRecords[_u].length, "!idx");
+        StakeRecord storage record = stakeRecords[_u][_recordIndex];
+        require(record.active, "!active");
+        require(record.amount > 0, "!amt");
+        
+        // 检查是否到期
+        require(block.timestamp >= record.startTime + record.duration, "!time");
+        
+        uint256 amt = record.amount;
+        uint256 periodIndex = _getPeriodIndex(record.duration);
+        
+        // 先领取待领取的奖励
+        uint256 pending = sAmt[_u][periodIndex] * sA[periodIndex] / 1e12 - sDebt[_u][periodIndex];
+        if (pending > 0) {
+            sDebt[_u][periodIndex] = sAmt[_u][periodIndex] * sA[periodIndex] / 1e12;
+            userPendingDQ[_u][periodIndex] += pending;
+        }
+        
+        // 更新汇总数据
+        sAmt[_u][periodIndex] -= amt;
+        tS[periodIndex] -= amt;
+        sDebt[_u][periodIndex] = sAmt[_u][periodIndex] * sA[periodIndex] / 1e12;
+        
+        // 标记记录无效
+        record.active = false;
+        record.amount = 0;
+        
+        // DQ返还用户
         IERC20(DQ_TOKEN).safeTransfer(_u, amt);
-        emit Unstake(_u, amt, _i);
+        emit Unstake(_u, amt, periodIndex);
     }
+    
+    // 根据时长获取周期索引
+    function _getPeriodIndex(uint256 _duration) internal pure returns (uint) {
+        if (_duration == 30 days) return 0;
+        if (_duration == 90 days) return 1;
+        if (_duration == 180 days) return 2;
+        return 3;  // 360 days
+    }
+    
+    // 领取质押奖励（DQ）
     function clmS(address _u, uint _i) external onlyM {
         require(!isB[_u], "bl");
-        _cs(_u, _i);
-    }
-    function _cs(address _u, uint _i) internal {
+        require(_i < 4, "!i");
+        
+        // 领取汇总奖励
         uint256 p = sAmt[_u][_i] * sA[_i] / 1e12 - sDebt[_u][_i];
         if (p > 0) {
             sDebt[_u][_i] = sAmt[_u][_i] * sA[_i] / 1e12;
-            userPendingSOL[_u] += p;
+            userPendingDQ[_u][_i] += p;
         }
     }
-    function claimStakeReward(address _u) external {
-        require(!isB[msg.sender], "bl");
-        for (uint i = 0; i < 4; i++) {
-            if (sAmt[msg.sender][i] > 0) _cs(msg.sender, i);
+    
+    // 提取待领取DQ奖励
+    function withdrawDQReward(address _u, uint _i) external onlyM {
+        require(_i < 4, "!i");
+        uint256 amt = userPendingDQ[_u][_i];
+        if (amt > 0) {
+            userPendingDQ[_u][_i] = 0;
+            IERC20(DQ_TOKEN).safeTransfer(_u, amt);
         }
     }
+    
+    // 查询用户质押记录数量
+    function getStakeRecordCount(address _u) external view returns (uint256) {
+        return stakeRecords[_u].length;
+    }
+    
+    // 查询用户质押记录详情
+    function getStakeRecord(address _u, uint256 _idx) external view returns (
+        uint256 amount,
+        uint256 startTime,
+        uint256 duration,
+        uint256 pendingReward,
+        bool active,
+        bool canUnstake
+    ) {
+        require(_idx < stakeRecords[_u].length, "!idx");
+        StakeRecord storage record = stakeRecords[_u][_idx];
+        uint256 periodIndex = _getPeriodIndex(record.duration);
+        uint256 pending = record.amount * sA[periodIndex] / 1e12 - record.rewardDebt;
+        return (
+            record.amount,
+            record.startTime,
+            record.duration,
+            pending,
+            record.active,
+            record.duration == 0 || block.timestamp >= record.startTime + record.duration
+        );
+    }
+    
+    // 查询汇总质押信息（兼容旧接口）
     function getStk(address _u, uint _i) external view returns (uint256, uint256) {
-        uint256 p = sAmt[_u][_i] * sA[_i] / 1e12 - sDebt[_u][_i];
-        return (sAmt[_u][_i], p);
+        uint256 pending = sAmt[_u][_i] * sA[_i] / 1e12 - sDebt[_u][_i];
+        uint256 totalPending = pending + userPendingDQ[_u][_i];
+        return (sAmt[_u][_i], totalPending);
     }
-    function getPartnerReward(address _u) external view returns (uint256 dqReward, uint256 solReward) {
-        dqReward = pDA / 1e12 - userPDD[_u];
-        solReward = pBA / 1e12 - userPBD[_u];
+    
+    // 查询待领取DQ
+    function getPendingDQ(address _u, uint _i) external view returns (uint256) {
+        return userPendingDQ[_u][_i];
     }
-    mapping(address => mapping(uint => uint256)) public sAmt;
-    mapping(address => mapping(uint => uint256)) public sDebt;
-    function mine() external onlyM {
-        require(block.timestamp >= lt + 1 days, "!time");
-        uint256 rate = br > MB ? br - BD : MB;
-        br = rate;
-        lt = block.timestamp;
-        uint256 reward = IERC20(DQ_TOKEN).balanceOf(address(this)) * RT / 10000;
-        if (reward > 0) IERC20(DQ_TOKEN).transfer(0x000000000000000000000000000000000000dEaD, reward);
+    
+    // 一次性查询用户所有质押记录
+    function getAllStakeRecords(address _u) external view returns (
+        uint256[] memory amounts,
+        uint256[] memory startTimes,
+        uint256[] memory durations,
+        uint256[] memory pendingRewards,
+        bool[] memory actives,
+        bool[] memory canUnstakes
+    ) {
+        uint256 len = stakeRecords[_u].length;
+        amounts = new uint256[](len);
+        startTimes = new uint256[](len);
+        durations = new uint256[](len);
+        pendingRewards = new uint256[](len);
+        actives = new bool[](len);
+        canUnstakes = new bool[](len);
+        
+        for (uint256 i; i < len; i++) {
+            StakeRecord storage record = stakeRecords[_u][i];
+            uint256 periodIndex = _getPeriodIndex(record.duration);
+            
+            amounts[i] = record.amount;
+            startTimes[i] = record.startTime;
+            durations[i] = record.duration;
+            pendingRewards[i] = record.amount * sA[periodIndex] / 1e12 - record.rewardDebt;
+            actives[i] = record.active;
+            canUnstakes[i] = record.duration == 0 || block.timestamp >= record.startTime + record.duration;
+        }
     }
+
+    // ============ DQ费用分配 ============
+    // 分配卖出DQ手续费（6%的一半给质押池）
+    // 按权重加权分配：30天5%、90天10%、180天15%、360天20%
+    function distDQFee(uint256 _amount) external onlyM {
+        if (_amount == 0) return;
+        
+        // 计算总权重质押量 = Σ(质押量 × 权重)
+        uint256 totalWeightedStake;
+        for (uint256 i; i < 4; i++) {
+            totalWeightedStake += tS[i] * stakeWeights[i];
+        }
+        
+        if (totalWeightedStake == 0) {
+            // 没有质押，全部给合伙人
+            IERC20(DQ_TOKEN).safeTransfer(PARTNER, _amount);
+            return;
+        }
+        
+        // 按权重分配给各周期（DQ保留在合约，等用户领取时转出）
+        for (uint256 i; i < 4; i++) {
+            if (tS[i] > 0) {
+                // 该周期应得奖励 = 总奖励 × (质押量×权重 / 总权重质押量)
+                uint256 reward = _amount * tS[i] * stakeWeights[i] / totalWeightedStake;
+                sA[i] += reward * 1e12 / tS[i];
+            }
+        }
+        // DQ保留在合约，用户领取时claimStakeReward转给用户
+    }
+
+    // ============ 提取 ============
     function withdraw(address _u, uint256 _a) external onlyM {
         require(_a <= userPendingSOL[_u], "!bal");
         userPendingSOL[_u] -= _a;
         IERC20(SOL).safeTransfer(_u, _a);
     }
     function withdrawSOL(uint256 _amount) external onlyOwner {
-        require(_amount > 0, "!amt");
-        uint256 bal = IERC20(SOL).balanceOf(address(this));
-        require(_amount <= bal, "!bal");
-        IERC20(SOL).safeTransfer(msg.sender, _amount);
+        IERC20(SOL).safeTransfer(OWNER, _amount);
     }
     function withdrawDQ(uint256 _amount) external onlyOwner {
-        require(_amount > 0, "!amt");
-        uint256 bal = IERC20(DQ_TOKEN).balanceOf(address(this));
-        require(_amount <= bal, "!bal");
-        IERC20(DQ_TOKEN).safeTransfer(msg.sender, _amount);
+        IERC20(DQ_TOKEN).safeTransfer(OWNER, _amount);
     }
-    function withdrawBNB() external onlyOwner {
-        uint256 bal = address(this).balance;
-        require(bal > 0, "!bal");
-        payable(feeRecipient).transfer(bal);
+
+    // ============ 合伙人 ============
+    function distP(uint256 _f) external onlyM { if (_f != 0) pDA += _f * 1e12; }
+    function claimPdq(address _u) external onlyM {
+        uint256 r = pDA / 1e12 - userPDD[_u];
+        if (r > 0) { userPDD[_u] = pDA / 1e12; userPendingSOL[_u] += r; }
     }
+
     receive() external payable {}
-    uint256 public pendingBurnAmount;  
-    function addPendingBurn(uint256 _amount) external {
-        require(msg.sender == miningContract || msg.sender == address(dq), "!auth");  // DQMining 或 DQToken
-        uint256 burnAmt = _amount * 94 / 100;  
-        pendingBurnAmount += burnAmt;
-        if (burnAmt > 0) {
-            IDQToken(dq).burn(burnAmt);
-        }
-    }
 }

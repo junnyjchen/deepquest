@@ -7,19 +7,19 @@
 // 主合约地址
 export const CONTRACT_ADDRESSES = {
   DQPROJECT: {
-    address: '0x126Ede55c37790a084389077c1bb89ECB882407F',
+    address: '0x6cFfC07F1bA1C283AA3193C783515c95397F88C4',
     name: 'DQProject'
   },
   DQSTAKE: {
-    address: '0x084D53c0A3CaC456e45FF245aFc7F637cBF92Ec6',
+    address: '0x8FF2de79180587333229b07426139Eb352733cc4',
     name: 'DQStake'
   },
   DQTOKEN: {
-    address: '0x58eb34119dC1c5631e74DEeAAf8e6cF120F9D0b8',
+    address: '0x3bc8C7b5b4Ec8798Fa9d8D177Ca0FCC317a24989',
     name: 'DQToken'
   },
   DQCARD: {
-    address: '0xc2940605A7F49EBE4e0A4936499a3f33893160C6',
+    address: '0x4006e454DB83836ed7A261ba3E894Fe3E3D6F7A9',
     name: 'DQCard'
   },
   SOL: {
@@ -42,12 +42,14 @@ export const CONTRACT_ADDRESSES = {
  *
  */
 export const DQPROJECT_ABI = [
-  // ========== 部署 ==========
-  {"inputs":[],"stateMutability":"nonpayable","type":"constructor"},
 
   // ========== 事件 ==========
   // 事件：event BurnFromDQT(address from, uint256 amount)
   {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"from","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"BurnFromDQT","type":"event"},
+  // 事件：event BurnFromPool(address seller, uint256 amount)
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"seller","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"BurnFromPool","type":"event"},
+  // 事件：event BuyNode(address user, uint8 nodeType, uint256 price)
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint8","name":"nodeType","type":"uint8"},{"indexed":false,"internalType":"uint256","name":"price","type":"uint256"}],"name":"BuyNode","type":"event"},
   // 事件：用户领取动态奖励（amount=到账金额，fee=手续费）
   {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"fee","type":"uint256"}],"name":"ClaimReward","type":"event"},
   // 事件：用户入金（u=用户，a=金额）
@@ -56,6 +58,8 @@ export const DQPROJECT_ABI = [
   {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"u","type":"address"},{"indexed":true,"internalType":"address","name":"r","type":"address"}],"name":"Register","type":"event"},
   // 事件：用户复投（amount=复投金额，energyAdded=增加的能量值）
   {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"energyAdded","type":"uint256"}],"name":"ReinvestSOL","type":"event"},
+  // 事件：event RemoveLP(address user, uint256 lpAmount, uint256 dqAmount, uint256 solAmount)
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"user","type":"address"},{"indexed":false,"internalType":"uint256","name":"lpAmount","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"dqAmount","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"solAmount","type":"uint256"}],"name":"RemoveLP","type":"event"},
   // 事件：卖出 DQ（d=DQ数量，s=获得SOL，b=销毁量，f=手续费）
   {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"u","type":"address"},{"indexed":false,"internalType":"uint256","name":"d","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"s","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"b","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"f","type":"uint256"}],"name":"SellDQ","type":"event"},
   // 事件：换 DQ 并加 LP（s=SOL，d=DQ，l=LP数量）
@@ -64,34 +68,16 @@ export const DQPROJECT_ABI = [
   {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"to","type":"address"},{"indexed":false,"internalType":"uint256","name":"amount","type":"uint256"}],"name":"WithdrawBNB","type":"event"},
 
   // ========== 读取（view）==========
-  // 所有注册用户数组（index → address）
-  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"allUsers","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-  // 授权地址查询（true = 已被授权）
-  {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"authorized","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
   // 通缩停止阈值（达到后不再销毁 DQ）
   {"inputs":[],"name":"BURN_STOP_THRESHOLD","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 买入手续费接收/分配地址
-  {"inputs":[],"name":"BUY_FEE","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-  // 领取手续费收益时需支付的 BNB 数量
-  {"inputs":[],"name":"CLAIM_BNB_FEE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 当前阶段编号
-  {"inputs":[],"name":"currentPhase","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 基础日限额（每阶段可上调）
   {"inputs":[],"name":"DAILY_LIMIT","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 用户今日已入金额（用于日限额统计）
-  {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"dailyDeposit","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // DAO 地址
   {"inputs":[],"name":"DAO","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
   // DAO 补贴费率（千分比）
   {"inputs":[],"name":"DAO_RATE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 入金白名单（true = 不受日限额限制）
-  {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"depositWhiteList","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
   // 直推奖励费率（千分比）
   {"inputs":[],"name":"DIRECT_RATE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // DQCard NFT 合约地址
-  {"inputs":[],"name":"dqCard","outputs":[{"internalType":"contract IDQCard","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-  // DQToken 代币合约地址
-  {"inputs":[],"name":"dqToken","outputs":[{"internalType":"contract IDQToken","name":"","type":"address"}],"stateMutability":"view","type":"function"},
   // 能量倍数（入金 × ENERGY_MUL = 能量）
   {"inputs":[],"name":"ENERGY_MUL","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 提现手续费中分配给基金会的比例
@@ -100,22 +86,8 @@ export const DQPROJECT_ABI = [
   {"inputs":[],"name":"FEE_NODE_RATE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 提现手续费中分配给合伙人的比例
   {"inputs":[],"name":"FEE_PARTNER_RATE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 读取：function feeAddr() → (address) [view]
-  {"inputs":[],"name":"feeAddr","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
   // 基金会地址
   {"inputs":[],"name":"FOUNDATION","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-  // 获取注册用户总数
-  {"inputs":[],"name":"getAllUsersLength","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 计算当前阶段的日限额（含 phase step，上限 200 ether）
-  {"inputs":[],"name":"getDailyLimit","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 查询用户待提现动态奖励余额
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"getPendingSOL","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 获取用户的团队规模（直接/间接下级总数）
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"getTeamSize","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 获取用户基础信息：推荐人、直推数、节点等级、总入金
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"getUser","outputs":[{"internalType":"address","name":"referrer","type":"address"},{"internalType":"uint256","name":"directCount","type":"uint256"},{"internalType":"uint8","name":"level","type":"uint8"},{"internalType":"uint256","name":"totalInvest","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 获取用户质押数据：团队业绩、能量、待提现 SOL
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"getUserStake","outputs":[{"internalType":"uint256","name":"teamInvest","type":"uint256"},{"internalType":"uint256","name":"energy","type":"uint256"},{"internalType":"uint256","name":"pendingSOL","type":"uint256"}],"stateMutability":"view","type":"function"},
   // DQ 初始发行量
   {"inputs":[],"name":"INITIAL_SUPPLY","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 保险地址
@@ -124,22 +96,14 @@ export const DQPROJECT_ABI = [
   {"inputs":[],"name":"INS_RATE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 最小入金额（单位 wei）
   {"inputs":[],"name":"INVEST_MIN","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 黑名单状态（true = 禁止操作）
-  {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"isBlacklisted","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
-  // 管理奖池分配费率（千分比）
-  {"inputs":[],"name":"MGR_RATE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // NFT 节点累计待分发的 SOL
-  {"inputs":[],"name":"nftPendingSOL","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 节点卡价格表（index: 0~3）
-  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"nodePrices","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 运营地址
   {"inputs":[],"name":"OP","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
   // 运营费率（千分比）
   {"inputs":[],"name":"OP_RATE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 合约 owner 地址
   {"inputs":[],"name":"OWNER","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-  // 合伙人累计待分发的 SOL
-  {"inputs":[],"name":"partnerPendingSOL","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 合伙人分配合约/地址
+  {"inputs":[],"name":"PARTNER","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
   // 每阶段日限额增加步长
   {"inputs":[],"name":"PHASE_STEP","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // PancakeSwap Router 地址
@@ -152,26 +116,74 @@ export const DQPROJECT_ABI = [
   {"inputs":[],"name":"SLIPPAGE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // SOL 代币合约地址
   {"inputs":[],"name":"SOL","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-  // 质押运营地址
-  {"inputs":[],"name":"STAKE_OP","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+  // 读取：function USDT() → (address) [view]
+  {"inputs":[],"name":"USDT","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+  // 提现手续费费率（千分比）
+  {"inputs":[],"name":"WITHDRAW_FEE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 所有注册用户数组（index → address）
+  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"allUsers","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+  // 授权地址查询（true = 已被授权）
+  {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"authorized","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
+  // 当前阶段编号
+  {"inputs":[],"name":"currentPhase","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 用户今日已入金额（用于日限额统计）
+  {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"dailyDeposit","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 入金白名单（true = 不受日限额限制）
+  {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"depositWhiteList","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
+  // DQCard NFT 合约地址
+  {"inputs":[],"name":"dqCard","outputs":[{"internalType":"contract IDQCard","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+  // DQToken 代币合约地址
+  {"inputs":[],"name":"dqToken","outputs":[{"internalType":"contract IDQToken","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+  // 读取：function feeAddr() → (address) [view]
+  {"inputs":[],"name":"feeAddr","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
+  // 读取：function getAllStakeRecords(address _user) → (uint256[] amounts, uint256[] startTimes, uint256[] durations, uint256[] pendingRewards, bool[] actives, bool[] canUnstakes) [view]
+  {"inputs":[{"internalType":"address","name":"_user","type":"address"}],"name":"getAllStakeRecords","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"},{"internalType":"uint256[]","name":"startTimes","type":"uint256[]"},{"internalType":"uint256[]","name":"durations","type":"uint256[]"},{"internalType":"uint256[]","name":"pendingRewards","type":"uint256[]"},{"internalType":"bool[]","name":"actives","type":"bool[]"},{"internalType":"bool[]","name":"canUnstakes","type":"bool[]"}],"stateMutability":"view","type":"function"},
+  // 获取注册用户总数
+  {"inputs":[],"name":"getAllUsersLength","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 读取：function getBurnInfo() → (uint256 balance, uint256 supply, bool canBurn) [view]
+  {"inputs":[],"name":"getBurnInfo","outputs":[{"internalType":"uint256","name":"balance","type":"uint256"},{"internalType":"uint256","name":"supply","type":"uint256"},{"internalType":"bool","name":"canBurn","type":"bool"}],"stateMutability":"view","type":"function"},
+  // 计算当前阶段的日限额（含 phase step，上限 200 ether）
+  {"inputs":[],"name":"getDailyLimit","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 读取：function getPendingDQ(address _user, uint256 _periodIndex) → (uint256) [view]
+  {"inputs":[{"internalType":"address","name":"_user","type":"address"},{"internalType":"uint256","name":"_periodIndex","type":"uint256"}],"name":"getPendingDQ","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 查询用户待提现动态奖励余额
+  {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"getPendingSOL","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 读取：function getStakeRecordCount(address _user) → (uint256) [view]
+  {"inputs":[{"internalType":"address","name":"_user","type":"address"}],"name":"getStakeRecordCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 获取用户的团队规模（直接/间接下级总数）
+  {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"getTeamSize","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 获取用户基础信息：推荐人、直推数、节点等级、总入金
+  {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"getUser","outputs":[{"internalType":"address","name":"referrer","type":"address"},{"internalType":"uint256","name":"directCount","type":"uint256"},{"internalType":"uint8","name":"level","type":"uint8"},{"internalType":"uint256","name":"totalInvest","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 获取用户质押数据：团队业绩、能量、待提现 SOL
+  {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"getUserStake","outputs":[{"internalType":"uint256","name":"teamInvest","type":"uint256"},{"internalType":"uint256","name":"energy","type":"uint256"},{"internalType":"uint256","name":"pendingSOL","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 黑名单状态（true = 禁止操作）
+  {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"isBlacklisted","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
+  // NFT 节点累计待分发的 SOL
+  {"inputs":[],"name":"nftPendingSOL","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 读取：function nodeUSDTReceiver() → (address) [view]
+  {"inputs":[],"name":"nodeUSDTReceiver","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
   // 绑定的质押合约地址
   {"inputs":[],"name":"stakeContract","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
   // 合约启动时间戳
   {"inputs":[],"name":"startTime","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 提现手续费费率（千分比）
-  {"inputs":[],"name":"WITHDRAW_FEE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
 
   // ========== 写操作（nonpayable / payable）==========
   // 加入黑名单（owner）
   {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"addToBlacklist","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  // 方法：function adminWithdrawAnyToken(address _token, uint256 _a) [nonpayable]
+  {"inputs":[{"internalType":"address","name":"_token","type":"address"},{"internalType":"uint256","name":"_a","type":"uint256"}],"name":"adminWithdrawAnyToken","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // owner 提走合约内 DQ（谨慎使用）
   {"inputs":[{"internalType":"uint256","name":"_a","type":"uint256"}],"name":"adminWithdrawDQ","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  // 方法：function adminWithdrawLP(address _lpToken, uint256 _a) [nonpayable]
+  {"inputs":[{"internalType":"address","name":"_lpToken","type":"address"},{"internalType":"uint256","name":"_a","type":"uint256"}],"name":"adminWithdrawLP","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // owner 提走合约内 SOL（谨慎使用）
   {"inputs":[{"internalType":"uint256","name":"_a","type":"uint256"}],"name":"adminWithdrawSOL","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 手动推进阶段（owner）
   {"inputs":[],"name":"advancePhase","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 授权 Router 进行 SOL/DQ 兑换操作（owner）
   {"inputs":[],"name":"approveRouter","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  // 方法：function burnDQ(uint256 _amount) [nonpayable]
+  {"inputs":[{"internalType":"uint256","name":"_amount","type":"uint256"}],"name":"burnDQ","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 购买节点卡（_t=卡牌类型，用 SOL 支付）
   {"inputs":[{"internalType":"uint256","name":"_t","type":"uint256"}],"name":"buyNode","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 领取 D 等级团队奖励
@@ -182,22 +194,14 @@ export const DQPROJECT_ABI = [
   {"inputs":[],"name":"claimLP","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 领取 NFT 分红
   {"inputs":[],"name":"claimNft","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 领取合伙人 BNB 奖励
-  {"inputs":[],"name":"claimPartnerBNB","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 领取合伙人 DQ 奖励
-  {"inputs":[],"name":"claimPartnerDQ","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 用户提现动态奖励（扣 WITHDRAW_FEE；以 SOL 支付给用户）
   {"inputs":[],"name":"claimReward","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 领取单币质押奖励（_periodIndex=质押周期索引）
   {"inputs":[{"internalType":"uint256","name":"_periodIndex","type":"uint256"}],"name":"claimStakeReward","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 方法：function createLPFromBalance(address _user, uint256 _a) [nonpayable]
-  {"inputs":[{"internalType":"address","name":"_user","type":"address"},{"internalType":"uint256","name":"_a","type":"uint256"}],"name":"createLPFromBalance","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 管理员代用户入金
   {"inputs":[{"internalType":"address","name":"_user","type":"address"},{"internalType":"uint256","name":"_a","type":"uint256"}],"name":"depositForUser","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 用户入金（转入 SOL；需已注册）
   {"inputs":[{"internalType":"uint256","name":"_a","type":"uint256"}],"name":"depositSOL","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 将手续费 SOL 分配到 NFT 分红池
-  {"inputs":[{"internalType":"uint256","name":"_amount","type":"uint256"}],"name":"distributeFeeToNFT","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 方法：function importNodes(address[] _u, uint8[] _t) [nonpayable]
   {"inputs":[{"internalType":"address[]","name":"_u","type":"address[]"},{"internalType":"uint8[]","name":"_t","type":"uint8[]"}],"name":"importNodes","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 导入单个用户推荐关系（owner）
@@ -208,12 +212,14 @@ export const DQPROJECT_ABI = [
   {"inputs":[{"internalType":"address","name":"_user","type":"address"},{"internalType":"uint256","name":"_a","type":"uint256"}],"name":"manualAddLP","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 触发挖矿结算（owner）
   {"inputs":[],"name":"mineBlock","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 方法：function receiveBurn(uint256 _amount) [nonpayable]
-  {"inputs":[{"internalType":"uint256","name":"_amount","type":"uint256"}],"name":"receiveBurn","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  // 方法：function onDQSell(address _seller, uint256 _sellAmount) [nonpayable]
+  {"inputs":[{"internalType":"address","name":"_seller","type":"address"},{"internalType":"uint256","name":"_sellAmount","type":"uint256"}],"name":"onDQSell","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 用户注册推荐人（需未注册；_r=推荐人地址）
   {"inputs":[{"internalType":"address","name":"_r","type":"address"}],"name":"register","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 移出黑名单（owner）
   {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"removeFromBlacklist","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  // 方法：function removeMyLP() [nonpayable]
+  {"inputs":[],"name":"removeMyLP","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 卖出 DQ 换 SOL（94% 销毁 + 6% 手续费；返回 solOut）
   {"inputs":[{"internalType":"uint256","name":"_dq","type":"uint256"}],"name":"sellDQForSOL","outputs":[{"internalType":"uint256","name":"solOut","type":"uint256"}],"stateMutability":"nonpayable","type":"function"},
   // 设置/更换 DQCard 合约地址（owner）
@@ -224,28 +230,26 @@ export const DQPROJECT_ABI = [
   {"inputs":[{"internalType":"address","name":"_addr","type":"address"}],"name":"setFeeAddr","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 设置基金会地址（owner）
   {"inputs":[{"internalType":"address","name":"_addr","type":"address"}],"name":"setFoundation","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  // 方法：function setNodeUSDTReceiver(address _addr) [nonpayable]
+  {"inputs":[{"internalType":"address","name":"_addr","type":"address"}],"name":"setNodeUSDTReceiver","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 方法：function setNodesDLevel(address[] _u, uint8[] _lvl) [nonpayable]
   {"inputs":[{"internalType":"address[]","name":"_u","type":"address[]"},{"internalType":"uint8[]","name":"_lvl","type":"uint8[]"}],"name":"setNodesDLevel","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 方法：function setNodesLevel(address[] _u, uint8[] _lvl) [nonpayable]
   {"inputs":[{"internalType":"address[]","name":"_u","type":"address[]"},{"internalType":"uint8[]","name":"_lvl","type":"uint8[]"}],"name":"setNodesLevel","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 方法：function setReferrer(address _u, address _r) [nonpayable]
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"address","name":"_r","type":"address"}],"name":"setReferrer","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 设置兑换滑点（owner；千分比）
   {"inputs":[{"internalType":"uint256","name":"_s","type":"uint256"}],"name":"setSlippage","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 设置绑定的质押合约地址（owner）
   {"inputs":[{"internalType":"address","name":"_a","type":"address"}],"name":"setStakeContract","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 设置用户 D 等级（owner；_lvl=0~7）
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint8","name":"_lvl","type":"uint8"}],"name":"setUserDLevel","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 设置用户节点等级（owner；_lvl=0~6）
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint8","name":"_lvl","type":"uint8"}],"name":"setUserLevel","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 质押 DQ（_amount=数量，_periodIndex=周期索引）
   {"inputs":[{"internalType":"uint256","name":"_amount","type":"uint256"},{"internalType":"uint256","name":"_periodIndex","type":"uint256"}],"name":"stakeDQ","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 解押 DQ（_periodIndex=对应质押周期）
-  {"inputs":[{"internalType":"uint256","name":"_periodIndex","type":"uint256"}],"name":"unstakeDQ","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[{"internalType":"uint256","name":"_recordIndex","type":"uint256"}],"name":"unstakeDQ","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 用户提现（转发到质押合约）
   {"inputs":[{"internalType":"uint256","name":"_a","type":"uint256"}],"name":"withdraw","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // owner 提走合约内 BNB（_to=收款地址，_amount=金额）
   {"inputs":[{"internalType":"address payable","name":"_to","type":"address"},{"internalType":"uint256","name":"_amount","type":"uint256"}],"name":"withdrawBNB","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  // 方法：function withdrawDQReward(uint256 _periodIndex) [nonpayable]
+  {"inputs":[{"internalType":"uint256","name":"_periodIndex","type":"uint256"}],"name":"withdrawDQReward","outputs":[],"stateMutability":"nonpayable","type":"function"},
 
   {"stateMutability":"payable","type":"receive"}
 ];
@@ -262,18 +266,16 @@ export const DQPROJECT_ABI = [
  *
  */
 export const DQSTAKE_ABI = [
-  // ========== 部署 ==========
-  {"inputs":[],"stateMutability":"nonpayable","type":"constructor"},
 
   // ========== 事件 ==========
-  // 事件：用户领取动态奖励（amount=到账金额，fee=手续费）
-  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"u","type":"address"},{"indexed":false,"internalType":"uint256","name":"a","type":"uint256"}],"name":"ClaimReward","type":"event"},
-  // 事件：用户入金（u=用户，a=金额）
-  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"u","type":"address"},{"indexed":false,"internalType":"uint256","name":"a","type":"uint256"}],"name":"Deposit","type":"event"},
   // 事件：用户能量变化（u=用户，e=新能量值）
   {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"u","type":"address"},{"indexed":false,"internalType":"uint256","name":"e","type":"uint256"}],"name":"EnergyChanged","type":"event"},
   // 事件：event LPRemoved(address u, uint256 a)
   {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"u","type":"address"},{"indexed":false,"internalType":"uint256","name":"a","type":"uint256"}],"name":"LPRemoved","type":"event"},
+  // 事件：event NodeDistributionEnabled(bool enabled)
+  {"anonymous":false,"inputs":[{"indexed":false,"internalType":"bool","name":"enabled","type":"bool"}],"name":"NodeDistributionEnabled","type":"event"},
+  // 事件：event NodeReceiverUpdated(address receiver)
+  {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"receiver","type":"address"}],"name":"NodeReceiverUpdated","type":"event"},
   // 事件：质押 DQ（u=用户，a=数量，i=周期索引）
   {"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"u","type":"address"},{"indexed":false,"internalType":"uint256","name":"a","type":"uint256"},{"indexed":false,"internalType":"uint256","name":"i","type":"uint256"}],"name":"Stake","type":"event"},
   // 事件：团队业绩变化（u=用户，v=新业绩值）
@@ -286,18 +288,8 @@ export const DQSTAKE_ABI = [
   {"inputs":[],"name":"BD","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 区块奖励参数
   {"inputs":[],"name":"br","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 领取手续费收益时需支付的 BNB 数量
-  {"inputs":[],"name":"CLAIM_GAS_FEE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 领取时支付 BNB gas 费（payable；需支付 CLAIM_GAS_FEE）
-  {"inputs":[],"name":"claimGasFee","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // D 等级奖励分配比例（千分比）
-  {"inputs":[],"name":"D_LEVEL_RATE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 用户直推人数
   {"inputs":[],"name":"dc","outputs":[{"internalType":"contract IDQCard","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-  // 用户直推业绩
-  {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"dd","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 用户 D 等级（0~7）
-  {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"dl","outputs":[{"internalType":"uint8","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},
   // D 等级全局累计奖励（index=dLevel）
   {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"dLevelAccReward","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 当前各 D 等级人数（index=dLevel）
@@ -316,14 +308,10 @@ export const DQSTAKE_ABI = [
   {"inputs":[],"name":"F180","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 60 天锁定期系数（质押收益加成）
   {"inputs":[],"name":"F60","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 手续费接收地址
-  {"inputs":[],"name":"feeRecipient","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
   // 基金会地址
   {"inputs":[],"name":"FOUNDATION","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-  // 手续费分配给基金会的比例（千分比）
-  {"inputs":[],"name":"FOUNDATION_RATE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 手续费分配参数
-  {"inputs":[],"name":"fp","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 读取：function getAllStakeRecords(address _u) → (uint256[] amounts, uint256[] startTimes, uint256[] durations, uint256[] pendingRewards, bool[] actives, bool[] canUnstakes) [view]
+  {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"getAllStakeRecords","outputs":[{"internalType":"uint256[]","name":"amounts","type":"uint256[]"},{"internalType":"uint256[]","name":"startTimes","type":"uint256[]"},{"internalType":"uint256[]","name":"durations","type":"uint256[]"},{"internalType":"uint256[]","name":"pendingRewards","type":"uint256[]"},{"internalType":"bool[]","name":"actives","type":"bool[]"},{"internalType":"bool[]","name":"canUnstakes","type":"bool[]"}],"stateMutability":"view","type":"function"},
   // 查询用户指定索引的直接下级地址
   {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint256","name":"_i","type":"uint256"}],"name":"getChild","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
   // 查询用户直接下级数量
@@ -336,18 +324,26 @@ export const DQSTAKE_ABI = [
   {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"getDLevelReward","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 查询用户当前能量值
   {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"getEnergy","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 读取：function getPartnerReward(address _u) → (uint256 dqReward, uint256 solReward) [view]
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"getPartnerReward","outputs":[{"internalType":"uint256","name":"dqReward","type":"uint256"},{"internalType":"uint256","name":"solReward","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 读取：function getLP(address _u) → (uint256) [view]
+  {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"getLP","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 读取：function getMineInfo() → (uint256 releaseAmount, uint256 currentBurnRate, uint256 nextBurnRate, bool canMine) [view]
+  {"inputs":[],"name":"getMineInfo","outputs":[{"internalType":"uint256","name":"releaseAmount","type":"uint256"},{"internalType":"uint256","name":"currentBurnRate","type":"uint256"},{"internalType":"uint256","name":"nextBurnRate","type":"uint256"},{"internalType":"bool","name":"canMine","type":"bool"}],"stateMutability":"view","type":"function"},
+  // 读取：function getMineReleaseAmount() → (uint256) [view]
+  {"inputs":[],"name":"getMineReleaseAmount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 读取：function getPendingDQ(address _u, uint256 _i) → (uint256) [view]
+  {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint256","name":"_i","type":"uint256"}],"name":"getPendingDQ","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 查询用户待提现动态奖励余额
   {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"getPendingSOL","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 读取：function getStakeRecord(address _u, uint256 _idx) → (uint256 amount, uint256 startTime, uint256 duration, uint256 pendingReward, bool active, bool canUnstake) [view]
+  {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint256","name":"_idx","type":"uint256"}],"name":"getStakeRecord","outputs":[{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"uint256","name":"startTime","type":"uint256"},{"internalType":"uint256","name":"duration","type":"uint256"},{"internalType":"uint256","name":"pendingReward","type":"uint256"},{"internalType":"bool","name":"active","type":"bool"},{"internalType":"bool","name":"canUnstake","type":"bool"}],"stateMutability":"view","type":"function"},
+  // 读取：function getStakeRecordCount(address _u) → (uint256) [view]
+  {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"getStakeRecordCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 查询用户质押信息（按 periodIndex）
   {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint256","name":"_i","type":"uint256"}],"name":"getStk","outputs":[{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 查询用户团队业绩
   {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"getTeamInvest","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 读取：function getUserLPRemovalFee(address _u) → (uint256) [view]
   {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"getUserLPRemovalFee","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 查询用户有效直推地址数量
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"getValidAddressCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 初始区块奖励参数
   {"inputs":[],"name":"IB","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // DQ 初始发行量
@@ -358,10 +354,6 @@ export const DQSTAKE_ABI = [
   {"inputs":[{"internalType":"uint8","name":"","type":"uint8"},{"internalType":"address","name":"","type":"address"}],"name":"isDLevel","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
   // LP 全局累计奖励（用于 LP 分红结算）
   {"inputs":[],"name":"lA","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // LP 分红快照（用于计算待领取）
-  {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"lF","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // LP 分红费率（千分比）
-  {"inputs":[],"name":"LP_RATE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 用户 LP 分红债（已领取快照）
   {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"lpD","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // LP 代币合约地址（SOL-DQ 交易对）
@@ -390,12 +382,10 @@ export const DQSTAKE_ABI = [
   {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"nD1","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // D2+ 等级全局快照参数
   {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"nD2","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // NFT 节点分红费率（千分比）
-  {"inputs":[],"name":"NFT_RATE","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 节点卡价格表（index: 0~3）
-  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"nodePrices","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 节点达标直推要求（index: 0~3）
-  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"nodeReq","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 读取：function nodeDistributionEnabled() → (bool) [view]
+  {"inputs":[],"name":"nodeDistributionEnabled","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},
+  // 读取：function nodeReceiver() → (address) [view]
+  {"inputs":[],"name":"nodeReceiver","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
   // 合约 owner 地址
   {"inputs":[],"name":"OWNER","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
   // 合伙人分配合约/地址
@@ -404,8 +394,6 @@ export const DQSTAKE_ABI = [
   {"inputs":[],"name":"pBA","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 合伙人 DQ 全局累计奖励
   {"inputs":[],"name":"pDA","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 读取：function pendingBurnAmount() → (uint256) [view]
-  {"inputs":[],"name":"pendingBurnAmount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 已释放的 DQ 数量（挖矿释放）
   {"inputs":[],"name":"releasedSupply","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // PancakeSwap Router 地址
@@ -420,8 +408,12 @@ export const DQSTAKE_ABI = [
   {"inputs":[{"internalType":"address","name":"","type":"address"},{"internalType":"uint256","name":"","type":"uint256"}],"name":"sDebt","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // SOL 代币合约地址
   {"inputs":[],"name":"SOL","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
-  // 合伙人费率相关参数
-  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"SP","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 读取：function stakeDurations(uint256) → (uint256) [view]
+  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"stakeDurations","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 读取：function stakeRecords(address, uint256) → (uint256 amount, uint256 startTime, uint256 duration, uint256 rewardDebt, bool active) [view]
+  {"inputs":[{"internalType":"address","name":"","type":"address"},{"internalType":"uint256","name":"","type":"uint256"}],"name":"stakeRecords","outputs":[{"internalType":"uint256","name":"amount","type":"uint256"},{"internalType":"uint256","name":"startTime","type":"uint256"},{"internalType":"uint256","name":"duration","type":"uint256"},{"internalType":"uint256","name":"rewardDebt","type":"uint256"},{"internalType":"bool","name":"active","type":"bool"}],"stateMutability":"view","type":"function"},
+  // 读取：function stakeWeights(uint256) → (uint256) [view]
+  {"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"stakeWeights","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 全局 LP 总份额快照参数
   {"inputs":[],"name":"tLP","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 全局单币质押总量
@@ -432,8 +424,6 @@ export const DQSTAKE_ABI = [
   {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"userDLevel","outputs":[{"internalType":"uint8","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},
   // 用户能量映射
   {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"userEnergy","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 用户节点等级映射
-  {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"userLevel","outputs":[{"internalType":"uint8","name":"","type":"uint8"}],"stateMutability":"view","type":"function"},
   // 读取：function userLPRemovalFee(address) → (uint256) [view]
   {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"userLPRemovalFee","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 读取：function userNftF(address, uint256) → (uint256) [view]
@@ -442,16 +432,14 @@ export const DQSTAKE_ABI = [
   {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"userPBD","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 读取：function userPDD(address) → (uint256) [view]
   {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"userPDD","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
+  // 读取：function userPendingDQ(address, uint256) → (uint256) [view]
+  {"inputs":[{"internalType":"address","name":"","type":"address"},{"internalType":"uint256","name":"","type":"uint256"}],"name":"userPendingDQ","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 用户待提现 SOL 映射
   {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"userPendingSOL","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
   // 用户推荐人映射
   {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"userReferrer","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},
   // 用户团队业绩映射
   {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"userTeamInvest","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 用户总入金映射
-  {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"userTotalInvest","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
-  // 用户有效直推地址数映射
-  {"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"userValidAddressCount","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},
 
   // ========== 写操作（nonpayable / payable）==========
   // 添加用户下级关系（仅主合约调用）
@@ -468,26 +456,18 @@ export const DQSTAKE_ABI = [
   {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint256","name":"_a","type":"uint256"}],"name":"addPendingSOL","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 增加用户团队业绩（仅主合约调用）
   {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint256","name":"_a","type":"uint256"}],"name":"addTeamInvest","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 方法：function adminWithdrawLP(address _u) [nonpayable]
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"adminWithdrawLP","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 方法：function bl(address u, bool s) [nonpayable]
   {"inputs":[{"internalType":"address","name":"u","type":"address"},{"internalType":"bool","name":"s","type":"bool"}],"name":"bl","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 方法：function claimD(address _u) [nonpayable]
   {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"claimD","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 领取 D 等级奖励
-  {"inputs":[],"name":"claimDLevelReward","outputs":[],"stateMutability":"payable","type":"function"},
   // 领取手续费分红
   {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"claimFee","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 领取 LP 分红
   {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"claimLP","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 领取 NFT 分红
   {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"claimNft","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 方法：function claimPbnb(address _u) [nonpayable]
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"claimPbnb","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 方法：function claimPdq(address _u) [nonpayable]
   {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"claimPdq","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 领取单币质押奖励（_periodIndex=质押周期索引）
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"claimStakeReward","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 方法：function clearUserLPRemovalFee(address _u) [nonpayable]
   {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"clearUserLPRemovalFee","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 方法：function clmS(address _u, uint256 _i) [nonpayable]
@@ -505,67 +485,51 @@ export const DQSTAKE_ABI = [
   // 方法：function forceRemoveLP(address _u) [nonpayable]
   {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"forceRemoveLP","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 导入单个用户推荐关系（owner）
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"address","name":"_r","type":"address"},{"internalType":"uint256","name":"_total","type":"uint256"},{"internalType":"uint256","name":"_team","type":"uint256"},{"internalType":"uint8","name":"_level","type":"uint8"},{"internalType":"uint256","name":"_energy","type":"uint256"}],"name":"importUser","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"address","name":"_r","type":"address"},{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"uint256","name":"","type":"uint256"},{"internalType":"uint8","name":"","type":"uint8"},{"internalType":"uint256","name":"","type":"uint256"}],"name":"importUser","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 方法：function mine() [nonpayable]
   {"inputs":[],"name":"mine","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 方法：function notifyLPRemoved(address _u, uint256 _amount) [nonpayable]
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint256","name":"_amount","type":"uint256"}],"name":"notifyLPRemoved","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 方法：function registerDLevel(address _user, uint8 _newLevel) [nonpayable]
   {"inputs":[{"internalType":"address","name":"_user","type":"address"},{"internalType":"uint8","name":"_newLevel","type":"uint8"}],"name":"registerDLevel","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 方法：function registerUser(address _u, address _r) [nonpayable]
   {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"address","name":"_r","type":"address"}],"name":"registerUser","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 方法：function removeChild(address _p, address _c) [nonpayable]
-  {"inputs":[{"internalType":"address","name":"_p","type":"address"},{"internalType":"address","name":"_c","type":"address"}],"name":"removeChild","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 方法：function setAddresses(address _dq, address _dc, address _lpPair) [nonpayable]
   {"inputs":[{"internalType":"address","name":"_dq","type":"address"},{"internalType":"address","name":"_dc","type":"address"},{"internalType":"address","name":"_lpPair","type":"address"}],"name":"setAddresses","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 方法：function setClaimGasFee(uint256 _fee) [nonpayable]
-  {"inputs":[{"internalType":"uint256","name":"_fee","type":"uint256"}],"name":"setClaimGasFee","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 方法：function setDLevelByOwner(address _user, uint8 _newLevel) [nonpayable]
-  {"inputs":[{"internalType":"address","name":"_user","type":"address"},{"internalType":"uint8","name":"_newLevel","type":"uint8"}],"name":"setDLevelByOwner","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 设置/更换 DQCard 合约地址（owner）
-  {"inputs":[{"internalType":"address","name":"_addr","type":"address"}],"name":"setDQCard","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 方法：function setEnergy(address _u, uint256 _e) [nonpayable]
   {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint256","name":"_e","type":"uint256"}],"name":"setEnergy","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 设置能量倍数（owner）
   {"inputs":[{"internalType":"uint256","name":"_m","type":"uint256"}],"name":"setEnergyMul","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 方法：function setFeeRecipient(address _addr) [nonpayable]
-  {"inputs":[{"internalType":"address","name":"_addr","type":"address"}],"name":"setFeeRecipient","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 方法：function setLpPair(address _pair) [nonpayable]
   {"inputs":[{"internalType":"address","name":"_pair","type":"address"}],"name":"setLpPair","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 方法：function setM(address a) [nonpayable]
   {"inputs":[{"internalType":"address","name":"a","type":"address"}],"name":"setM","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 设置主合约地址（owner）
   {"inputs":[{"internalType":"address","name":"_addr","type":"address"}],"name":"setMiningContract","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  // 方法：function setNodeDistributionEnabled(bool _enabled) [nonpayable]
+  {"inputs":[{"internalType":"bool","name":"_enabled","type":"bool"}],"name":"setNodeDistributionEnabled","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  // 方法：function setNodeReceiver(address _receiver) [nonpayable]
+  {"inputs":[{"internalType":"address","name":"_receiver","type":"address"}],"name":"setNodeReceiver","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 方法：function setPendingSOL(address _u, uint256 _p) [nonpayable]
   {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint256","name":"_p","type":"uint256"}],"name":"setPendingSOL","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 方法：function setTeamInvest(address _u, uint256 _v) [nonpayable]
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint256","name":"_v","type":"uint256"}],"name":"setTeamInvest","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 设置用户有效直推数（owner）
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint256","name":"_c","type":"uint256"}],"name":"setValidAddress","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 用户质押 DQ（_a=数量，_p=周期索引）
   {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint256","name":"_a","type":"uint256"},{"internalType":"uint256","name":"_i","type":"uint256"}],"name":"stake","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 减少用户能量（仅主合约调用）
   {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint256","name":"_a","type":"uint256"}],"name":"subEnergy","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 方法：function subPendingBurn(address _u, uint256 _amount) [nonpayable]
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint256","name":"_amount","type":"uint256"}],"name":"subPendingBurn","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 减少用户待提现 SOL（仅主合约调用）
   {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint256","name":"_a","type":"uint256"}],"name":"subPendingSOL","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  // 方法：function subTotalLP(uint256 _a) [nonpayable]
+  {"inputs":[{"internalType":"uint256","name":"_a","type":"uint256"}],"name":"subTotalLP","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 用户解押 DQ（_p=周期索引）
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint256","name":"_i","type":"uint256"}],"name":"unstake","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint256","name":"_recordIndex","type":"uint256"}],"name":"unstake","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 方法：function updateTeam(address _u, uint256 _a) [nonpayable]
   {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint256","name":"_a","type":"uint256"}],"name":"updateTeam","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 方法：function updateValidAddress(address _u) [nonpayable]
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"updateValidAddress","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 用户提现（转发到质押合约）
   {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint256","name":"_a","type":"uint256"}],"name":"withdraw","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // owner 提走合约内 BNB
-  {"inputs":[],"name":"withdrawBNB","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // owner 提走合约内 DQ（谨慎使用）
   {"inputs":[{"internalType":"uint256","name":"_amount","type":"uint256"}],"name":"withdrawDQ","outputs":[],"stateMutability":"nonpayable","type":"function"},
+  // 方法：function withdrawDQReward(address _u, uint256 _i) [nonpayable]
+  {"inputs":[{"internalType":"address","name":"_u","type":"address"},{"internalType":"uint256","name":"_i","type":"uint256"}],"name":"withdrawDQReward","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // 提走 LP（转发到质押合约）
   {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"withdrawLP","outputs":[],"stateMutability":"nonpayable","type":"function"},
-  // 管理员代提 LP
-  {"inputs":[{"internalType":"address","name":"_u","type":"address"}],"name":"withdrawLPByM","outputs":[],"stateMutability":"nonpayable","type":"function"},
   // owner 提走合约内 SOL（谨慎使用）
   {"inputs":[{"internalType":"uint256","name":"_amount","type":"uint256"}],"name":"withdrawSOL","outputs":[],"stateMutability":"nonpayable","type":"function"},
 
