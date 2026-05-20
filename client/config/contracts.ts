@@ -11,7 +11,7 @@ export const CONTRACT_ADDRESSES = {
     name: 'DQProject'
   },
   DQSTAKE: {
-    address: '0x89853522B8eeA134Fa486d753E693Ee5C8f916d1',
+    address: '0xA24a2abda5C973dB31f04C43E6a52DcE7F1c2132',
     name: 'DQStake'
   },
   DQTOKEN: {
