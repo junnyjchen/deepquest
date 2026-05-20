@@ -721,7 +721,7 @@ export const claimBlockDQOnChain = async (
 
   console.log('[Web3] 链上领取所有爆块奖励');
 
-  const tx = await contract.claimBlockReward();
+  const tx = await contract.claimBlockDQ();
   console.log('[Web3] 交易已发送:', tx.hash);
 
   return tx;
@@ -747,12 +747,31 @@ export const withdrawDQRewardOnChain = async (
 };
 
 /**
- * 获取待领取直推+见点+管理奖励（SOL）
+ * 领取质押分红到待提取池（链上）——需先调用此函数，再调 withdrawDQRewardOnChain
+ * @param signer 签名者
+ * @param periodIndex 质押周期索引
+ */
+export const claimStakeRewardOnChain = async (
+  signer: ethers.Signer,
+  periodIndex: number
+): Promise<ethers.TransactionResponse> => {
+  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+
+  console.log('[Web3] 链上领取质押分红到待提取池，周期:', periodIndex);
+
+  const tx = await contract.claimStakeReward(periodIndex);
+  console.log('[Web3] 交易已发送:', tx.hash);
+
+  return tx;
+};
+
+/**
+ * 获取待领取直推 SOL 奖励（从 DQSTAKE 合约读取 getPendingSOL）
  */
 export const getPendingReward = async (userAddress: string): Promise<string> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
-    const pending = await contract.getPendingReward(userAddress);
+    const contract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
+    const pending = await contract.getPendingSOL(userAddress);
     return ethers.formatEther(pending);
   } catch (error) {
     console.error('[Web3] 获取待领取直推奖励失败:', error);
@@ -762,12 +781,39 @@ export const getPendingReward = async (userAddress: string): Promise<string> => 
 
 /**
  * 获取待领取节点手续费分红（SOL）
+ * 从 DQPROJECT 合约读取 feePoolS1/S2/S3 和 userFeeDebt，遍历用户 NFT 计算
  */
 export const getPendingFee = async (userAddress: string): Promise<string> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
-    const pending = await contract.getPendingFee(userAddress);
-    return ethers.formatEther(pending);
+    const dqCardContract = getContract(CONTRACT_ADDRESSES.DQCARD.address, DQCARD_ABI);
+    const coreContract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
+
+    const nftCount = Number(await dqCardContract.balanceOf(userAddress));
+    if (nftCount === 0) return '0';
+
+    const [feePoolS1, feePoolS2, feePoolS3, debt0, debt1, debt2] = await Promise.all([
+      coreContract.feePoolS1(),
+      coreContract.feePoolS2(),
+      coreContract.feePoolS3(),
+      coreContract.userFeeDebt(userAddress, 0),
+      coreContract.userFeeDebt(userAddress, 1),
+      coreContract.userFeeDebt(userAddress, 2),
+    ]);
+
+    let reward = 0n;
+    for (let i = 0; i < nftCount; i++) {
+      const tokenId = await dqCardContract.tokenOfOwnerByIndex(userAddress, i);
+      const cardType = Number(await dqCardContract.cardType(tokenId));
+      if (cardType === 1 && BigInt(feePoolS1) > BigInt(debt0)) {
+        reward += BigInt(feePoolS1) - BigInt(debt0);
+      } else if (cardType === 2 && BigInt(feePoolS2) > BigInt(debt1)) {
+        reward += BigInt(feePoolS2) - BigInt(debt1);
+      } else if (cardType === 3 && BigInt(feePoolS3) > BigInt(debt2)) {
+        reward += BigInt(feePoolS3) - BigInt(debt2);
+      }
+    }
+
+    return ethers.formatEther(reward);
   } catch (error) {
     console.error('[Web3] 获取待领取手续费分红失败:', error);
     return '0';
@@ -775,12 +821,12 @@ export const getPendingFee = async (userAddress: string): Promise<string> => {
 };
 
 /**
- * 获取待领取爆块奖励（DQ）
+ * 获取已积累的爆块 DQ 奖励（LP/NFT/D等级 积累后待提取，从 DQSTAKE userBlockDQ 读取）
  */
 export const getPendingBlockReward = async (userAddress: string): Promise<string> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
-    const pending = await contract.getPendingBlockReward(userAddress);
+    const contract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
+    const pending = await contract.userBlockDQ(userAddress);
     return ethers.formatEther(pending);
   } catch (error) {
     console.error('[Web3] 获取待领取爆块奖励失败:', error);
@@ -789,13 +835,13 @@ export const getPendingBlockReward = async (userAddress: string): Promise<string
 };
 
 /**
- * 获取待领取质押奖励（DQ）
+ * 获取待领取质押奖励（DQ），使用 DQSTAKE getStk 返回实时 + 已积累总量
  */
 export const getPendingStakeReward = async (userAddress: string, periodIndex: number): Promise<string> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
-    const pending = await contract.getPendingStakeReward(userAddress, periodIndex);
-    return ethers.formatEther(pending);
+    const contract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
+    const [, totalPending] = await contract.getStk(userAddress, periodIndex);
+    return ethers.formatEther(totalPending);
   } catch (error) {
     console.error('[Web3] 获取待领取质押奖励失败:', error);
     return '0';
@@ -845,11 +891,11 @@ export const getUserDLevel = async (userAddress: string): Promise<number | null>
 };
 
 /**
- * 获取待领取 SOL 金额（从链上）
+ * 获取待领取 SOL 金额（从 DQSTAKE 合约读取）
  */
 export const getPendingSOL = async (userAddress: string): Promise<string> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
+    const contract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
     const pending = await contract.getPendingSOL(userAddress);
     return ethers.formatEther(pending);
   } catch (error) {
@@ -1082,47 +1128,47 @@ export const getLPReward = async (address: string): Promise<{ lpShare: string; p
 export const getNFTReward = async (address: string): Promise<string> => {
   try {
     const dqCardContract = getContract(CONTRACT_ADDRESSES.DQCARD.address, DQCARD_ABI);
-    const stakeContract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
-    
+
     // 1. 获取用户持有的NFT数量
     const nftCount = await dqCardContract.balanceOf(address);
     const count = Number(nftCount);
-    
+
     if (count === 0) {
       return '0';
     }
-    
-    // 2. 获取累计奖励系数 nA[0], nA[1], nA[2] (需要从合约状态读取)
-    // 注意：这些是合约内部状态，可能需要合约提供查询函数
-    // 这里我们通过计算每个NFT的分红来累加
-    
-    // 3. 遍历用户的每个NFT
+
+    const stakeContract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
+
+    // 2. 读取累计奖励系数 nA[0/1/2] 和用户已领记录 userNftF[addr][0/1/2]
+    const [nA0, nA1, nA2, nF0, nF1, nF2] = await Promise.all([
+      stakeContract.nA(0),
+      stakeContract.nA(1),
+      stakeContract.nA(2),
+      stakeContract.userNftF(address, 0),
+      stakeContract.userNftF(address, 1),
+      stakeContract.userNftF(address, 2),
+    ]);
+
+    let reward = 0n;
+
+    // 3. 遍历用户的每个NFT，按卡片类型累加未领取分红
     for (let i = 0; i < count; i++) {
       try {
-        // 获取NFT的tokenId
         const tokenId = await dqCardContract.tokenOfOwnerByIndex(address, i);
-        // 获取NFT类型 (1=A, 2=B, 3=C)
-        const cardType = await dqCardContract.cardType(tokenId);
-        const typeNum = Number(cardType);
-        
-        // 获取该类型的价格
-        const price = await dqCardContract.getCardPrice(typeNum);
-        
-        // 这里需要从质押合约读取分红累计值
-        // 由于合约可能没有直接提供查询接口，我们返回一个说明
-        console.log(`[Web3] NFT #${i}: Type=${typeNum}, Price=${ethers.formatEther(price)}`);
-        
-        // 注意：完整的计算需要访问合约的 nA[idx] 和 nD{idx}[user] 状态
-        // 如果合约没有提供查询函数，可能需要等待合约升级或使用事件日志
-        
+        const cardType = Number(await dqCardContract.cardType(tokenId));
+        if (cardType === 1 && BigInt(nA0) > BigInt(nF0)) {
+          reward += BigInt(nA0) - BigInt(nF0);
+        } else if (cardType === 2 && BigInt(nA1) > BigInt(nF1)) {
+          reward += BigInt(nA1) - BigInt(nF1);
+        } else if (cardType === 3 && BigInt(nA2) > BigInt(nF2)) {
+          reward += BigInt(nA2) - BigInt(nF2);
+        }
       } catch (err) {
         console.error(`[Web3] 获取NFT #${i} 信息失败:`, err);
       }
     }
-    
-    // 由于无法直接读取 nA 和 nD 状态变量，返回提示
-    console.warn('[Web3] NFT分红需要合约提供查询函数，当前仅能通过claimNft交易来获取');
-    return '0'; // 暂时返回0，实际需要合约提供getNFTReward函数
+
+    return ethers.formatEther(reward);
     
   } catch (error) {
     console.error('[Web3] 查询NFT分红失败:', error);

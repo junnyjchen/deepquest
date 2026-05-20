@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { ethers } from 'ethers';
 import { getSupabaseClient } from '../storage/database/supabase-client';
-import { getUserRegisterTxHash, isUserRegisteredOnChain, getUserInfoFromChain, getReferralLineage } from '../utils/bsc-web3';
+import { getUserRegisterTxHash, isUserRegisteredOnChain, getUserInfoFromChain } from '../utils/bsc-web3';
 import { AVE_PAIR_ABI, AVE_PAIR_ADDRESS, DQTOKEN_CONTRACT_ADDRESS } from '../config/contracts';
 
 const supabase = getSupabaseClient();
@@ -2259,13 +2259,47 @@ router.delete('/sync/index', async (req, res) => {
 });
 
 /**
+ * 从数据库获取用户的推荐链路（祖先列表），不访问链上
+ */
+async function getReferralLineageFromDB(
+  userAddress: string,
+  maxDepth: number = 15
+): Promise<Array<{ address: string; depth: number }>> {
+  const lineage: Array<{ address: string; depth: number }> = [];
+  let currentAddress = userAddress.toLowerCase();
+  const visited = new Set<string>();
+
+  for (let depth = 1; depth <= maxDepth; depth++) {
+    if (visited.has(currentAddress)) {
+      console.warn(`[DApp] 检测到循环引用，停止追溯: ${currentAddress}`);
+      break;
+    }
+    visited.add(currentAddress);
+
+    const { data: row, error } = await supabase
+      .from('users')
+      .select('referrer_address')
+      .eq('wallet_address', currentAddress)
+      .single();
+
+    if (error || !row || !row.referrer_address) break;
+
+    const referrer = row.referrer_address.toLowerCase();
+    lineage.push({ address: referrer, depth });
+    currentAddress = referrer;
+  }
+
+  return lineage;
+}
+
+/**
  * 添加团队闭包关系
  * 为用户及其所有祖先（15代以内）建立闭包表关系
  */
 async function addTeamClosureRelations(walletAddress: string, maxDepth: number = 15): Promise<void> {
   try {
-    // 获取用户的推荐链路（所有祖先）
-    const lineage = await getReferralLineage(walletAddress, maxDepth);
+    // 直接从数据库获取推荐链路，不访问链上
+    const lineage = await getReferralLineageFromDB(walletAddress, maxDepth);
     
     if (lineage.length === 0) {
       console.log(`[DApp] 用户 ${walletAddress} 无推荐链路，跳过闭包关系创建`);
@@ -2340,8 +2374,8 @@ export async function syncTeamClosureRelations(walletAddresses: string[], maxDep
 
   for (const walletAddress of walletAddresses) {
     try {
-      // 获取用户的推荐链路
-      const lineage = await getReferralLineage(walletAddress, maxDepth);
+      // 直接从数据库获取推荐链路，不访问链上
+      const lineage = await getReferralLineageFromDB(walletAddress, maxDepth);
       
       if (lineage.length === 0) continue;
 

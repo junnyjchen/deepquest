@@ -332,6 +332,7 @@ export default {
     },
     confirm: {
       title: '确认领取',
+      claim: '确定领取',
       sol: '确定要领取 {amount} SOL 吗？',
       fee: '确定要领取节点手续费 {amount} SOL 吗？',
       lp: '确定要领取 LP 奖励 {amount} DQ 吗？',
@@ -454,6 +455,7 @@ export default {
     // Alert messages
     alert: {
       connectWallet: '请先连接钱包',
+      connectFailed: '钱包连接失败，请重试',
       minDepositAmount: '入金金额不能少于 {amount} SOL',
       insufficientBalance: '余额不足',
       needBrowserWallet: '请在浏览器中打开并连接 TP 钱包或 MetaMask',

@@ -303,7 +303,10 @@ export default {
     block: 'Block Rewards',
     stake: 'Staking',
     period: 'Period',
-    records: 'Records',
+    records: {
+      claim: 'Reward Records',
+      withdraw: 'Withdrawal Records',
+    },
     withdrawalRecords: 'Withdrawal Records',
     progressLines: 'Progress Lines',
     progressHint: 'Line {line} Reward',
@@ -330,6 +333,7 @@ export default {
     },
     confirm: {
       title: 'Confirm Claim',
+      claim: 'Confirm claim',
       sol: 'Are you sure you want to claim {amount} SOL?',
       fee: 'Are you sure you want to claim node fee {amount} SOL?',
       lp: 'Are you sure you want to claim LP rewards {amount} DQ?',
@@ -434,6 +438,7 @@ export default {
     // Alert messages
     alert: {
       connectWallet: 'Please connect wallet first',
+      connectFailed: 'Wallet connection failed, please try again',
       minDepositAmount: 'Deposit amount must be at least {amount} SOL',
       insufficientBalance: 'Insufficient balance',
       needBrowserWallet: 'Please open in browser and connect TP wallet or MetaMask',
