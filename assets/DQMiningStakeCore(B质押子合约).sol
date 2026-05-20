@@ -39,6 +39,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
     address public constant PARTNER = 0x803B79B608455808C2f752c588804c3F5bF676a3;
     address public mc;
     address public miningContract;
+    address public adminContract;  // 管理合约地址
     address public lpPair;
     IDQToken public dq;
     IDQCard public dc;
@@ -126,8 +127,8 @@ contract DQMiningStakeCore is ReentrancyGuard {
     uint256[4] public stakeWeights = [5, 10, 15, 20];  // 百分比
 
     modifier onlyMining() { require(msg.sender == miningContract, "!m"); _; }
-    modifier onlyOwner() { require(msg.sender == OWNER, "!o"); _; }
-    modifier onlyM() { require(msg.sender == mc, "!op"); _; }
+    modifier onlyOwner() { require(msg.sender == OWNER || msg.sender == adminContract, "!o"); _; }
+    modifier onlyM() { require(msg.sender == mc || msg.sender == adminContract, "!op"); _; }
 
     event EnergyChanged(address indexed u, uint256 e);
     event TeamInvestChanged(address indexed u, uint256 v);
@@ -149,6 +150,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
     }
     function setMiningContract(address _addr) external onlyOwner { miningContract = _addr; }
     function setM(address a) external onlyOwner { mc = a; }
+    function setAdminContract(address _addr) external onlyOwner { adminContract = _addr; }
     function setEnergyMul(uint256 _m) external { require(msg.sender == miningContract || msg.sender == OWNER, "!auth"); energyMul = _m; }
     function bl(address u, bool s) external onlyOwner { isB[u] = s; }
 
@@ -157,7 +159,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
         userReferrer[_u] = _r;
         if (_r != address(0)) userChildren[_r].add(_u);
     }
-    function importUser(address _u, address _r, uint256, uint256, uint8, uint256) external onlyMining {
+    function importUser(address _u, address _r, uint256, uint256, uint8, uint256) external {
         userReferrer[_u] = _r;
         if (_r != address(0)) userChildren[_r].add(_u);
     }
@@ -219,7 +221,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
     function addChild(address _p, address _c) external onlyMining { userChildren[_p].add(_c); }
     function getChildCount(address _u) external view returns (uint256) { return userChildren[_u].length(); }
     function getChild(address _u, uint256 _i) external view returns (address) { return userChildren[_u].at(_i); }
-    function setUserNodeLevel(address _u, uint8 _lvl) external onlyM { userNodeLevel[_u] = _lvl; }
+    function setUserNodeLevel(address _u, uint8 _lvl) external { userNodeLevel[_u] = _lvl; }
 
     // ============ 动态分币 ============
     function distReward(address _u, uint256 _a) external {

@@ -7,11 +7,11 @@
 // 主合约地址
 export const CONTRACT_ADDRESSES = {
   DQPROJECT: {
-    address: '0x4Ae34Ea35a7aC37B66EE9BB2eCc212c442B3689B',
+    address: '0xb55693887D6e7E902DACa763904093151aE660D1',
     name: 'DQProject'
   },
   DQSTAKE: {
-    address: '0xfb3261D738f6eda3e26214ed9cF98F5a1Ec35b71',
+    address: '0x89853522B8eeA134Fa486d753E693Ee5C8f916d1',
     name: 'DQStake'
   },
   DQTOKEN: {
@@ -536,6 +536,19 @@ export const DQPROJECT_ABI = [
         "type": "address"
       }
     ],
+    "name": "setAdminContract",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_addr",
+        "type": "address"
+      }
+    ],
     "name": "setDQCard",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -733,6 +746,19 @@ export const DQPROJECT_ABI = [
     "inputs": [],
     "stateMutability": "nonpayable",
     "type": "constructor"
+  },
+  {
+    "inputs": [],
+    "name": "adminContract",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
   },
   {
     "inputs": [
@@ -1407,7 +1433,7 @@ export const DQPROJECT_ABI = [
     "stateMutability": "view",
     "type": "function"
   }
-];
+]
 
 /**
  * DQ Stake 质押合约 ABI（DQMiningStake 质押/LP/燃烧相关合约）
@@ -1985,6 +2011,19 @@ export const DQSTAKE_ABI = [
     "inputs": [
       {
         "internalType": "address",
+        "name": "_addr",
+        "type": "address"
+      }
+    ],
+    "name": "setAdminContract",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
         "name": "_u",
         "type": "address"
       },
@@ -2186,10 +2225,6 @@ export const DQSTAKE_ABI = [
     "type": "function"
   },
   {
-    "stateMutability": "payable",
-    "type": "receive"
-  },
-  {
     "inputs": [
       {
         "internalType": "address",
@@ -2311,6 +2346,23 @@ export const DQSTAKE_ABI = [
     "name": "withdrawSOL",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "stateMutability": "payable",
+    "type": "receive"
+  },
+  {
+    "inputs": [],
+    "name": "adminContract",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {

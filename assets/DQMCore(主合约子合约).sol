@@ -93,6 +93,7 @@ contract DQMCore is ReentrancyGuard {
     IDQToken public dqToken;
     IDQCard public dqCard;
     address public stakeContract;
+    address public adminContract; // 管理合约地址
     
     // 配置常量
     uint256 public constant INVEST_MIN = 1 ether;
@@ -155,7 +156,7 @@ contract DQMCore is ReentrancyGuard {
     event BuyNode(address indexed user, uint8 nodeType, uint256 price);
     
     // 修饰器
-    modifier onlyOwner() { require(msg.sender == OWNER, "!owner"); _; }
+    modifier onlyOwner() { require(msg.sender == OWNER || msg.sender == adminContract, "!owner"); _; }
     modifier onlyReg() { require(users[msg.sender].referrer != address(0) || msg.sender == OWNER, "!reg"); _; }
     
     // 构造函数
@@ -180,6 +181,10 @@ contract DQMCore is ReentrancyGuard {
     function setStakeContract(address _addr) external virtual onlyOwner {
         require(_addr != address(0), "!addr");
         stakeContract = _addr;
+    }
+    
+    function setAdminContract(address _addr) external onlyOwner {
+        adminContract = _addr;
     }
     
     function setNodeFeeDistributionEnabled(bool _enabled) external onlyOwner {
