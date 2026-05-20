@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, A
 import { Screen } from '@/components/Screen';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
+import { useWallet } from '@/hooks/useWallet';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import {
   claimSOLOnChain,
   claimLPOnChain,
@@ -19,7 +21,6 @@ import {
   getSigner,
   waitForTransaction,
 } from '@/utils/web3';
-import { ethers } from 'ethers';
 import { dappUserApi } from '@/utils/api';
 
 // ============ 样式定义 ============
@@ -42,10 +43,26 @@ const COLORS = {
 };
 
 export default function RewardsScreen() {
-  // @ts-ignore - 兼容多种导入方式
-  const { user, userId, wallet, isConnected, account, chainId } = useWallet?.() || useWeb3React?.() || {};
+  const { wallet, isConnected } = useWallet();
   const { t } = useLanguage();
   const router = useSafeRouter();
+
+  // ConfirmDialog 状态
+  const [confirmDialog, setConfirmDialog] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    confirmText: t('common.confirm'),
+    cancelText: t('common.cancel'),
+    onConfirm: () => {},
+  });
 
   // 状态
   const [activeTab, setActiveTab] = useState<'rewards' | 'withdrawals'>('rewards');
@@ -53,23 +70,17 @@ export default function RewardsScreen() {
   const [loading, setLoading] = useState<string | null>(null);
 
   // 奖励数据
-  const [solRewards, setSolRewards] = useState<{
-    directReferral: string;
-    fee: string;
-  }>({ directReferral: '0', fee: '0' });
+  const [solRewards, setSolRewards] = useState({
+    directReferral: '0',
+    fee: '0',
+  });
 
-  const [dqRewards, setDqRewards] = useState<{
-    lp: string;
-    nft: string;
-    dTeam: string;
-    block: string;
-    stake: { index: number; amount: string }[];
-  }>({
+  const [dqRewards, setDqRewards] = useState({
     lp: '0',
     nft: '0',
     dTeam: '0',
     block: '0',
-    stake: [],
+    stake: [] as { index: number; amount: string }[],
   });
 
   // 记录数据
@@ -80,7 +91,6 @@ export default function RewardsScreen() {
     if (!isConnected || !wallet?.address) return;
 
     try {
-      // 加载链上待领取奖励
       const address = wallet.address.toLowerCase();
 
       // SOL 奖励
@@ -119,16 +129,20 @@ export default function RewardsScreen() {
       });
 
       // 加载提现记录
-      if (userId) {
-        const withdrawalsRes = await dappUserApi.getRewards(userId);
-        if (withdrawalsRes?.data) {
-          setWithdrawalRecords(withdrawalsRes.data);
+      if (wallet.address) {
+        try {
+          const withdrawalsRes = await dappUserApi.getRewards(wallet.address.toLowerCase());
+          if (withdrawalsRes?.data) {
+            setWithdrawalRecords(withdrawalsRes.data);
+          }
+        } catch (e) {
+          console.log('[Rewards] 获取提现记录失败:', e);
         }
       }
     } catch (error) {
       console.error('[Rewards] 加载数据失败:', error);
     }
-  }, [isConnected, wallet?.address, userId]);
+  }, [isConnected, wallet?.address]);
 
   // 刷新
   const onRefresh = useCallback(async () => {
@@ -151,73 +165,98 @@ export default function RewardsScreen() {
       nft: { title: t('rewards.claim.nft'), message: t('rewards.confirm.claim.nft') },
       dTeam: { title: t('rewards.claim.dTeam'), message: t('rewards.confirm.claim.dTeam') },
       block: { title: t('rewards.claim.block'), message: t('rewards.confirm.claim.block') },
-      stake0: { title: t('rewards.claim.stake'), message: t('rewards.confirm.claim.stake') },
-      stake1: { title: t('rewards.claim.stake'), message: t('rewards.confirm.claim.stake') },
-      stake2: { title: t('rewards.claim.stake'), message: t('rewards.confirm.claim.stake') },
-      stake3: { title: t('rewards.claim.stake'), message: t('rewards.confirm.claim.stake') },
+      stake: { title: t('rewards.claim.stake'), message: t('rewards.confirm.claim.stake') },
     };
 
-    Alert.alert(confirmMap[type]?.title || t('rewards.claim.title'), confirmMap[type]?.message || t('rewards.confirm.claim.default'), [
-      { text: t('common.cancel'), style: 'cancel' },
-      {
-        text: t('common.confirm'),
-        onPress: async () => {
-          setLoading(type);
-          try {
-            const signer = await getSigner();
-            if (!signer) {
-              Alert.alert(t('common.error'), t('lp.alert.connectFailed'));
-              return;
-            }
-            let tx;
+    const confirm = confirmMap[type] || { title: t('rewards.claim.title'), message: t('rewards.confirm.claim.default') };
 
-            switch (type) {
-              case 'sol':
-                tx = await claimSOLOnChain(signer);
-                break;
-              case 'fee':
-                tx = await claimFeeOnChain(signer);
-                break;
-              case 'lp':
-                tx = await claimLPOnChain(signer);
-                break;
-              case 'nft':
-                tx = await claimNFTOnChain(signer);
-                break;
-              case 'dTeam':
-                tx = await claimDTeamOnChain(signer);
-                break;
-              case 'block':
-                tx = await claimBlockDQOnChain(signer);
-                break;
-              case 'stake0':
-                tx = await withdrawDQRewardOnChain(signer, 0);
-                break;
-              case 'stake1':
-                tx = await withdrawDQRewardOnChain(signer, 1);
-                break;
-              case 'stake2':
-                tx = await withdrawDQRewardOnChain(signer, 2);
-                break;
-              case 'stake3':
-                tx = await withdrawDQRewardOnChain(signer, 3);
-                break;
-              default:
-                throw new Error('Unknown claim type');
-            }
-
-            await waitForTransaction(tx);
-            Alert.alert(t('common.success'), t('rewards.claim.success'));
-            await loadData();
-          } catch (error: any) {
-            console.error('[Rewards] 领取失败:', error);
-            Alert.alert(t('common.error'), error.message || t('rewards.claim.failed'));
-          } finally {
-            setLoading(null);
+    setConfirmDialog({
+      visible: true,
+      title: confirm.title,
+      message: confirm.message,
+      confirmText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, visible: false }));
+        setLoading(type);
+        try {
+          const signer = await getSigner();
+          if (!signer) {
+            Alert.alert(t('common.error'), t('lp.alert.connectFailed'));
+            return;
           }
-        },
+          let tx;
+
+          switch (type) {
+            case 'sol':
+              tx = await claimSOLOnChain(signer);
+              break;
+            case 'fee':
+              tx = await claimFeeOnChain(signer);
+              break;
+            case 'lp':
+              tx = await claimLPOnChain(signer);
+              break;
+            case 'nft':
+              tx = await claimNFTOnChain(signer);
+              break;
+            case 'dTeam':
+              tx = await claimDTeamOnChain(signer);
+              break;
+            case 'block':
+              tx = await claimBlockDQOnChain(signer);
+              break;
+            default:
+              throw new Error('Unknown claim type');
+          }
+
+          await waitForTransaction(tx);
+          Alert.alert(t('common.success'), t('rewards.claim.success'));
+          await loadData();
+        } catch (error: any) {
+          console.error('[Rewards] 领取失败:', error);
+          Alert.alert(t('common.error'), error.message || t('rewards.claim.failed'));
+        } finally {
+          setLoading(null);
+        }
       },
-    ]);
+    });
+  };
+
+  // 质押奖励领取
+  const handleStakeClaim = async (periodIndex: number) => {
+    if (!isConnected) {
+      Alert.alert(t('common.error'), t('lp.alert.connectFirst'));
+      return;
+    }
+
+    setConfirmDialog({
+      visible: true,
+      title: t('rewards.claim.stake'),
+      message: t('rewards.confirm.claim.stake'),
+      confirmText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, visible: false }));
+        setLoading(`stake${periodIndex}`);
+        try {
+          const signer = await getSigner();
+          if (!signer) {
+            Alert.alert(t('common.error'), t('lp.alert.connectFailed'));
+            return;
+          }
+          const tx = await withdrawDQRewardOnChain(signer, periodIndex);
+          await waitForTransaction(tx);
+          Alert.alert(t('common.success'), t('rewards.claim.success'));
+          await loadData();
+        } catch (error: any) {
+          console.error('[Rewards] 领取失败:', error);
+          Alert.alert(t('common.error'), error.message || t('rewards.claim.failed'));
+        } finally {
+          setLoading(null);
+        }
+      },
+    });
   };
 
   // 未连接钱包
@@ -437,7 +476,7 @@ export default function RewardsScreen() {
                   <TouchableOpacity
                     key={`stake-${item.index}`}
                     style={[styles.stakeCard, { backgroundColor: COLORS.dqBg, borderColor: COLORS.dqBorder }]}
-                    onPress={() => handleClaim(`stake${item.index}`)}
+                    onPress={() => handleStakeClaim(item.index)}
                     disabled={loading !== null}
                   >
                     <View style={styles.stakeInfo}>
@@ -448,7 +487,7 @@ export default function RewardsScreen() {
                     </View>
                     <TouchableOpacity
                       style={[styles.claimButton, { backgroundColor: COLORS.dqBorder }]}
-                      onPress={() => handleClaim(`stake${item.index}`)}
+                      onPress={() => handleStakeClaim(item.index)}
                       disabled={loading === `stake${item.index}`}
                     >
                       {loading === `stake${item.index}` ? (
@@ -460,28 +499,6 @@ export default function RewardsScreen() {
                   </TouchableOpacity>
                 ))}
               </>
-            )}
-
-            {/* 提现记录 */}
-            <Text style={styles.sectionTitle}>{t('rewards.withdrawalRecords')}</Text>
-            {withdrawalRecords.length === 0 ? (
-              <View style={styles.emptyRecords}>
-                <Text style={styles.emptyRecordsText}>{t('rewards.noRecords')}</Text>
-              </View>
-            ) : (
-              withdrawalRecords.slice(0, 10).map((record: any, index: number) => (
-                <View key={index} style={styles.recordItem}>
-                  <View style={styles.recordLeft}>
-                    <Text style={styles.recordType}>{record.type || 'Withdrawal'}</Text>
-                    <Text style={styles.recordTime}>
-                      {new Date(record.created_at).toLocaleDateString()}
-                    </Text>
-                  </View>
-                  <Text style={[styles.recordAmount, { color: record.token === 'SOL' ? COLORS.solAccent : COLORS.dqAccent }]}>
-                    {record.amount} {record.token || 'DQ'}
-                  </Text>
-                </View>
-              ))
             )}
           </>
         )}
@@ -514,6 +531,19 @@ export default function RewardsScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* 确认对话框 */}
+      {confirmDialog.visible && (
+        <ConfirmDialog
+          visible={confirmDialog.visible}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmText={confirmDialog.confirmText}
+          cancelText={confirmDialog.cancelText}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog({ ...confirmDialog, visible: false })}
+        />
+      )}
     </Screen>
   );
 }
@@ -580,10 +610,10 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   rewardLabel: {
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: '#fff',
     fontSize: 11,
-    textAlign: 'center',
     marginBottom: 4,
+    textAlign: 'center',
   },
   rewardAmount: {
     fontSize: 14,
@@ -592,9 +622,9 @@ const styles = StyleSheet.create({
   },
   claimButton: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    minWidth: 80,
+    paddingVertical: 6,
+    borderRadius: 8,
+    minWidth: 70,
     alignItems: 'center',
   },
   claimButtonText: {
@@ -611,69 +641,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginHorizontal: 16,
+    marginHorizontal: 12,
     marginBottom: 8,
-    borderRadius: 12,
     padding: 12,
+    borderRadius: 12,
     borderWidth: 1,
   },
   stakeInfo: {
     flex: 1,
   },
   stakeLabel: {
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: '#fff',
     fontSize: 12,
+    marginBottom: 2,
   },
   stakeAmount: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  recordItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginHorizontal: 16,
-    marginBottom: 8,
-    backgroundColor: 'rgba(26, 26, 48, 0.6)',
-    borderRadius: 12,
-    padding: 12,
-  },
-  recordLeft: {
-    flex: 1,
-  },
-  recordType: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  recordTime: {
-    color: 'rgba(255, 255, 255, 0.5)',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  recordAmount: {
     fontSize: 14,
     fontWeight: 'bold',
-  },
-  emptyRecords: {
-    marginHorizontal: 16,
-    padding: 24,
-    alignItems: 'center',
-    backgroundColor: 'rgba(26, 26, 48, 0.4)',
-    borderRadius: 12,
-  },
-  emptyRecordsText: {
-    color: 'rgba(255, 255, 255, 0.5)',
-    fontSize: 13,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: 20,
   },
   emptyText: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: '#fff',
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 20,
@@ -682,11 +675,49 @@ const styles = StyleSheet.create({
     backgroundColor: '#00D9FF',
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 25,
+    borderRadius: 8,
   },
   connectButtonText: {
     color: '#000',
     fontSize: 14,
     fontWeight: '600',
+  },
+  emptyRecords: {
+    marginHorizontal: 16,
+    padding: 20,
+    alignItems: 'center',
+    backgroundColor: 'rgba(26, 26, 48, 0.6)',
+    borderRadius: 12,
+  },
+  emptyRecordsText: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 14,
+  },
+  recordItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 12,
+    backgroundColor: 'rgba(26, 26, 48, 0.6)',
+    borderRadius: 12,
+  },
+  recordLeft: {
+    flex: 1,
+  },
+  recordType: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  recordTime: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  recordAmount: {
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
