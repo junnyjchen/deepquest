@@ -209,6 +209,22 @@ export default function DappIndex() {
     }
   };
 
+  const fetchChainBalances = useCallback(async (address: string) => {
+    try {
+      setLoading(true);
+      const [solBalance, dqtBalance] = await Promise.all([
+        getSOLTokenBalance(address),
+        getDQTokenBalance(address),
+      ]);
+      setSolBalance(parseFloat(solBalance).toFixed(4));
+      setDqtBalance(parseFloat(dqtBalance).toFixed(2));
+    } catch (error) {
+      console.error('获取链上余额失败:', error);
+    } finally {
+      setLoading(false);
+    }  
+  }, []);
+
   // 加载保存的钱包地址
   useFocusEffect(
     useCallback(() => {
@@ -229,6 +245,11 @@ export default function DappIndex() {
           
           // 获取平台统计数据
           await fetchStats();
+
+          //获取用户余额信息 DQ ,SOL
+          if (savedWallet) {
+            await fetchChainBalances(savedWallet);
+          }
         } catch (error) {
           console.error('初始化失败:', error);
         } finally {

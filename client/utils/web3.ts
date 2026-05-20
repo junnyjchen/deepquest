@@ -187,28 +187,11 @@ export const getUserFromChain = async (userAddress: string) => {
 
     if (!isRegistered) return null;
 
-    let teamInvest = '0.0';
-    let energy = '0.0';
-    let pendingSOL = '0.0';
-
-    const [stakeRes] = await Promise.allSettled([
-      contract.getUserStake(userAddress),
-    ]);
-
-    if (stakeRes.status === 'fulfilled') {
-      teamInvest = ethers.formatEther(stakeRes.value[0]);
-      energy = ethers.formatEther(stakeRes.value[1]);
-      pendingSOL = ethers.formatEther(stakeRes.value[2]);
-    }
-    
     return {
       referrer,
       directCount: Number(directCount),
       level: Number(level),
       totalInvest: ethers.formatEther(totalInvest),
-      teamInvest,
-      energy,
-      pendingSOL,
     };
   } catch (e) {
     // 如果调用本身 revert / ABI 不匹配，也返回 null（但建议日志打出来）
@@ -297,10 +280,11 @@ const diagnoseDepositOverflow = async (
   const directReward = amountInWei * 50n / 100n * 30n / 100n;
 
   try {
-    const [userRes, dqCardAddr, stakeInfoRes] = await Promise.all([
+    const diagStakeContract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
+    const [userRes, dqCardAddr, userEnergyRaw] = await Promise.all([
       contract.getUser(userAddress),
       contract.dqCard().catch(() => CONTRACT_ADDRESSES.DQCARD.address),
-      contract.getUserStake(userAddress).catch(() => [0n, 0n, 0n]),
+      diagStakeContract.getEnergy(userAddress).catch(() => 0n),
     ]);
 
     const referrer = String(userRes?.[0] || ethers.ZeroAddress);
@@ -309,13 +293,13 @@ const diagnoseDepositOverflow = async (
     }
 
     const cardContract = getContract(dqCardAddr, DQCARD_ABI);
-    const [referrerStake, referrerNftBalance] = await Promise.all([
-      contract.getUserStake(referrer).catch(() => [0n, 0n, 0n]),
+    const [referrerEnergyRaw, referrerNftBalance] = await Promise.all([
+      diagStakeContract.getEnergy(referrer).catch(() => 0n),
       cardContract.balanceOf(referrer).catch(() => 0n),
     ]);
 
-    const referrerEnergy = BigInt(referrerStake?.[1]?.toString?.() ?? referrerStake?.[1] ?? 0);
-    const userEnergy = BigInt(stakeInfoRes?.[1]?.toString?.() ?? stakeInfoRes?.[1] ?? 0);
+    const referrerEnergy = BigInt(referrerEnergyRaw?.toString?.() ?? referrerEnergyRaw ?? 0);
+    const userEnergy = BigInt(userEnergyRaw?.toString?.() ?? userEnergyRaw ?? 0);
     const nftCount = BigInt(referrerNftBalance?.toString?.() ?? referrerNftBalance ?? 0);
 
     if (nftCount === 0n && referrerEnergy < directReward) {
@@ -708,6 +692,48 @@ export const claimSOLOnChain = async (
   console.log('[Web3] 交易已发送:', tx.hash);
 
   return tx;
+};
+
+/**
+ * 获取用户团队业绩（从质押合约）
+ */
+export const getUserTeamInvest = async (userAddress: string): Promise<string> => {
+  try {
+    const contract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
+    const value = await contract.getTeamInvest(userAddress);
+    return ethers.formatEther(value);
+  } catch (error) {
+    console.error('[Web3] 获取团队业绩失败:', error);
+    return '0.0';
+  }
+};
+
+/**
+ * 获取用户能量值（从质押合约）
+ */
+export const getUserEnergy = async (userAddress: string): Promise<string> => {
+  try {
+    const contract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
+    const value = await contract.getEnergy(userAddress);
+    return ethers.formatEther(value);
+  } catch (error) {
+    console.error('[Web3] 获取用户能量失败:', error);
+    return '0.0';
+  }
+};
+
+/**
+ * 获取用户 D 等级（从质押合约）
+ */
+export const getUserDLevel = async (userAddress: string): Promise<number | null> => {
+  try {
+    const contract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
+    const value = await contract.getDLevel(userAddress);
+    return Number(value);
+  } catch (error) {
+    console.error('[Web3] 获取用户 D 等级失败:', error);
+    return null;
+  }
 };
 
 /**

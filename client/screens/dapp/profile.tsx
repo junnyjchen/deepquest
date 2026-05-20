@@ -27,6 +27,7 @@ import {
   getLPReward,
   getDLevelReward,
   getUserFromChain,
+  getUserDLevel,
 } from '@/utils/web3';
 
 // 精确匹配参考图的颜色体系
@@ -89,12 +90,13 @@ export default function DappProfile() {
     try {
       setChainLoading(true);
 
-      const [chainUser] =
+      const [chainUser, chainDLevel] =
         await Promise.all([
           // getDQTokenBalance(address),
           // getSOLTokenBalance(address),
           // getLPReward(address),
           getUserFromChain(address),
+          getUserDLevel(address),
         ]);
       console.log(chainUser);
       // 合并：链上字段优先覆盖（实时）
@@ -105,8 +107,8 @@ export default function DappProfile() {
         const sLevelNum = typeof chainUser?.level === 'number'
           ? chainUser.level
           : Number(String(prev.level).replace(/^S/i, '')) || 0;
-        const dLevelNum = typeof chainUser?.dLevel === 'number'
-          ? chainUser.dLevel
+        const dLevelNum = chainDLevel !== null
+          ? chainDLevel
           : Number(String(prev.dLevel).replace(/^D/i, '')) || 0;
         
         //如果链上等级和后端接口等级不一致，异步更新后端接口等级
@@ -117,9 +119,6 @@ export default function DappProfile() {
 
         next.level = `S${sLevelNum}`;
         next.dLevel = `D${dLevelNum}`;
-
-      const pendingSolOnChain = chainUser?.pendingSOL;
-      void pendingSolOnChain;
 
         // stakedAmount：优先用链上 totalInvest（如果能取到）
         if (chainUser?.totalInvest) {
@@ -134,10 +133,6 @@ export default function DappProfile() {
 
         // 直推人数/等级：链上可作为更可信来源
         if (typeof chainUser?.directCount === 'number') next.directCount = chainUser.directCount;
-
-  // validAddressCount：线下“有入金地址数量”（合约字段）
-  // 你如果希望前端把它显示成 teamSize（更贴近合约口径），可以打开下面这行。
-  // if (typeof chainUser?.validAddressCount === 'number') next.teamSize = chainUser.validAddressCount;
 
         // 激活状态：链上存在投资即可视为激活
         const activatedOnChain =
@@ -154,6 +149,26 @@ export default function DappProfile() {
     } finally {
       setChainLoading(false);
     }
+  }, []);
+
+
+  const fetchChainBalances = useCallback(async (address: string) => {
+    try {
+      setChainLoading(true);
+      const [solBalance, dqtBalance] = await Promise.all([
+        getSOLTokenBalance(address),
+        getDQTokenBalance(address),
+      ]);
+      setUserData(prev => ({
+        ...prev,
+        bnbBalance: solBalance || prev.bnbBalance,
+        dqtBalance: dqtBalance || prev.dqtBalance,
+      }));
+    } catch (error) {
+      console.error('获取链上余额失败:', error);
+    } finally {
+      setChainLoading(false);
+    }  
   }, []);
 
   // 获取用户数据
@@ -212,8 +227,8 @@ export default function DappProfile() {
             setWalletAddress(savedWallet);
             // 获取用户数据
             await fetchUserData(savedWallet);
-            // 同步拉取链上实时数据
-            // await fetchChainData(savedWallet);
+     
+            await fetchChainBalances(savedWallet);
           }
         } catch (error) {
           console.error('初始化失败:', error);
@@ -231,19 +246,19 @@ export default function DappProfile() {
   //   useCallback(() => {
   //     if (!walletAddress) return;
 
-  //     // let timer: ReturnType<typeof setInterval> | null = null;
+      // let timer: ReturnType<typeof setInterval> | null = null;
 
-  //     // 先触发一次
-  //     fetchChainData(walletAddress);
+      // 先触发一次
+      // fetchChainData(walletAddress);
 
-  //     // 每 20 秒刷新一次（可按需调整）
-  //     // timer = setInterval(() => {
-  //     //   fetchChainData(walletAddress);
-  //     // }, 20_000);
+      // 每 20 秒刷新一次（可按需调整）
+      // timer = setInterval(() => {
+      //   fetchChainData(walletAddress);
+      // }, 20_000);
 
-  //     // return () => {
-  //     //   if (timer) clearInterval(timer);
-  //     // };
+      // return () => {
+      //   if (timer) clearInterval(timer);
+      // };
   //   }, [walletAddress, fetchChainData])
   // );
 
