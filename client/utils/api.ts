@@ -428,23 +428,10 @@ export const dappApi = {
     }),
 
   // 入金
-  deposit: (wallet_address: string, amount: string, tx_hash: string) =>
+  deposit: (wallet_address: string, amount: string, tx_hash: string, action_type?: 'deposit' | 'lp_add' | 'lp_remove', action_date?: string) =>
     request<any>('/api/v1/dapp/deposit', {
       method: 'POST',
-      body: JSON.stringify({ wallet_address, amount, tx_hash }),
-    }),
-
-  recordLPAction: (
-    wallet_address: string,
-    amount: string,
-    action_type: 'deposit' | 'cancel',
-    tx_hash?: string,
-    action_time?: string,
-    action_date?: string
-  ) =>
-    request<any>('/api/v1/dapp/lp-action-record', {
-      method: 'POST',
-      body: JSON.stringify({ wallet_address, amount, tx_hash, action_type, action_time, action_date }),
+      body: JSON.stringify({ wallet_address, amount, tx_hash, action_type, action_date }),
     }),
   
   // 获取入金限制信息

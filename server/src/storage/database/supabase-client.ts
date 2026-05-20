@@ -180,7 +180,6 @@ function getSupabaseClient(token?: string): SupabaseClient {
 const REQUIRED_TABLES = [
   'users',
   'deposits',
-  'lp_action_records',
   'rewards',
   'sol_rewards',
   'withdrawals',
@@ -303,26 +302,15 @@ async function initializeDatabase(): Promise<boolean> {
         tx_hash VARCHAR(128) NOT NULL UNIQUE,
         user_address VARCHAR(64) NOT NULL,
         amount NUMERIC(20, 9) NOT NULL,
-        phase INTEGER NOT NULL,
+        phase INTEGER NOT NULL DEFAULT 0,
         status VARCHAR(20) NOT NULL DEFAULT 'completed',
+        action_type VARCHAR(20) NOT NULL DEFAULT 'deposit',
+        action_date DATE NOT NULL DEFAULT CURRENT_DATE,
         created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
       )`,
       `CREATE INDEX IF NOT EXISTS deposits_user_idx ON deposits(user_address)`,
-
-      // LP操作记录表
-      `CREATE TABLE IF NOT EXISTS lp_action_records (
-        id SERIAL PRIMARY KEY,
-        user_address VARCHAR(64) NOT NULL,
-        amount NUMERIC(20, 9) NOT NULL,
-        action_type VARCHAR(20) NOT NULL,
-        tx_hash VARCHAR(128),
-        action_time TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-        action_date DATE DEFAULT CURRENT_DATE NOT NULL,
-        created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
-      )`,
-      `CREATE INDEX IF NOT EXISTS lp_action_records_user_idx ON lp_action_records(user_address)`,
-      `CREATE INDEX IF NOT EXISTS lp_action_records_action_date_idx ON lp_action_records(action_date)`,
-      `CREATE INDEX IF NOT EXISTS lp_action_records_action_type_idx ON lp_action_records(action_type)`,
+      `CREATE INDEX IF NOT EXISTS deposits_action_type_idx ON deposits(action_type)`,
+      `CREATE INDEX IF NOT EXISTS deposits_action_date_idx ON deposits(action_date)`,
 
       // 奖励记录表
       `CREATE TABLE IF NOT EXISTS rewards (
@@ -621,26 +609,12 @@ CREATE TABLE IF NOT EXISTS deposits (
     tx_hash VARCHAR(128) NOT NULL UNIQUE,
     user_address VARCHAR(64) NOT NULL,
     amount NUMERIC(20, 9) NOT NULL,
-    phase INTEGER NOT NULL,
+    phase INTEGER NOT NULL DEFAULT 0,
     status VARCHAR(20) NOT NULL DEFAULT 'completed',
+    action_type VARCHAR(20) NOT NULL DEFAULT 'deposit',
+    action_date DATE NOT NULL DEFAULT CURRENT_DATE,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
-
--- LP action records table
-CREATE TABLE IF NOT EXISTS lp_action_records (
-  id SERIAL PRIMARY KEY,
-  user_address VARCHAR(64) NOT NULL,
-  amount NUMERIC(20, 9) NOT NULL,
-  action_type VARCHAR(20) NOT NULL,
-  tx_hash VARCHAR(128),
-  action_time TIMESTAMPTZ DEFAULT NOW() NOT NULL,
-  action_date DATE DEFAULT CURRENT_DATE NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS lp_action_records_user_idx ON lp_action_records(user_address);
-CREATE INDEX IF NOT EXISTS lp_action_records_action_date_idx ON lp_action_records(action_date);
-CREATE INDEX IF NOT EXISTS lp_action_records_action_type_idx ON lp_action_records(action_type);
 
 -- Rewards table
 CREATE TABLE IF NOT EXISTS rewards (

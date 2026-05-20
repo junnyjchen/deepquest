@@ -82,14 +82,18 @@ export const deposits = pgTable(
     tx_hash: varchar("tx_hash", { length: 128 }).notNull().unique(),
     user_address: varchar("user_address", { length: 64 }).notNull(),
     amount: numeric("amount", { precision: 20, scale: 9 }).notNull(),
-    phase: integer("phase").notNull(),
+    phase: integer("phase").notNull().default(0),
     status: varchar("status", { length: 20 }).notNull().default("completed"), // pending, completed, failed
+    action_type: varchar("action_type", { length: 20 }).notNull().default("deposit"), // deposit, lp_add, lp_remove
+    action_date: date("action_date").default(sql`CURRENT_DATE`).notNull(),
     created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index("deposits_user_idx").on(table.user_address),
     index("deposits_created_idx").on(table.created_at),
     index("deposits_tx_idx").on(table.tx_hash),
+    index("deposits_action_type_idx").on(table.action_type),
+    index("deposits_action_date_idx").on(table.action_date),
   ]
 );
 
@@ -151,26 +155,6 @@ export const lpStakes = pgTable(
   (table) => [
     index("lp_stakes_user_idx").on(table.user_address),
     index("lp_stakes_claimed_idx").on(table.is_claimed),
-  ]
-);
-
-// ============ LP操作记录表 ============
-export const lpActionRecords = pgTable(
-  "lp_action_records",
-  {
-    id: serial().primaryKey(),
-    user_address: varchar("user_address", { length: 64 }).notNull(),
-    amount: numeric("amount", { precision: 20, scale: 9 }).notNull(),
-    action_type: varchar("action_type", { length: 20 }).notNull(), // deposit, cancel
-    tx_hash: varchar("tx_hash", { length: 128 }),
-    action_time: timestamp("action_time", { withTimezone: true }).defaultNow().notNull(),
-    action_date: date("action_date").default(sql`CURRENT_DATE`).notNull(),
-    created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  },
-  (table) => [
-    index("lp_action_records_user_idx").on(table.user_address),
-    index("lp_action_records_date_idx").on(table.action_date),
-    index("lp_action_records_type_idx").on(table.action_type),
   ]
 );
 

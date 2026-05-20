@@ -470,21 +470,10 @@ export default function DappLP() {
       await addTx.wait();
       console.log('[LP] 入金成功:', addTx.hash);
 
-      const actionTime = new Date();
-      const actionDate = actionTime.toISOString().slice(0, 10);
+      const actionDate = new Date().toISOString().slice(0, 10);
 
       try {
-        await Promise.all([
-          dappApi.deposit(userAddress, amount, addTx.hash),
-          dappApi.recordLPAction(
-            userAddress,
-            amount,
-            'deposit',
-            addTx.hash,
-            actionTime.toISOString(),
-            actionDate
-          ),
-        ]);
+        await dappApi.deposit(userAddress, amount, addTx.hash, 'lp_add', actionDate);
       } catch (syncError) {
         console.error('[LP] 入金记录同步失败:', syncError);
       }
@@ -568,16 +557,14 @@ export default function DappLP() {
           await removeTx.wait();
           console.log('[LP] 取消 LP 成功:', removeTx.hash);
 
-          const actionTime = new Date();
-          const actionDate = actionTime.toISOString().slice(0, 10);
+          const actionDate = new Date().toISOString().slice(0, 10);
 
           try {
-            await dappApi.recordLPAction(
+            await dappApi.deposit(
               await signer.getAddress(),
               lpShares,
-              'cancel',
               removeTx.hash,
-              actionTime.toISOString(),
+              'lp_remove',
               actionDate
             );
           } catch (syncError) {

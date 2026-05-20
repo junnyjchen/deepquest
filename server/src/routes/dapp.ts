@@ -132,27 +132,17 @@ async function getPoolDataWithCache(): Promise<PoolCacheData> {
 router.get('/stats', async (req, res) => {
   try {
     // 从数据库获取真实数据
-    const [usersResult, depositsResult, rewardsResult, poolData] = await Promise.all([
+    const todayDate = new Date().toISOString().slice(0, 10);
+    const [usersResult, todayDepositsResult, rewardsResult, poolData] = await Promise.all([
       supabase.from('users').select('count', { count: 'exact' }),
-      supabase.from('deposits').select('amount, created_at').eq('status', 'completed'),
+      supabase.from('deposits').select('amount').eq('status', 'completed').eq('action_type', 'deposit').eq('action_date', todayDate),
       supabase.from('rewards').select('amount').eq('status', 'completed'),
       getPoolDataWithCache(),
     ]);
 
     // 计算统计数据
     const totalUsers = usersResult.count || 0;
-    const totalDeposit = depositsResult.data?.reduce((sum: number, d: { amount?: string }) => sum + parseFloat(d.amount || '0'), 0) || 0;
-    
-    // 计算今日新增
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStart = today.toISOString();
-    
-    const todayDeposits = depositsResult.data?.filter((d: { created_at?: string; amount?: string }) => {
-      const depositDate = new Date(d.created_at || '');
-      return depositDate >= new Date(todayStart);
-    }) || [];
-    const todayDeposit = todayDeposits.reduce((sum: number, d: { amount?: string }) => sum + parseFloat(d.amount || '0'), 0);
+    const todayDeposit = todayDepositsResult.data?.reduce((sum: number, d: { amount?: string }) => sum + parseFloat(d.amount || '0'), 0) || 0;
 
     // 模拟一些动态数据
     const stats = {
@@ -168,7 +158,7 @@ router.get('/stats', async (req, res) => {
       
       // 全网数据
       totalUsers: totalUsers,
-      totalDeposit: totalDeposit.toFixed(2),
+      totalDeposit: '0.00', // totalDeposit.toFixed(2), // 总入单金额 BNB
       totalReward: rewardsResult.data?.reduce((sum: number, r: { amount?: string }) => sum + parseFloat(r.amount || '0'), 0) || 0,
       
       // K线数据
@@ -1441,7 +1431,7 @@ router.put('/referrer', async (req, res) => {
 // 入金
 router.post('/deposit', async (req, res) => {
   try {
-    const { wallet_address, amount, tx_hash } = req.body;
+    const { wallet_address, amount, tx_hash, action_type, action_date } = req.body;
 
     if (!wallet_address || !amount || !tx_hash) {
       return res.status(400).json({
@@ -1450,33 +1440,16 @@ router.post('/deposit', async (req, res) => {
       });
     }
 
-    // 检查用户是否存在
-    const { data: user, error: userError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('wallet_address', wallet_address.toLowerCase())
-      .single();
-
-    if (userError || !user) {
-      return res.status(404).json({
-        code: 404,
-        message: '用户不存在，请先注册'
-      });
-    }
-
-    // 首次入金检查（首次入金必须是节点）
-    const { data: existingDeposits } = await supabase
-      .from('deposits')
-      .select('id')
-      .eq('user_address', wallet_address.toLowerCase())
-      .eq('status', 'completed');
-
-    if ((existingDeposits?.length || 0) === 0 && (!user.level || user.level === 0)) {
+    const validActionTypes = ['deposit', 'lp_add', 'lp_remove'];
+    const resolvedActionType = action_type || 'deposit';
+    if (!validActionTypes.includes(resolvedActionType)) {
       return res.status(400).json({
         code: 400,
-        message: '首次入金必须是节点用户，请先购买节点'
+        message: '无效的操作类型'
       });
     }
+
+    const resolvedActionDate = action_date || new Date().toISOString().slice(0, 10);
 
     // 创建入金记录
     const { data: deposit, error: depositError } = await supabase
@@ -1486,7 +1459,8 @@ router.post('/deposit', async (req, res) => {
         amount: amount,
         tx_hash: tx_hash,
         status: 'completed',
-        deposited_at: new Date().toISOString(),
+        action_type: resolvedActionType,
+        action_date: resolvedActionDate,
       })
       .select()
       .single();
@@ -1499,25 +1473,50 @@ router.post('/deposit', async (req, res) => {
       });
     }
 
-    // 更新用户入金总额
-    const newTotalInvest = parseFloat(user.total_invest || '0') + parseFloat(amount);
-    await supabase
-      .from('users')
-      .update({ 
-        total_invest: newTotalInvest.toString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('wallet_address', wallet_address.toLowerCase());
+    // lp_remove 不更新投入总额
+    if (resolvedActionType !== 'lp_remove') {
+      // 更新用户入金总额
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('wallet_address', wallet_address.toLowerCase())
+        .single();
 
-    res.json({
-      code: 0,
-      message: '入金成功',
-      data: {
-        deposit_id: deposit.id,
-        amount: amount,
-        total_invest: newTotalInvest.toFixed(2),
+      if (userError || !user) {
+        return res.status(404).json({
+          code: 404,
+          message: '用户不存在，请先注册'
+        });
       }
-    });
+
+      const newTotalInvest = parseFloat(user.total_invest || '0') + parseFloat(amount);
+      await supabase
+        .from('users')
+        .update({ 
+          total_invest: newTotalInvest.toString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('wallet_address', wallet_address.toLowerCase());
+
+      res.json({
+        code: 0,
+        message: '入金成功',
+        data: {
+          deposit_id: deposit.id,
+          amount: amount,
+          total_invest: newTotalInvest.toFixed(2),
+        }
+      });
+    } else {
+      res.json({
+        code: 0,
+        message: '记录成功',
+        data: {
+          deposit_id: deposit.id,
+          amount: amount,
+        }
+      });
+    }
   } catch (error) {
     console.error('入金失败:', error);
     res.status(500).json({
@@ -1527,69 +1526,6 @@ router.post('/deposit', async (req, res) => {
   }
 });
 
-// 记录 LP 入金/取消操作
-router.post('/lp-action-record', async (req, res) => {
-  try {
-    const { wallet_address, amount, tx_hash, action_type, action_time, action_date } = req.body;
-
-    if (!wallet_address || !amount || !action_type) {
-      return res.status(400).json({
-        code: 400,
-        message: '缺少必要参数'
-      });
-    }
-
-    if (!['deposit', 'cancel'].includes(action_type)) {
-      return res.status(400).json({
-        code: 400,
-        message: '无效的操作类型'
-      });
-    }
-
-    const actionTime = action_time ? new Date(action_time) : new Date();
-    if (Number.isNaN(actionTime.getTime())) {
-      return res.status(400).json({
-        code: 400,
-        message: '无效的操作时间'
-      });
-    }
-
-    const normalizedActionDate = action_date || actionTime.toISOString().slice(0, 10);
-
-    const { data: record, error } = await supabase
-      .from('lp_action_records')
-      .insert({
-        user_address: wallet_address.toLowerCase(),
-        amount,
-        action_type,
-        tx_hash: tx_hash || null,
-        action_time: actionTime.toISOString(),
-        action_date: normalizedActionDate,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('记录 LP 操作失败:', error);
-      return res.status(500).json({
-        code: 500,
-        message: '记录 LP 操作失败'
-      });
-    }
-
-    res.json({
-      code: 0,
-      message: '记录成功',
-      data: record,
-    });
-  } catch (error) {
-    console.error('记录 LP 操作失败:', error);
-    res.status(500).json({
-      code: 500,
-      message: '服务器错误'
-    });
-  }
-});
 
 // 获取待领取奖励
 router.get('/pending-rewards/:wallet_address', async (req, res) => {
