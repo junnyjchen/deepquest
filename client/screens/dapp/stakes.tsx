@@ -2,20 +2,21 @@ import { useState, useCallback } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
   FlatList,
 } from 'react-native';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { Screen } from '@/components/Screen';
 import { LogoHeader } from '@/components/LogoHeader';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { dappUserApi } from '@/utils/api';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { showToast } from '@/utils/toast';
+import { ChainStakeRecord, connectWallet, getStakeRecordsFromChain, unstakeDQOnChain } from '@/utils/web3';
 
 // 精确匹配参考图的颜色体系
 const BG_DARK = '#0A0A12';
@@ -32,10 +33,11 @@ const WALLET_STORAGE_KEY = '@deepquest_wallet';
 interface StakeRecord {
   id: number;
   amount: string;
-  stake_days?: number;
-  status: string;
-  created_at: string;
-  tx_hash?: string;
+  duration: number;
+  startTime: number;
+  pendingReward: string;
+  active: boolean;
+  canUnstake: boolean;
 }
 
 export default function DappStakes() {
@@ -44,9 +46,8 @@ export default function DappStakes() {
   const [refreshing, setRefreshing] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [stakes, setStakes] = useState<StakeRecord[]>([]);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
+  const [unstakingId, setUnstakingId] = useState<number | null>(null);
+  const [confirmRecord, setConfirmRecord] = useState<StakeRecord | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -55,7 +56,7 @@ export default function DappStakes() {
           const savedWallet = await AsyncStorage.getItem(WALLET_STORAGE_KEY);
           if (savedWallet) {
             setWalletAddress(savedWallet);
-            await fetchStakes(savedWallet, 1);
+            await fetchStakes(savedWallet);
           }
         } catch (error) {
           console.error('初始化失败:', error);
@@ -68,85 +69,92 @@ export default function DappStakes() {
     }, [])
   );
 
-  const fetchStakes = async (address: string, pageNum: number, append = false) => {
+  const fetchStakes = async (address: string) => {
     try {
-      if (pageNum === 1) {
-        setLoading(true);
-      } else {
-        setLoadingMore(true);
-      }
-
-      const response = await dappUserApi.getStakes(address, pageNum, 20);
-      
-      if (response.code === 0 && response.data) {
-        const newStakes = response.data.list || [];
-        
-        if (append) {
-          setStakes(prev => [...prev, ...newStakes]);
-        } else {
-          setStakes(newStakes);
-        }
-        
-        setHasMore(newStakes.length === 20);
-        setPage(pageNum);
-      }
+      setLoading(true);
+      const records = await getStakeRecordsFromChain(address);
+      setStakes(records.map((record) => ({
+        id: record.recordIndex,
+        amount: record.amount,
+        duration: record.duration,
+        startTime: record.startTime,
+        pendingReward: record.pendingReward,
+        active: record.active,
+        canUnstake: record.canUnstake,
+      })));
     } catch (error) {
       console.error('获取质押记录失败:', error);
     } finally {
       setLoading(false);
-      setLoadingMore(false);
     }
   };
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     if (walletAddress) {
-      await fetchStakes(walletAddress, 1);
+      await fetchStakes(walletAddress);
     }
     setRefreshing(false);
   }, [walletAddress]);
 
-  const onEndReached = () => {
-    if (!loadingMore && hasMore && walletAddress) {
-      fetchStakes(walletAddress, page + 1, true);
+  const handleCopyAddress = async (text: string) => {
+    if (text) {
+      await Clipboard.setStringAsync(text);
+      showToast.success(t('common.success'), '已复制到剪贴板');
     }
   };
 
-  const handleCopyTx = async (txHash: string) => {
-    if (txHash) {
-      await Clipboard.setStringAsync(txHash);
-    }
+  const getStatusColor = (item: StakeRecord) => {
+    if (!item.active) return TEXT_MUTED;
+    if (item.canUnstake) return '#00FF88';
+    return YELLOW;
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return '#00FF88';
-      case 'pending':
-        return YELLOW;
-      case 'failed':
-        return '#FF5050';
-      default:
-        return TEXT_MUTED;
-    }
+  const getStatusText = (item: StakeRecord) => {
+    if (!item.active) return '已解押';
+    if (item.canUnstake) return '可解押';
+    return '锁定中';
   };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return t('stakes.completed');
-      case 'pending':
-        return t('stakes.pending');
-      case 'failed':
-        return t('stakes.failed');
-      default:
-        return status;
-    }
-  };
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+  const formatDate = (timestamp: number) => {
+    const date = new Date(timestamp * 1000);
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  };
+
+  const formatDurationDays = (duration: number) => Math.round(duration / (24 * 60 * 60));
+
+  const openUnstakeDialog = (item: StakeRecord) => {
+    if (!item.canUnstake || !item.active) {
+      showToast.info(t('common.tips'), '该质押记录尚未到期，暂不可解押');
+      return;
+    }
+    setConfirmRecord(item);
+  };
+
+  const handleUnstake = async () => {
+    if (!confirmRecord || !walletAddress) return;
+
+    try {
+      setUnstakingId(confirmRecord.id);
+      setConfirmRecord(null);
+
+      const walletInfo = await connectWallet();
+      if (!walletInfo) {
+        showToast.error(t('common.error'), t('common.walletConnectFailed'));
+        return;
+      }
+
+      const tx = await unstakeDQOnChain(walletInfo.signer, confirmRecord.id);
+      await tx.wait();
+
+      showToast.success(t('common.success'), '解押成功');
+      await fetchStakes(walletAddress);
+    } catch (error: any) {
+      console.error('解押失败:', error);
+      showToast.error(t('common.error'), error.message || '解押失败，请重试');
+    } finally {
+      setUnstakingId(null);
+    }
   };
 
   const renderItem = ({ item }: { item: StakeRecord }) => (
@@ -161,33 +169,54 @@ export default function DappStakes() {
           </View>
           <View>
             <Text className="text-sm font-semibold" style={{ color: TEXT_WHITE }}>{t('stakes.stake')}</Text>
-            <Text className="text-xs" style={{ color: TEXT_MUTED }}>{formatDate(item.created_at)}</Text>
+            <Text className="text-xs" style={{ color: TEXT_MUTED }}>{formatDate(item.startTime)}</Text>
           </View>
         </View>
         <View className="items-end">
-          <Text className="text-base font-bold" style={{ color: YELLOW }}>{item.amount} SOL</Text>
-          {item.stake_days ? (
-            <Text className="text-xs mt-1" style={{ color: CYAN }}>{item.stake_days} 天</Text>
-          ) : null}
-          <View className="px-2 py-0.5 rounded-full mt-1" style={{ backgroundColor: `${getStatusColor(item.status)}20` }}>
-            <Text className="text-xs" style={{ color: getStatusColor(item.status) }}>{getStatusText(item.status)}</Text>
+          <Text className="text-base font-bold" style={{ color: YELLOW }}>{item.amount} DQ</Text>
+          <Text className="text-xs mt-1" style={{ color: CYAN }}>{formatDurationDays(item.duration)} 天</Text>
+          <View className="px-2 py-0.5 rounded-full mt-1" style={{ backgroundColor: `${getStatusColor(item)}20` }}>
+            <Text className="text-xs" style={{ color: getStatusColor(item) }}>{getStatusText(item)}</Text>
           </View>
         </View>
       </View>
-      
-      {item.tx_hash && (
-        <TouchableOpacity 
-          className="flex-row items-center gap-2 p-2 rounded-lg"
-          style={{ backgroundColor: 'rgba(0,240,255,0.05)' }}
-          onPress={() => handleCopyTx(item.tx_hash ?? '')}
+
+      <View className="rounded-lg p-3 mb-3" style={{ backgroundColor: 'rgba(0,240,255,0.05)' }}>
+        <View className="flex-row items-center justify-between mb-2">
+          <Text className="text-xs" style={{ color: TEXT_MUTED }}>待领取 DQ</Text>
+          <Text className="text-sm font-semibold" style={{ color: CYAN }}>{item.pendingReward} DQ</Text>
+        </View>
+        <TouchableOpacity
+          className="flex-row items-center justify-between"
+          onPress={() => handleCopyAddress(String(item.id))}
         >
-          <Ionicons name="link" size={14} color={CYAN} />
-          <Text className="text-xs font-mono flex-1" style={{ color: CYAN }} numberOfLines={1}>
-            {item.tx_hash}
-          </Text>
-          <Ionicons name="copy" size={14} color={CYAN} />
+          <Text className="text-xs" style={{ color: TEXT_MUTED }}>记录索引</Text>
+          <View className="flex-row items-center gap-2">
+            <Text className="text-xs font-mono" style={{ color: CYAN }}>{item.id}</Text>
+            <Ionicons name="copy" size={14} color={CYAN} />
+          </View>
         </TouchableOpacity>
-      )}
+      </View>
+
+      {item.active ? (
+        <TouchableOpacity
+          className="py-3 rounded-lg items-center"
+          style={{
+            backgroundColor: item.canUnstake ? YELLOW : 'rgba(255,255,255,0.08)',
+            opacity: unstakingId === item.id ? 0.7 : 1,
+          }}
+          onPress={() => openUnstakeDialog(item)}
+          disabled={!item.canUnstake || unstakingId === item.id}
+        >
+          {unstakingId === item.id ? (
+            <ActivityIndicator size="small" color={item.canUnstake ? BG_DARK : TEXT_MUTED} />
+          ) : (
+            <Text className="text-sm font-semibold" style={{ color: item.canUnstake ? BG_DARK : TEXT_MUTED }}>
+              {item.canUnstake ? '解押' : '未到期'}
+            </Text>
+          )}
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 
@@ -204,6 +233,16 @@ export default function DappStakes() {
 
   return (
     <Screen>
+      <ConfirmDialog
+        visible={Boolean(confirmRecord)}
+        title="确认解押"
+        message={confirmRecord ? `确定解押这笔 ${confirmRecord.amount} DQ 的质押记录吗？` : ''}
+        confirmText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        type="warning"
+        onConfirm={handleUnstake}
+        onCancel={() => setConfirmRecord(null)}
+      />
       <LogoHeader />
       <View className="flex-1" style={{ backgroundColor: BG_DARK }}>
         {/* 钱包提示 */}
@@ -235,15 +274,6 @@ export default function DappStakes() {
                 tintColor={YELLOW}
                 colors={[YELLOW]}
               />
-            }
-            onEndReached={onEndReached}
-            onEndReachedThreshold={0.5}
-            ListFooterComponent={
-              loadingMore ? (
-                <View className="py-4 items-center">
-                  <ActivityIndicator size="small" color={YELLOW} />
-                </View>
-              ) : null
             }
           />
         )}

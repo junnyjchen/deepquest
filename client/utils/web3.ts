@@ -248,8 +248,10 @@ export const registerUserOnChain = async (
 export const getInvestRange = async (): Promise<{ min: string; max: string }> => {
   try {
     const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
-    const min = await contract.INVEST_MIN();
-    const max = await contract.getCurrentMaxInvest();
+    const [min, max] = await Promise.all([
+      contract.INVEST_MIN(),
+      contract.getDailyLimit(),
+    ]);
 
     return {
       min: ethers.formatEther(min),
@@ -472,6 +474,88 @@ export const stakeDQOnChain = async (
   return tx;
 };
 
+export interface ChainStakeRecord {
+  recordIndex: number;
+  amount: string;
+  startTime: number;
+  duration: number;
+  pendingReward: string;
+  active: boolean;
+  canUnstake: boolean;
+}
+
+/**
+ * 获取当前用户链上质押记录
+ */
+export const getStakeRecordsFromChain = async (userAddress: string): Promise<ChainStakeRecord[]> => {
+  try {
+    const contract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
+    const count = Number(await contract.getStakeRecordCount(userAddress));
+
+    if (count === 0) {
+      return [];
+    }
+
+    const records = await Promise.all(
+      Array.from({ length: count }, async (_, index) => {
+        const [amount, startTime, duration, pendingReward, active, canUnstake] = await contract.getStakeRecord(userAddress, index);
+
+        return {
+          recordIndex: index,
+          amount: ethers.formatEther(amount),
+          startTime: Number(startTime),
+          duration: Number(duration),
+          pendingReward: ethers.formatEther(pendingReward),
+          active: Boolean(active),
+          canUnstake: Boolean(canUnstake),
+        } satisfies ChainStakeRecord;
+      })
+    );
+
+    return records.reverse();
+  } catch (error) {
+    console.error('[Web3] 获取链上质押记录失败:', error);
+    return [];
+  }
+};
+
+/**
+ * 解押 DQ（链上）
+ */
+export const unstakeDQOnChain = async (
+  signer: ethers.Signer,
+  recordIndex: number
+): Promise<ethers.TransactionResponse> => {
+  const userAddress = await signer.getAddress();
+  const projectContract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+  const stakeContract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
+
+  try {
+    const [, , , , active, canUnstake] = await stakeContract.getStakeRecord(userAddress, recordIndex);
+
+    if (!active) {
+      throw new Error('该质押记录已解押');
+    }
+    if (!canUnstake) {
+      throw new Error('该质押记录尚未到期，暂不可解押');
+    }
+  } catch (preflightError) {
+    console.error('[Web3] 解押预检查失败:', preflightError);
+    throw preflightError;
+  }
+
+  try {
+    await projectContract.unstakeDQ.staticCall(recordIndex);
+  } catch (error) {
+    console.error('[Web3] unstakeDQ staticCall 失败:', error);
+    throw error;
+  }
+
+  const tx = await projectContract.unstakeDQ(recordIndex);
+  console.log('[Web3] 解押交易已发送:', tx.hash);
+  return tx;
+};
+
 /**
  * 领取 LP 奖励（链上）
  */
@@ -606,14 +690,8 @@ export const claimDTeamOnChain = async (
 export const claimPartnerOnChain = async (
   signer: ethers.Signer
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
-
-  console.log('[Web3] 链上领取合伙人奖励');
-
-  const tx = await contract.claimPartnerReward();
-  console.log('[Web3] 交易已发送:', tx.hash);
-
-  return tx;
+  void signer;
+  throw new Error('当前 ABI 未提供用户侧 claimPartnerReward/claimPartnerOnChain 方法');
 };
 
 /**
@@ -942,14 +1020,8 @@ export const getDLevelReward = async (address: string): Promise<string> => {
  */
 export const getPartnerReward = async (): Promise<{ dqReward: string; solReward: string }> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
-    const result = await contract.getPartnerReward();
-    
-    const dqReward = ethers.formatEther(result[0]); // DQ分红
-    const solReward = ethers.formatEther(result[1]); // SOL分红
-    
-    console.log('[Web3] 合伙人分红查询:', { dqReward, solReward });
-    return { dqReward, solReward };
+    console.warn('[Web3] 当前 ABI 未提供 getPartnerReward 查询方法');
+    return { dqReward: '0', solReward: '0' };
   } catch (error) {
     console.error('[Web3] 查询合伙人分红失败:', error);
     return { dqReward: '0', solReward: '0' };
@@ -1001,11 +1073,10 @@ export const addLiquidityOnChain = async (
 ): Promise<ethers.TransactionResponse> => {
   const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
   const amountInWei = ethers.parseUnits(solAmount, 18);
-  const minLp = ethers.parseUnits(minLpAmount || '0', 18);
 
-  console.log('[Web3] 添加 LP（入金）:', solAmount, 'SOL');
+  console.log('[Web3] 添加 LP（按当前 ABI 实际走 depositSOL 入金）:', solAmount, 'SOL', 'minLp 参数未在当前合约使用:', minLpAmount);
 
-  const tx = await contract.addLiquidityForUser(amountInWei, minLp);
+  const tx = await contract.depositSOL(amountInWei);
   console.log('[Web3] LP 添加交易已发送:', tx.hash);
 
   return tx;
@@ -1021,7 +1092,7 @@ export const withdrawLPOnChain = async (
 
   console.log('[Web3] 取消 LP');
 
-  const tx = await contract.withdrawLP();
+  const tx = await contract.removeMyLP();
   console.log('[Web3] 取消 LP 交易已发送:', tx.hash);
 
   return tx;
@@ -1038,29 +1109,6 @@ export const getUserLPShares = async (userAddress: string): Promise<string> => {
   } catch (error) {
     console.error('[Web3] 获取 LP 份额失败:', error);
     return '0';
-  }
-};
-
-/**
- * 获取用户 LP 记录
- */
-export const getUserLPRecords = async (userAddress: string): Promise<{ amount: string; depositTime: string }[]> => {
-  try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
-    const index = await contract.userLPIndex(userAddress);
-    const records: { amount: string; depositTime: string }[] = [];
-
-    for (let i = 0; i < Number(index); i++) {
-      const record = await contract.userLPRecords(userAddress, i);
-      records.push({
-        amount: ethers.formatEther(record[0]),
-        depositTime: new Date(Number(record[1]) * 1000).toISOString(),
-      });
-    }
-    return records;
-  } catch (error) {
-    console.error('[Web3] 获取 LP 记录失败:', error);
-    return [];
   }
 };
 

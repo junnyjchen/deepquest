@@ -160,6 +160,13 @@ contract DQMCore is ReentrancyGuard {
     // 接收BNB
     receive() external payable {}
     
+    //==================== 合约配置 ====================
+    
+    function setStakeContract(address _addr) external virtual onlyOwner {
+        require(_addr != address(0), "!addr");
+        stakeContract = _addr;
+    }
+    
     //==================== 用户注册 ====================
     
     function register(address _r) external {
@@ -220,33 +227,45 @@ contract DQMCore is ReentrancyGuard {
         address lpP = IDQMiningStake(stakeContract).lpPair();
         require(lpP != address(0), "!pair");
         require(IERC20(SOL).balanceOf(address(this)) >= _a, "!bal");
+        
         uint256 halfSol = _a / 2;
         uint256 swapSol = _a - halfSol;
+        
         address[] memory path = new address[](2);
         path[0] = SOL; path[1] = address(dqToken);
         IERC20(SOL).approve(ROUTER, _a);
+        
         uint256[] memory expected = IPancakeRouter02(ROUTER).getAmountsOut(swapSol, path);
         uint256 minOut = expected[1] * SLIPPAGE / 1000;
+        
         uint256 dqBefore = dqToken.balanceOf(address(this));
         IPancakeRouter02(ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(swapSol, minOut, path, address(this), block.timestamp + 300);
         uint256 dqAfter = dqToken.balanceOf(address(this));
         uint256 dBal = dqAfter - dqBefore;
         require(dBal > 0, "!swap");
+        
         dqToken.approve(ROUTER, dBal);
         uint256 minA = halfSol * SLIPPAGE / 1000;
         uint256 minB = dBal * SLIPPAGE / 1000;
-                (, , uint256 lpBal) = IPancakeRouter02(ROUTER).addLiquidity(SOL, address(dqToken), halfSol, dBal, minA, minB, address(this), block.timestamp + 300);
+        
+        (, , uint256 lpBal) = IPancakeRouter02(ROUTER).addLiquidity(SOL, address(dqToken), halfSol, dBal, minA, minB, address(this), block.timestamp + 300);
         require(lpBal > 0, "!lp");
-                IERC20(lpP).transfer(_u, lpBal);
+        
+        IERC20(lpP).transfer(_u, lpBal);
         IDQMiningStake(stakeContract).addLP(_u, lpBal, block.timestamp);
         emit SwapAndAddLP(_u, halfSol, dBal, lpBal);
     }
-      function claimReward() external nonReentrant {
+    
+    //==================== 领取奖励 ====================
+    
+    function claimReward() external nonReentrant {
         require(stakeContract != address(0), "!stake");
         IDQMiningStake sk = IDQMiningStake(stakeContract);
-                uint256 pending = sk.getPendingSOL(msg.sender);
+        
+        uint256 pending = sk.getPendingSOL(msg.sender);
         require(pending > 0, "!pending");
         sk.subPendingSOL(msg.sender, pending);
+        
         uint256 lpRemovalFee = sk.getUserLPRemovalFee(msg.sender);
         uint256 actualPending = pending;
         
@@ -261,13 +280,15 @@ contract DQMCore is ReentrancyGuard {
             sk.clearUserLPRemovalFee(msg.sender);
             IERC20(SOL).safeTransfer(FOUNDATION, lpRemovalFee);
         }
-                uint256 fee = actualPending * WITHDRAW_FEE / 100;
+        
+        uint256 fee = actualPending * WITHDRAW_FEE / 100;
         uint256 net = actualPending - fee;
         _distFee(fee);
         IERC20(SOL).safeTransfer(msg.sender, net);
         emit ClaimReward(msg.sender, net, fee + lpRemovalFee);
     }
-     function _distFee(uint256 _fee) internal {
+    
+    function _distFee(uint256 _fee) internal {
         if (_fee == 0) return;
         uint256 n = _fee * FEE_NODE_RATE / 100;
         uint256 p = _fee * FEE_PARTNER_RATE / 100;
@@ -275,62 +296,88 @@ contract DQMCore is ReentrancyGuard {
         IERC20(SOL).safeTransfer(PARTNER, p);
         IERC20(SOL).safeTransfer(FOUNDATION, _fee - n - p);
     }
+    
     function claimLP() external nonReentrant {
         require(stakeContract != address(0), "!stake");
         IDQMiningStake(stakeContract).claimLP(msg.sender);
     }
+    
     function claimNft() external nonReentrant {
         if (stakeContract != address(0)) IDQMiningStake(stakeContract).claimNft(msg.sender);
     }
+    
     function claimFee() external nonReentrant {
         if (stakeContract != address(0)) IDQMiningStake(stakeContract).claimFee(msg.sender);
     }
+    
     function claimDTeam() external nonReentrant {
         if (stakeContract != address(0)) IDQMiningStake(stakeContract).claimD(msg.sender);
     }
+    
+    //==================== 取消LP ====================
+    
     function removeMyLP() external nonReentrant {
-        require(stakeContract != address(0), "!stake"); 
+        require(stakeContract != address(0), "!stake");
+        
         address lpP = IDQMiningStake(stakeContract).lpPair();
         require(lpP != address(0), "!pair");
+        
         uint256 userLP = IDQMiningStake(stakeContract).getLP(msg.sender);
         require(userLP > 0, "!lp");
+        
         IERC20(lpP).safeTransferFrom(msg.sender, address(this), userLP);
         IDQMiningStake(stakeContract).withdrawLP(msg.sender);
         IDQMiningStake(stakeContract).subTotalLP(userLP);
+        
         IERC20(lpP).approve(ROUTER, userLP);
+        
         (uint256 amountDQ, uint256 amountSOL) = IPancakeRouter02(ROUTER).removeLiquidity(
             address(dqToken), SOL, userLP, 0, 0, address(this), block.timestamp + 300
         );
+        
         if (amountDQ > 0) dqToken.transfer(msg.sender, amountDQ);
         if (amountSOL > 0) IERC20(SOL).safeTransfer(msg.sender, amountSOL);
+        
         emit RemoveLP(msg.sender, userLP, amountDQ, amountSOL);
     }
+    
+    //==================== 质押相关 ====================
+    
     function stakeDQ(uint256 _amount, uint _periodIndex) external nonReentrant {
         require(stakeContract != address(0), "!stake");
         require(dqToken.balanceOf(msg.sender) >= _amount, "!bal");
         dqToken.transferFrom(msg.sender, address(this), _amount);
         IDQMiningStake(stakeContract).stake(msg.sender, _amount, _periodIndex);
     }
+    
     function unstakeDQ(uint _recordIndex) external nonReentrant {
         if (stakeContract != address(0)) IDQMiningStake(stakeContract).unstake(msg.sender, _recordIndex);
     }
+    
     function claimStakeReward(uint _periodIndex) external nonReentrant {
         if (stakeContract != address(0)) IDQMiningStake(stakeContract).clmS(msg.sender, _periodIndex);
     }
+    
     function withdrawDQReward(uint _periodIndex) external nonReentrant {
         if (stakeContract != address(0)) IDQMiningStake(stakeContract).withdrawDQReward(msg.sender, _periodIndex);
     }
-        function sellDQForSOL(uint256 _dq) external nonReentrant returns (uint256 solOut) {
+    
+    //==================== 卖出DQ ====================
+    
+    function sellDQForSOL(uint256 _dq) external nonReentrant returns (uint256 solOut) {
         require(dqToken.balanceOf(msg.sender) >= _dq, "!bal");
         dqToken.transferFrom(msg.sender, address(this), _dq);
+        
         uint256 supply = dqToken.totalSupply();
         uint256 burnAmount;
         if (supply > INITIAL_SUPPLY * BURN_STOP_THRESHOLD / 100) {
             burnAmount = _dq * 94 / 100;
             IDQToken(address(dqToken)).burn(burnAmount);
         }
+        
         uint256 fee = _dq * SELL_FEE / 100;
         uint256 userSolAmount = _dq - fee;
+        
         if (fee > 0) {
             uint256 halfFee = fee * 50 / 100;
             uint256 stakeFee = fee * 50 / 100;
@@ -342,6 +389,7 @@ contract DQMCore is ReentrancyGuard {
                 IDQMiningStake(stakeContract).distDQFee(stakeFee);
             }
         }
+        
         address[] memory path = new address[](2);
         path[0] = address(dqToken);
         path[1] = SOL;
@@ -352,8 +400,11 @@ contract DQMCore is ReentrancyGuard {
         IERC20(SOL).safeTransfer(msg.sender, solOut);
         emit SellDQ(msg.sender, _dq, solOut, burnAmount, fee);
     }
+    
+    // DQToken调用：底池卖出时销毁
     function onDQSell(address _seller, uint256 _sellAmount) external {
         require(msg.sender == address(dqToken), "!dqToken");
+        
         uint256 supply = dqToken.totalSupply();
         if (supply > INITIAL_SUPPLY * BURN_STOP_THRESHOLD / 100) {
             uint256 burnAmount = _sellAmount * 94 / 100;
@@ -365,25 +416,37 @@ contract DQMCore is ReentrancyGuard {
             }
         }
     }
-       function buyNode(uint256 _t) external nonReentrant {
+    
+    //==================== 购买节点 ====================
+    
+    function buyNode(uint256 _t) external nonReentrant {
         require(_t >= 1 && _t <= 3, "!type");
         require(dqCard.getCardPrice(_t) > 0, "!price");
         uint256 price = dqCard.getCardPrice(_t);
         require(IERC20(USDT).balanceOf(msg.sender) >= price, "!bal");
+        
+        // 收取USDT
         IERC20(USDT).safeTransferFrom(msg.sender, nodeUSDTReceiver, price);
+        
+        // 铸造NFT
         dqCard.mintByOwner(msg.sender, _t);
         users[msg.sender].level = uint8(_t);
         
         emit BuyNode(msg.sender, uint8(_t), price);
     }
+    
+    //==================== 查询函数 ====================
+    
     function getDailyLimit() public view returns (uint256) {
         uint256 l = DAILY_LIMIT + (currentPhase - 1) * PHASE_STEP;
         return l > 200 ether ? 200 ether : l;
     }
+    
     function getUser(address _u) external view returns (address referrer, uint256 directCount, uint8 level, uint256 totalInvest) {
         User storage us = users[_u];
         return (us.referrer, us.directCount, us.level, us.totalInvest);
     }
+    
     function getUserStake(address _u) external view returns (uint256 teamInvest, uint256 energy, uint256 pendingSOL) {
         if (stakeContract != address(0)) {
             IDQMiningStake sk = IDQMiningStake(stakeContract);
@@ -391,18 +454,22 @@ contract DQMCore is ReentrancyGuard {
         }
         return (0, 0, 0);
     }
+    
     function getPendingSOL(address _u) external view returns (uint256) {
         if (stakeContract != address(0)) return IDQMiningStake(stakeContract).getPendingSOL(_u);
         return 0;
     }
+    
     function getStakeRecordCount(address _user) external view returns (uint256) {
         if (stakeContract != address(0)) return IDQMiningStake(stakeContract).getStakeRecordCount(_user);
         return 0;
     }
+    
     function getPendingDQ(address _user, uint _periodIndex) external view returns (uint256) {
         if (stakeContract != address(0)) return IDQMiningStake(stakeContract).getPendingDQ(_user, _periodIndex);
         return 0;
     }
+    
     function getAllStakeRecords(address _user) external view returns (
         uint256[] memory amounts,
         uint256[] memory startTimes,
@@ -416,12 +483,15 @@ contract DQMCore is ReentrancyGuard {
         }
         return (new uint256[](0), new uint256[](0), new uint256[](0), new uint256[](0), new bool[](0), new bool[](0));
     }
+    
     function getTeamSize(address _u) external view returns (uint256) { 
         return users[_u].children.length(); 
     }
+    
     function getAllUsersLength() external view returns (uint256) { 
         return allUsers.length; 
     }
+    
     function getBurnInfo() external view returns (uint256 balance, uint256 supply, bool canBurn) {
         balance = dqToken.balanceOf(address(this));
         supply = dqToken.totalSupply();

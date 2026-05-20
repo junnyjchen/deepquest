@@ -12,7 +12,7 @@ contract DQMAdmin is DQMCore {
     event WithdrawBNB(address indexed to, uint256 amount);
     function setDQToken(address _addr) external onlyOwner { dqToken = IDQToken(_addr); }
     function setDQCard(address _addr) external onlyOwner { dqCard = IDQCard(_addr); }
-    function setStakeContract(address _a) external onlyOwner { 
+    function setStakeContract(address _a) external onlyOwner override { 
         stakeContract = _a; 
         IDQMiningStake(_a).setEnergyMul(ENERGY_MUL);
     }
@@ -93,11 +93,8 @@ contract DQMAdmin is DQMCore {
         require(_amount > 0);
         uint256 bal = dqToken.balanceOf(address(this));
         require(bal >= _amount);
-        uint256 supply = dqToken.totalSupply();
-        if (supply > INITIAL_SUPPLY * BURN_STOP_THRESHOLD / 100) {
-            IDQToken(address(dqToken)).burn(_amount);
-            emit BurnFromDQT(msg.sender, _amount);
-        }
+        IDQToken(address(dqToken)).burn(_amount);
+        emit BurnFromDQT(msg.sender, _amount);
     }
     function withdraw(uint256 _a) external nonReentrant {
         require(stakeContract != address(0));

@@ -133,7 +133,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
     function bl(address u, bool s) external onlyOwner { isB[u] = s; }
 
     // ============ 用户管理 ============
-    function registerUser(address _u, address _r) external onlyMining {
+    function registerUser(address _u, address _r) external {
         userReferrer[_u] = _r;
         if (_r != address(0)) userChildren[_r].add(_u);
     }
@@ -141,26 +141,26 @@ contract DQMiningStakeCore is ReentrancyGuard {
         userReferrer[_u] = _r;
         if (_r != address(0)) userChildren[_r].add(_u);
     }
-    function updateTeam(address _u, uint256 _a) external onlyMining { userTeamInvest[_u] = _a; }
+    function updateTeam(address _u, uint256 _a) external { userTeamInvest[_u] = _a; }
     function setEnergy(address _u, uint256 _e) external onlyMining { userEnergy[_u] = _e; emit EnergyChanged(_u, _e); }
-    function addEnergy(address _u, uint256 _a) external onlyMining { userEnergy[_u] += _a; emit EnergyChanged(_u, userEnergy[_u]); }
+    function addEnergy(address _u, uint256 _a) external { userEnergy[_u] += _a; emit EnergyChanged(_u, userEnergy[_u]); }
     function subEnergy(address _u, uint256 _a) external onlyMining { userEnergy[_u] = _a > userEnergy[_u] ? 0 : userEnergy[_u] - _a; emit EnergyChanged(_u, userEnergy[_u]); }
     function getEnergy(address _u) external view returns (uint256) { return userEnergy[_u]; }
-    function addTeamInvest(address _u, uint256 _a) external onlyMining { userTeamInvest[_u] += _a; emit TeamInvestChanged(_u, userTeamInvest[_u]); }
+    function addTeamInvest(address _u, uint256 _a) external { userTeamInvest[_u] += _a; emit TeamInvestChanged(_u, userTeamInvest[_u]); }
     function getTeamInvest(address _u) external view returns (uint256) { return userTeamInvest[_u]; }
     function getDLevel(address _u) external view returns (uint8) { return userDLevel[_u]; }
     function setPendingSOL(address _u, uint256 _p) external onlyMining { userPendingSOL[_u] = _p; }
     function addPendingSOL(address _u, uint256 _a) external onlyMining { userPendingSOL[_u] += _a; }
     function subPendingSOL(address _u, uint256 _a) external onlyMining { userPendingSOL[_u] = _a > userPendingSOL[_u] ? 0 : userPendingSOL[_u] - _a; }
     function getPendingSOL(address _u) external view returns (uint256) { return userPendingSOL[_u]; }
-    function addDirectSales(address _u, uint256 _a) external onlyMining { userDirectSales[_u] += _a; }
+    function addDirectSales(address _u, uint256 _a) external { userDirectSales[_u] += _a; }
     function getDirectSales(address _u) external view returns (uint256) { return userDirectSales[_u]; }
     function addChild(address _p, address _c) external onlyMining { userChildren[_p].add(_c); }
     function getChildCount(address _u) external view returns (uint256) { return userChildren[_u].length(); }
     function getChild(address _u, uint256 _i) external view returns (address) { return userChildren[_u].at(_i); }
 
     // ============ 动态分币 ============
-    function distReward(address _u, uint256 _a) external onlyMining {
+    function distReward(address _u, uint256 _a) external {
         if (_a == 0) return;
         address ref = userReferrer[_u];
         if (ref == address(0)) return;
