@@ -51,7 +51,7 @@ export default function RewardsScreen() {
   const { wallet, isConnected } = useWallet();
   const { t } = useLanguage();
 
-  const [activeTab, setActiveTab] = useState<'rewards' | 'records'>('rewards');
+  const [activeTab, setActiveTab] = useState<'rewards' | 'withdrawals'>('rewards');
   const [recordType, setRecordType] = useState<'claim' | 'withdraw'>('claim');
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
@@ -246,11 +246,11 @@ export default function RewardsScreen() {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.tab, activeTab === 'records' && styles.tabActive]}
-            onPress={() => setActiveTab('records')}
+            style={[styles.tab, activeTab === 'withdrawals' && styles.tabActive]}
+            onPress={() => setActiveTab('withdrawals')}
           >
-            <Text style={[styles.tabText, activeTab === 'records' && styles.tabTextActive]}>
-              {t('rewards.tab.records')}
+            <Text style={[styles.tabText, activeTab === 'withdrawals' && styles.tabTextActive]}>
+              {t('rewards.tab.withdrawals')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -436,7 +436,7 @@ export default function RewardsScreen() {
         )}
 
         {/* 记录 Tab */}
-        {activeTab === 'records' && (
+        {activeTab === 'withdrawals' && (
           <>
             {/* 记录类型切换 */}
             <View style={styles.recordTabContainer}>
