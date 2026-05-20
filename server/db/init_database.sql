@@ -83,7 +83,6 @@ CREATE TABLE public.deposits (
   tx_hash character varying NOT NULL UNIQUE,
   user_address character varying NOT NULL,
   amount numeric NOT NULL,
-  phase integer NOT NULL DEFAULT 0,
   status character varying NOT NULL DEFAULT 'completed'::character varying,
   action_type character varying NOT NULL DEFAULT 'deposit',
   action_date date NOT NULL DEFAULT CURRENT_DATE,

@@ -380,21 +380,6 @@ export const depositSOLOnChain = async (
     throw preflightError;
   }
 
-  // 静态调用再兜底一次（有些 RPC 不回传 revert reason，但能挡住明显 revert）
-  try {
-    await contract.depositSOL.staticCall(amountInWei);
-  } catch (e) {
-    const panicCode = getPanicCode(e);
-    if (panicCode === 0x11) {
-      const diagnosis = await diagnoseDepositOverflow(contract, userAddress, amountInWei);
-      console.error('[Web3] depositSOL 检测到 Panic(0x11):', diagnosis, e);
-      throw new Error(diagnosis);
-    }
-
-    console.error('[Web3] depositSOL staticCall 失败:', e);
-    throw e;
-  }
-
   const tx = await contract.depositSOL(amountInWei);
   console.log('[Web3] 交易已发送:', tx.hash);
 
