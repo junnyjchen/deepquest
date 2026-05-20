@@ -318,6 +318,12 @@ export default {
       stake: '质押奖励',
       success: '领取成功',
       failed: '领取失败，请重试',
+      withdrawSol: '提现 SOL',
+      withdrawDq: '提现 DQ',
+      tab: {
+        rewards: '奖励记录',
+        withdrawals: '提现记录',
+      },
       confirm: {
         sol: '确定要领取 {amount} SOL 吗？',
         fee: '确定要领取节点手续费 {amount} SOL 吗？',

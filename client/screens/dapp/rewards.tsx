@@ -1,71 +1,58 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, ActivityIndicator, Alert } from 'react-native';
-import { Screen } from '@/components/Screen';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+  RefreshControl,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useWallet } from '@/hooks/useWallet';
+import { Screen } from '@/components/Screen';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { getSigner, waitForTransaction } from '@/utils/web3';
 import {
+  getPendingReward,
+  getPendingFee,
+  getPendingSOL,
+  getPendingStakeReward,
+  getPendingBlockReward,
   claimSOLOnChain,
   claimLPOnChain,
   claimNFTOnChain,
   claimDTeamOnChain,
-  claimFeeOnChain,
   claimBlockDQOnChain,
+  claimFeeOnChain,
   withdrawDQRewardOnChain,
-  getPendingReward,
-  getPendingSOL,
-  getPendingFee,
-  getPendingBlockReward,
-  getPendingStakeReward,
-  getSigner,
-  waitForTransaction,
 } from '@/utils/web3';
-import { dappUserApi } from '@/utils/api';
 
-// ============ 样式定义 ============
 const COLORS = {
-  solBg: 'rgba(20, 40, 60, 0.6)',
+  solBg: 'rgba(0, 217, 255, 0.1)',
   solBorder: '#00D9FF',
   solAccent: '#00D9FF',
-  dqBg: 'rgba(40, 20, 60, 0.6)',
-  dqBorder: '#B366FF',
-  dqAccent: '#B366FF',
-  cardBg: 'rgba(26, 26, 48, 0.95)',
-  cardBg2: 'rgba(26, 26, 48, 0.8)',
-  cardBgTrans: 'rgba(26, 26, 48, 0.6)',
-  border: 'rgba(255, 255, 255, 0.1)',
-  text: '#FFFFFF',
-  textSecondary: 'rgba(255, 255, 255, 0.6)',
-  textMuted: 'rgba(255, 255, 255, 0.4)',
-  success: '#00FF88',
-  warning: '#FFD700',
+  dqBg: 'rgba(139, 92, 246, 0.1)',
+  dqBorder: '#8B5CF6',
+  dqAccent: '#A78BFA',
+  stakeBg: 'rgba(251, 191, 36, 0.1)',
+  stakeBorder: '#FBBF24',
+  stakeAccent: '#FBBF24',
+  withdrawBg: 'rgba(239, 68, 68, 0.1)',
+  withdrawBorder: '#EF4444',
+  withdrawAccent: '#EF4444',
+  cardBg: 'rgba(26, 26, 48, 0.6)',
 };
 
 export default function RewardsScreen() {
+  const router = useSafeRouter();
   const { wallet, isConnected } = useWallet();
   const { t } = useLanguage();
-  const router = useSafeRouter();
 
-  // ConfirmDialog 状态
-  const [confirmDialog, setConfirmDialog] = useState<{
-    visible: boolean;
-    title: string;
-    message: string;
-    confirmText?: string;
-    cancelText?: string;
-    onConfirm: () => void;
-  }>({
-    visible: false,
-    title: '',
-    message: '',
-    confirmText: t('common.confirm'),
-    cancelText: t('common.cancel'),
-    onConfirm: () => {},
-  });
-
-  // 状态
-  const [activeTab, setActiveTab] = useState<'rewards' | 'withdrawals'>('rewards');
+  const [activeTab, setActiveTab] = useState<'rewards' | 'records'>('rewards');
+  const [recordType, setRecordType] = useState<'claim' | 'withdraw'>('claim');
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
 
@@ -74,7 +61,6 @@ export default function RewardsScreen() {
     directReferral: '0',
     fee: '0',
   });
-
   const [dqRewards, setDqRewards] = useState({
     lp: '0',
     nft: '0',
@@ -84,67 +70,52 @@ export default function RewardsScreen() {
   });
 
   // 记录数据
+  const [claimRecords, setClaimRecords] = useState<any[]>([]);
   const [withdrawalRecords, setWithdrawalRecords] = useState<any[]>([]);
+
+  const [confirmDialog, setConfirmDialog] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    confirmText: '',
+    cancelText: '',
+    onConfirm: () => {},
+  });
+
+  const walletAddress = wallet?.address || '';
 
   // 加载数据
   const loadData = useCallback(async () => {
-    if (!isConnected || !wallet?.address) return;
+    if (!walletAddress) return;
 
     try {
-      const address = wallet.address.toLowerCase();
-
-      // SOL 奖励
+      // 加载所有 SOL 奖励
       const [pendingReward, pendingFee] = await Promise.all([
-        getPendingReward(address),
-        getPendingFee(address),
+        getPendingReward(walletAddress),
+        getPendingFee(walletAddress),
       ]);
       setSolRewards({
         directReferral: pendingReward || '0',
         fee: pendingFee || '0',
       });
 
-      // DQ 奖励
-      const [pendingLP, pendingNft, pendingDTeam, pendingBlock] = await Promise.all([
-        getPendingReward('lp'),
-        getPendingReward('nft'),
-        getPendingReward('dTeam'),
-        getPendingBlockReward(address),
+      // 加载所有 DQ 奖励
+      const [pendingBlock] = await Promise.all([
+        getPendingBlockReward(walletAddress),
       ]);
-
-      // 质押奖励（周期 0-3）
-      const stakeRewards: { index: number; amount: string }[] = [];
-      for (let i = 0; i < 4; i++) {
-        const pending = await getPendingStakeReward(address, i);
-        if (parseFloat(pending) > 0) {
-          stakeRewards.push({ index: i, amount: pending });
-        }
-      }
-
       setDqRewards({
-        lp: pendingLP || '0',
-        nft: pendingNft || '0',
-        dTeam: pendingDTeam || '0',
+        lp: '0',
+        nft: '0',
+        dTeam: '0',
         block: pendingBlock || '0',
-        stake: stakeRewards,
+        stake: [],
       });
-
-      // 加载提现记录
-      if (wallet.address) {
-        try {
-          const withdrawalsRes = await dappUserApi.getRewards(wallet.address.toLowerCase());
-          if (withdrawalsRes?.data) {
-            setWithdrawalRecords(withdrawalsRes.data);
-          }
-        } catch (e) {
-          console.log('[Rewards] 获取提现记录失败:', e);
-        }
-      }
     } catch (error) {
       console.error('[Rewards] 加载数据失败:', error);
     }
-  }, [isConnected, wallet?.address]);
+  }, [walletAddress]);
 
-  // 刷新
+  // 下拉刷新
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadData();
@@ -152,28 +123,20 @@ export default function RewardsScreen() {
   }, [loadData]);
 
   // 领取奖励
-  const handleClaim = async (type: string) => {
-    if (!isConnected) {
-      Alert.alert(t('common.error'), t('lp.alert.connectFirst'));
-      return;
-    }
-
-    const confirmMap: Record<string, { title: string; message: string }> = {
-      sol: { title: t('rewards.claim.sol'), message: t('rewards.confirm.claim.sol') },
-      fee: { title: t('rewards.claim.fee'), message: t('rewards.confirm.claim.fee') },
-      lp: { title: t('rewards.claim.lp'), message: t('rewards.confirm.claim.lp') },
-      nft: { title: t('rewards.claim.nft'), message: t('rewards.confirm.claim.nft') },
-      dTeam: { title: t('rewards.claim.dTeam'), message: t('rewards.confirm.claim.dTeam') },
-      block: { title: t('rewards.claim.block'), message: t('rewards.confirm.claim.block') },
-      stake: { title: t('rewards.claim.stake'), message: t('rewards.confirm.claim.stake') },
+  const handleClaim = (type: 'sol' | 'fee' | 'lp' | 'nft' | 'dTeam' | 'block') => {
+    const titles: Record<string, string> = {
+      sol: t('rewards.directReferral'),
+      fee: t('rewards.fee'),
+      lp: t('rewards.lp'),
+      nft: t('rewards.nft'),
+      dTeam: t('rewards.dTeam'),
+      block: t('rewards.block'),
     };
-
-    const confirm = confirmMap[type] || { title: t('rewards.claim.title'), message: t('rewards.confirm.claim.default') };
 
     setConfirmDialog({
       visible: true,
-      title: confirm.title,
-      message: confirm.message,
+      title: t('rewards.confirm.title'),
+      message: `${t('rewards.confirm.claim')} ${titles[type]}?`,
       confirmText: t('common.confirm'),
       cancelText: t('common.cancel'),
       onConfirm: async () => {
@@ -185,8 +148,8 @@ export default function RewardsScreen() {
             Alert.alert(t('common.error'), t('lp.alert.connectFailed'));
             return;
           }
-          let tx;
 
+          let tx;
           switch (type) {
             case 'sol':
               tx = await claimSOLOnChain(signer);
@@ -206,8 +169,6 @@ export default function RewardsScreen() {
             case 'block':
               tx = await claimBlockDQOnChain(signer);
               break;
-            default:
-              throw new Error('Unknown claim type');
           }
 
           await waitForTransaction(tx);
@@ -224,12 +185,7 @@ export default function RewardsScreen() {
   };
 
   // 质押奖励领取
-  const handleStakeClaim = async (periodIndex: number) => {
-    if (!isConnected) {
-      Alert.alert(t('common.error'), t('lp.alert.connectFirst'));
-      return;
-    }
-
+  const handleStakeClaim = (periodIndex: number) => {
     setConfirmDialog({
       visible: true,
       title: t('rewards.claim.stake'),
@@ -290,11 +246,11 @@ export default function RewardsScreen() {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.tab, activeTab === 'withdrawals' && styles.tabActive]}
-            onPress={() => setActiveTab('withdrawals')}
+            style={[styles.tab, activeTab === 'records' && styles.tabActive]}
+            onPress={() => setActiveTab('records')}
           >
-            <Text style={[styles.tabText, activeTab === 'withdrawals' && styles.tabTextActive]}>
-              {t('rewards.tab.withdrawals')}
+            <Text style={[styles.tabText, activeTab === 'records' && styles.tabTextActive]}>
+              {t('rewards.tab.records')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -302,18 +258,14 @@ export default function RewardsScreen() {
         {/* 奖励 Tab */}
         {activeTab === 'rewards' && (
           <>
-            {/* SOL 奖励区域 */}
+            {/* SOL 奖励 */}
             <Text style={styles.sectionTitle}>{t('rewards.solRewards')}</Text>
             <View style={styles.rewardRow}>
-              {/* 直推+见点+管理奖励 */}
               <TouchableOpacity
                 style={[styles.rewardCard, { backgroundColor: COLORS.solBg, borderColor: COLORS.solBorder }]}
                 onPress={() => handleClaim('sol')}
                 disabled={loading !== null}
               >
-                <View style={[styles.rewardIcon, { backgroundColor: COLORS.solBg }]}>
-                  <Text style={styles.rewardIconText}>💰</Text>
-                </View>
                 <Text style={styles.rewardLabel}>{t('rewards.directReferral')}</Text>
                 <Text style={[styles.rewardAmount, { color: COLORS.solAccent }]}>
                   {parseFloat(solRewards.directReferral || '0').toFixed(4)} SOL
@@ -331,15 +283,11 @@ export default function RewardsScreen() {
                 </TouchableOpacity>
               </TouchableOpacity>
 
-              {/* 节点手续费分红 */}
               <TouchableOpacity
                 style={[styles.rewardCard, { backgroundColor: COLORS.solBg, borderColor: COLORS.solBorder }]}
                 onPress={() => handleClaim('fee')}
                 disabled={loading !== null}
               >
-                <View style={[styles.rewardIcon, { backgroundColor: COLORS.solBg }]}>
-                  <Text style={styles.rewardIconText}>📊</Text>
-                </View>
                 <Text style={styles.rewardLabel}>{t('rewards.fee')}</Text>
                 <Text style={[styles.rewardAmount, { color: COLORS.solAccent }]}>
                   {parseFloat(solRewards.fee || '0').toFixed(4)} SOL
@@ -358,18 +306,14 @@ export default function RewardsScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* DQ 奖励区域 */}
+            {/* DQ 奖励 */}
             <Text style={styles.sectionTitle}>{t('rewards.dqRewards')}</Text>
             <View style={styles.rewardRow}>
-              {/* LP 奖励 */}
               <TouchableOpacity
                 style={[styles.rewardCard, { backgroundColor: COLORS.dqBg, borderColor: COLORS.dqBorder }]}
                 onPress={() => handleClaim('lp')}
                 disabled={loading !== null}
               >
-                <View style={[styles.rewardIcon, { backgroundColor: COLORS.dqBg }]}>
-                  <Text style={styles.rewardIconText}>💎</Text>
-                </View>
                 <Text style={styles.rewardLabel}>{t('rewards.lp')}</Text>
                 <Text style={[styles.rewardAmount, { color: COLORS.dqAccent }]}>
                   {parseFloat(dqRewards.lp || '0').toFixed(4)} DQ
@@ -387,15 +331,11 @@ export default function RewardsScreen() {
                 </TouchableOpacity>
               </TouchableOpacity>
 
-              {/* 节点奖励 */}
               <TouchableOpacity
                 style={[styles.rewardCard, { backgroundColor: COLORS.dqBg, borderColor: COLORS.dqBorder }]}
                 onPress={() => handleClaim('nft')}
                 disabled={loading !== null}
               >
-                <View style={[styles.rewardIcon, { backgroundColor: COLORS.dqBg }]}>
-                  <Text style={styles.rewardIconText}>🎫</Text>
-                </View>
                 <Text style={styles.rewardLabel}>{t('rewards.nft')}</Text>
                 <Text style={[styles.rewardAmount, { color: COLORS.dqAccent }]}>
                   {parseFloat(dqRewards.nft || '0').toFixed(4)} DQ
@@ -415,15 +355,11 @@ export default function RewardsScreen() {
             </View>
 
             <View style={styles.rewardRow}>
-              {/* D等级奖励 */}
               <TouchableOpacity
                 style={[styles.rewardCard, { backgroundColor: COLORS.dqBg, borderColor: COLORS.dqBorder }]}
                 onPress={() => handleClaim('dTeam')}
                 disabled={loading !== null}
               >
-                <View style={[styles.rewardIcon, { backgroundColor: COLORS.dqBg }]}>
-                  <Text style={styles.rewardIconText}>👑</Text>
-                </View>
                 <Text style={styles.rewardLabel}>{t('rewards.dTeam')}</Text>
                 <Text style={[styles.rewardAmount, { color: COLORS.dqAccent }]}>
                   {parseFloat(dqRewards.dTeam || '0').toFixed(4)} DQ
@@ -441,15 +377,11 @@ export default function RewardsScreen() {
                 </TouchableOpacity>
               </TouchableOpacity>
 
-              {/* 爆块奖励 */}
               <TouchableOpacity
                 style={[styles.rewardCard, { backgroundColor: COLORS.dqBg, borderColor: COLORS.dqBorder }]}
                 onPress={() => handleClaim('block')}
                 disabled={loading !== null}
               >
-                <View style={[styles.rewardIcon, { backgroundColor: COLORS.dqBg }]}>
-                  <Text style={styles.rewardIconText}>💥</Text>
-                </View>
                 <Text style={styles.rewardLabel}>{t('rewards.block')}</Text>
                 <Text style={[styles.rewardAmount, { color: COLORS.dqAccent }]}>
                   {parseFloat(dqRewards.block || '0').toFixed(4)} DQ
@@ -472,59 +404,110 @@ export default function RewardsScreen() {
             {dqRewards.stake.length > 0 && (
               <>
                 <Text style={styles.sectionTitle}>{t('rewards.stakeRewards')}</Text>
-                {dqRewards.stake.map((item) => (
-                  <TouchableOpacity
-                    key={`stake-${item.index}`}
-                    style={[styles.stakeCard, { backgroundColor: COLORS.dqBg, borderColor: COLORS.dqBorder }]}
-                    onPress={() => handleStakeClaim(item.index)}
-                    disabled={loading !== null}
-                  >
-                    <View style={styles.stakeInfo}>
-                      <Text style={styles.stakeLabel}>{t('rewards.period')} {item.index + 1}</Text>
-                      <Text style={[styles.stakeAmount, { color: COLORS.dqAccent }]}>
+                <View style={styles.rewardRow}>
+                  {dqRewards.stake.map((item) => (
+                    <TouchableOpacity
+                      key={`stake-${item.index}`}
+                      style={[styles.rewardCard, { backgroundColor: COLORS.stakeBg, borderColor: COLORS.stakeBorder }]}
+                      onPress={() => handleStakeClaim(item.index)}
+                      disabled={loading !== null}
+                    >
+                      <Text style={styles.rewardLabel}>{t('rewards.period')} {item.index + 1}</Text>
+                      <Text style={[styles.rewardAmount, { color: COLORS.stakeAccent }]}>
                         {parseFloat(item.amount).toFixed(4)} DQ
                       </Text>
-                    </View>
-                    <TouchableOpacity
-                      style={[styles.claimButton, { backgroundColor: COLORS.dqBorder }]}
-                      onPress={() => handleStakeClaim(item.index)}
-                      disabled={loading === `stake${item.index}`}
-                    >
-                      {loading === `stake${item.index}` ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <Text style={styles.claimButtonTextDark}>{t('rewards.claim.btn')}</Text>
-                      )}
+                      <TouchableOpacity
+                        style={[styles.claimButton, { backgroundColor: COLORS.stakeBorder }]}
+                        onPress={() => handleStakeClaim(item.index)}
+                        disabled={loading === `stake${item.index}`}
+                      >
+                        {loading === `stake${item.index}` ? (
+                          <ActivityIndicator size="small" color="#000" />
+                        ) : (
+                          <Text style={styles.claimButtonText}>{t('rewards.claim.btn')}</Text>
+                        )}
+                      </TouchableOpacity>
                     </TouchableOpacity>
-                  </TouchableOpacity>
-                ))}
+                  ))}
+                </View>
               </>
             )}
           </>
         )}
 
-        {/* 提现记录 Tab */}
-        {activeTab === 'withdrawals' && (
+        {/* 记录 Tab */}
+        {activeTab === 'records' && (
           <>
-            <Text style={styles.sectionTitle}>{t('rewards.withdrawalRecords')}</Text>
-            {withdrawalRecords.length === 0 ? (
-              <View style={styles.emptyRecords}>
-                <Text style={styles.emptyRecordsText}>{t('rewards.noRecords')}</Text>
-              </View>
-            ) : (
-              withdrawalRecords.slice(0, 20).map((record: any, index: number) => (
-                <View key={index} style={styles.recordItem}>
-                  <View style={styles.recordLeft}>
-                    <Text style={styles.recordType}>{record.type || 'Withdrawal'}</Text>
-                    <Text style={styles.recordTime}>
-                      {new Date(record.created_at).toLocaleDateString()}
-                    </Text>
+            {/* 记录类型切换 */}
+            <View style={styles.recordTabContainer}>
+              <TouchableOpacity
+                style={[styles.recordTab, recordType === 'claim' && styles.recordTabActive]}
+                onPress={() => setRecordType('claim')}
+              >
+                <Text style={[styles.recordTabText, recordType === 'claim' && styles.recordTabTextActive]}>
+                  {t('rewards.records.claim')}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.recordTab, recordType === 'withdraw' && styles.recordTabActive]}
+                onPress={() => setRecordType('withdraw')}
+              >
+                <Text style={[styles.recordTabText, recordType === 'withdraw' && styles.recordTabTextActive]}>
+                  {t('rewards.records.withdraw')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* 奖励记录 */}
+            {recordType === 'claim' && (
+              <>
+                <Text style={styles.sectionTitle}>{t('rewards.records.claim')}</Text>
+                {claimRecords.length === 0 ? (
+                  <View style={styles.emptyRecords}>
+                    <Text style={styles.emptyRecordsText}>{t('rewards.noRecords')}</Text>
                   </View>
-                  <Text style={[styles.recordAmount, { color: record.token === 'SOL' ? COLORS.solAccent : COLORS.dqAccent }]}>
-                    {record.amount} {record.token || 'DQ'}
-                  </Text>
-                </View>
-              ))
+                ) : (
+                  claimRecords.slice(0, 20).map((record: any, index: number) => (
+                    <View key={index} style={styles.recordItem}>
+                      <View style={styles.recordLeft}>
+                        <Text style={styles.recordType}>{record.type || 'Claim'}</Text>
+                        <Text style={styles.recordTime}>
+                          {new Date(record.created_at).toLocaleDateString()}
+                        </Text>
+                      </View>
+                      <Text style={[styles.recordAmount, { color: record.token === 'SOL' ? COLORS.solAccent : COLORS.dqAccent }]}>
+                        {record.amount} {record.token || 'DQ'}
+                      </Text>
+                    </View>
+                  ))
+                )}
+              </>
+            )}
+
+            {/* 提现记录 */}
+            {recordType === 'withdraw' && (
+              <>
+                <Text style={styles.sectionTitle}>{t('rewards.records.withdraw')}</Text>
+                {withdrawalRecords.length === 0 ? (
+                  <View style={styles.emptyRecords}>
+                    <Text style={styles.emptyRecordsText}>{t('rewards.noRecords')}</Text>
+                  </View>
+                ) : (
+                  withdrawalRecords.slice(0, 20).map((record: any, index: number) => (
+                    <View key={index} style={styles.recordItem}>
+                      <View style={styles.recordLeft}>
+                        <Text style={styles.recordType}>{record.type || 'Withdrawal'}</Text>
+                        <Text style={styles.recordTime}>
+                          {new Date(record.created_at).toLocaleDateString()}
+                        </Text>
+                      </View>
+                      <Text style={[styles.recordAmount, { color: record.token === 'SOL' ? COLORS.solAccent : COLORS.dqAccent }]}>
+                        {record.amount} {record.token || 'DQ'}
+                      </Text>
+                    </View>
+                  ))
+                )}
+              </>
             )}
           </>
         )}
@@ -556,58 +539,72 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginHorizontal: 16,
     marginTop: 16,
-    marginBottom: 8,
+    marginBottom: 12,
     backgroundColor: 'rgba(26, 26, 48, 0.6)',
-    borderRadius: 12,
+    borderRadius: 10,
     padding: 4,
   },
   tab: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 8,
     alignItems: 'center',
-    borderRadius: 10,
+    borderRadius: 8,
   },
   tabActive: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   tabText: {
     color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   tabTextActive: {
     color: '#fff',
   },
+  recordTabContainer: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: 'rgba(26, 26, 48, 0.4)',
+    borderRadius: 8,
+    padding: 3,
+  },
+  recordTab: {
+    flex: 1,
+    paddingVertical: 6,
+    alignItems: 'center',
+    borderRadius: 6,
+  },
+  recordTabActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  recordTabText: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  recordTabTextActive: {
+    color: '#fff',
+  },
   sectionTitle: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
     marginHorizontal: 16,
-    marginTop: 16,
+    marginTop: 12,
     marginBottom: 8,
   },
   rewardRow: {
     flexDirection: 'row',
     paddingHorizontal: 12,
-    gap: 8,
+    gap: 6,
   },
   rewardCard: {
     flex: 1,
-    borderRadius: 16,
-    padding: 12,
+    borderRadius: 12,
+    padding: 10,
     borderWidth: 1,
     alignItems: 'center',
-  },
-  rewardIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  rewardIconText: {
-    fontSize: 20,
   },
   rewardLabel: {
     color: '#fff',
@@ -616,48 +613,26 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   rewardAmount: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: 'bold',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   claimButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 8,
-    minWidth: 70,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 6,
+    minWidth: 60,
     alignItems: 'center',
   },
   claimButtonText: {
     color: '#000',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
   claimButtonTextDark: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-  },
-  stakeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginHorizontal: 12,
-    marginBottom: 8,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  stakeInfo: {
-    flex: 1,
-  },
-  stakeLabel: {
-    color: '#fff',
-    fontSize: 12,
-    marginBottom: 2,
-  },
-  stakeAmount: {
-    fontSize: 14,
-    fontWeight: 'bold',
   },
   emptyContainer: {
     flex: 1,
@@ -684,40 +659,40 @@ const styles = StyleSheet.create({
   },
   emptyRecords: {
     marginHorizontal: 16,
-    padding: 20,
+    padding: 16,
     alignItems: 'center',
     backgroundColor: 'rgba(26, 26, 48, 0.6)',
-    borderRadius: 12,
+    borderRadius: 10,
   },
   emptyRecordsText: {
     color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: 14,
+    fontSize: 13,
   },
   recordItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginHorizontal: 16,
-    marginBottom: 8,
-    padding: 12,
+    marginBottom: 6,
+    padding: 10,
     backgroundColor: 'rgba(26, 26, 48, 0.6)',
-    borderRadius: 12,
+    borderRadius: 10,
   },
   recordLeft: {
     flex: 1,
   },
   recordType: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
   },
   recordTime: {
     color: 'rgba(255, 255, 255, 0.5)',
-    fontSize: 12,
+    fontSize: 11,
     marginTop: 2,
   },
   recordAmount: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
   },
 });

@@ -325,6 +325,12 @@ export default {
       stake: 'Staking Rewards',
       success: 'Claim successful',
       failed: 'Claim failed, please try again',
+      withdrawSol: 'Withdraw SOL',
+      withdrawDq: 'Withdraw DQ',
+      tab: {
+        rewards: 'Rewards',
+        withdrawals: 'Withdrawals',
+      },
       confirm: {
         sol: 'Are you sure you want to claim {amount} SOL?',
         fee: 'Are you sure you want to claim node fee {amount} SOL?',
