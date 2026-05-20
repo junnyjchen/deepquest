@@ -604,7 +604,17 @@ export const dappUserApi = {
     if (limit) query.append('limit', String(limit));
     return request<any>(`/api/v1/dapp/user/withdrawals/${wallet_address}?${query.toString()}`);
   },
-  
+
+  // 获取用户奖励记录（别名）
+  getUserRewards: (wallet_address: string, params?: { page?: number; limit?: number; reward_type?: string }) => {
+    return dappUserApi.getRewards(wallet_address, params);
+  },
+
+  // 获取用户提现记录（别名）
+  getUserWithdrawals: (wallet_address: string, page?: number, limit?: number) => {
+    return dappUserApi.getWithdrawals(wallet_address, page, limit);
+  },
+
   // 领取奖励
   claimReward: (wallet_address: string, reward_type?: string) =>
     request<any>('/api/v1/dapp/claim-reward', {

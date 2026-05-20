@@ -17,7 +17,8 @@ export const LANGUAGES = [
 ] as const;
 
 // 语言包映射
-const translations: Record<string, typeof zhTW> = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const translations: Record<string, any> = {
   'zh-TW': zhTW,
   'zh-CN': zhCN,
   'en': en,

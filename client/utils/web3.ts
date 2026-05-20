@@ -31,6 +31,22 @@ export const getBrowserProvider = (): ethers.BrowserProvider | null => {
 };
 
 /**
+ * 获取签名者
+ */
+export const getSigner = async (): Promise<ethers.Signer | null> => {
+  const provider = getBrowserProvider();
+  if (!provider) {
+    return null;
+  }
+  try {
+    return await provider.getSigner();
+  } catch (error) {
+    console.error('[Web3] 获取签名者失败:', error);
+    return null;
+  }
+};
+
+/**
  * 请求钱包连接
  */
 export const connectWallet = async (): Promise<{
@@ -686,12 +702,119 @@ export const claimSOLOnChain = async (
 ): Promise<ethers.TransactionResponse> => {
   const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
 
-  console.log('[Web3] 链上领取 SOL 奖励');
+  console.log('[Web3] 链上领取 SOL 奖励（直推+见点+管理）');
 
   const tx = await contract.claimReward();
   console.log('[Web3] 交易已发送:', tx.hash);
 
   return tx;
+};
+
+/**
+ * 领取节点手续费分红（链上）
+ */
+export const claimFeeOnChain = async (
+  signer: ethers.Signer
+): Promise<ethers.TransactionResponse> => {
+  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+
+  console.log('[Web3] 链上领取节点手续费分红');
+
+  const tx = await contract.claimFee();
+  console.log('[Web3] 交易已发送:', tx.hash);
+
+  return tx;
+};
+
+/**
+ * 领取所有爆块奖励（LP+节点+D等级）（链上）
+ */
+export const claimBlockDQOnChain = async (
+  signer: ethers.Signer
+): Promise<ethers.TransactionResponse> => {
+  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+
+  console.log('[Web3] 链上领取所有爆块奖励');
+
+  const tx = await contract.claimBlockReward();
+  console.log('[Web3] 交易已发送:', tx.hash);
+
+  return tx;
+};
+
+/**
+ * 提取质押奖励（链上）
+ * @param signer 签名者
+ * @param periodIndex 质押周期索引
+ */
+export const withdrawDQRewardOnChain = async (
+  signer: ethers.Signer,
+  periodIndex: number
+): Promise<ethers.TransactionResponse> => {
+  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+
+  console.log('[Web3] 链上提取质押奖励，周期:', periodIndex);
+
+  const tx = await contract.withdrawDQReward(periodIndex);
+  console.log('[Web3] 交易已发送:', tx.hash);
+
+  return tx;
+};
+
+/**
+ * 获取待领取直推+见点+管理奖励（SOL）
+ */
+export const getPendingReward = async (userAddress: string): Promise<string> => {
+  try {
+    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
+    const pending = await contract.getPendingReward(userAddress);
+    return ethers.formatEther(pending);
+  } catch (error) {
+    console.error('[Web3] 获取待领取直推奖励失败:', error);
+    return '0';
+  }
+};
+
+/**
+ * 获取待领取节点手续费分红（SOL）
+ */
+export const getPendingFee = async (userAddress: string): Promise<string> => {
+  try {
+    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
+    const pending = await contract.getPendingFee(userAddress);
+    return ethers.formatEther(pending);
+  } catch (error) {
+    console.error('[Web3] 获取待领取手续费分红失败:', error);
+    return '0';
+  }
+};
+
+/**
+ * 获取待领取爆块奖励（DQ）
+ */
+export const getPendingBlockReward = async (userAddress: string): Promise<string> => {
+  try {
+    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
+    const pending = await contract.getPendingBlockReward(userAddress);
+    return ethers.formatEther(pending);
+  } catch (error) {
+    console.error('[Web3] 获取待领取爆块奖励失败:', error);
+    return '0';
+  }
+};
+
+/**
+ * 获取待领取质押奖励（DQ）
+ */
+export const getPendingStakeReward = async (userAddress: string, periodIndex: number): Promise<string> => {
+  try {
+    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
+    const pending = await contract.getPendingStakeReward(userAddress, periodIndex);
+    return ethers.formatEther(pending);
+  } catch (error) {
+    console.error('[Web3] 获取待领取质押奖励失败:', error);
+    return '0';
+  }
 };
 
 /**
