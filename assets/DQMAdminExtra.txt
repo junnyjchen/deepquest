@@ -1,0 +1,65 @@
+[
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "to",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "WithdrawBNB",
+    "type": "event"
+  },
+  {
+    "stateMutability": "payable",
+    "type": "receive"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address payable",
+        "name": "_to",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "withdrawBNB",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "inputs": [],
+    "name": "OWNER",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]
+
+
+
+60a060405234801561000f575f80fd5b5073274acc6397349f21179ed6258a54b2a11b28faf56080526080516102196100455f395f81816047015260b101526102195ff3fe60806040526004361061002b575f3560e01c8063117803e314610036578063a97af1f214610085575f80fd5b3661003257005b5f80fd5b348015610041575f80fd5b506100697f000000000000000000000000000000000000000000000000000000000000000081565b6040516001600160a01b03909116815260200160405180910390f35b348015610090575f80fd5b506100a461009f3660046101ae565b6100a6565b005b336001600160a01b037f0000000000000000000000000000000000000000000000000000000000000000161461010b5760405162461bcd60e51b815260206004820152600660248201526510b7bbb732b960d11b604482015260640160405180910390fd5b5f826001600160a01b0316826040515f6040518083038185875af1925050503d805f8114610154576040519150601f19603f3d011682016040523d82523d5f602084013e610159565b606091505b5050905080610166575f80fd5b826001600160a01b03167fceac4c050cf0bd5320be38f58d0d370278667b15662191291c09d7fb144371b3836040516101a191815260200190565b60405180910390a2505050565b5f80604083850312156101bf575f80fd5b82356001600160a01b03811681146101d5575f80fd5b94602093909301359350505056fea2646970667358221220959c9ee2f8beb84e8a9ce7ee8de4a8bc1e4aec87923e9bb33c792f7b3ebe336964736f6c63430008140033

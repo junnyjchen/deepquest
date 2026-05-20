@@ -87,7 +87,6 @@ export default function DappLP() {
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
   const [solBalance, setSolBalance] = useState('0');
-  const [solAllowance, setSolAllowance] = useState('0');
   const [lpShares, setLpShares] = useState('0');
   const [txPending, setTxPending] = useState(false);
   const [activeTab, setActiveTab] = useState<'add' | 'remove'>('add');
@@ -171,13 +170,11 @@ export default function DappLP() {
   const fetchData = async (address: string) => {
     try {
       // 获取 SOL 余额
-      const [balance, allowance, shares] = await Promise.all([
+      const [balance, shares] = await Promise.all([
         getSOLTokenBalance(address),
-        getSOLAllowance(address),
         getUserLPShares(address),
       ]);
       setSolBalance(balance);
-      setSolAllowance(allowance);
       setLpShares(shares);
     } catch (error) {
       console.error('获取数据失败:', error);
@@ -270,7 +267,6 @@ export default function DappLP() {
     setActivationReferrer('');
     setAmount('');
     setSolBalance('0');
-    setSolAllowance('0');
     setLpShares('0');
   };
 
@@ -466,7 +462,6 @@ export default function DappLP() {
         const approveTx = await approveSOL(signer, amount);
         await approveTx.wait();
         console.log('[LP] 授权成功');
-        setSolAllowance(amount);
       }
 
       // 3. 调用 depositSOL 入金

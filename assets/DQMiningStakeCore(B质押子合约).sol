@@ -76,6 +76,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
     uint256 public br = IB;
     uint256 public lt;
     mapping(address => uint256) public userEnergy;
+    mapping(address => uint8) public userNodeLevel;  // 用户节点等级(S1-S6)
     mapping(address => uint256) public userTeamInvest;
     mapping(address => uint256) public userPendingSOL;
     mapping(address => uint256) public userDirectSales;
@@ -86,6 +87,24 @@ contract DQMiningStakeCore is ReentrancyGuard {
     uint256 public energyMul = 3;
     uint256[6] public mgrThresh = [100, 200, 600, 2000, 6000, 20000];
     uint8[6] public mgrRates = [5, 10, 15, 20, 25, 30];
+
+    // 奖励明细记录
+    struct RewardRecord {
+        uint8 rewardType;      // 1=直推 2=见点 3=管理 4=LP 5=节点 6=D等级 7=DQ分红
+        uint256 amount;        // 金额
+        address fromUser;      // 来源用户
+        uint256 timestamp;     // 时间
+        uint8 tokenType;       // 0=SOL, 1=DQ
+    }
+    mapping(address => RewardRecord[]) public userRewardRecords;  // 用户奖励明细
+
+    // DQ爆块明细记录
+    struct DQRewardRecord {
+        uint256 periodIndex;   // 周期索引
+        uint256 amount;        // DQ数量
+        uint256 timestamp;     // 时间
+    }
+    mapping(address => DQRewardRecord[]) public userDQRewardRecords;  // DQ爆块明细
     mapping(address => mapping(uint => uint256)) public sAmt;
     mapping(address => mapping(uint => uint256)) public sDebt;
 
@@ -98,7 +117,8 @@ contract DQMiningStakeCore is ReentrancyGuard {
         bool active;          // 是否有效
     }
     mapping(address => StakeRecord[]) public stakeRecords;  // 用户 -> 质押记录列表
-    mapping(address => mapping(uint256 => uint256)) public userPendingDQ;  // 用户待领取DQ奖励
+    mapping(address => mapping(uint256 => uint256)) public userPendingDQ;  // 用户待领取DQ奖励(质押)
+    mapping(address => uint256) public userBlockDQ;  // 用户待领取DQ爆块奖励(LP/节点/D等级)
     
     // 质押周期配置（秒）：0=30天，1=90天，2=180天，3=360天
     // 奖励权重：5%、10%、15%、20%
@@ -143,6 +163,47 @@ contract DQMiningStakeCore is ReentrancyGuard {
     }
     function updateTeam(address _u, uint256 _a) external { userTeamInvest[_u] = _a; }
     function setEnergy(address _u, uint256 _e) external onlyMining { userEnergy[_u] = _e; emit EnergyChanged(_u, _e); }
+
+    // ============ 奖励明细记录 ============
+    function _recordReward(address _user, uint8 _type, uint256 _amount, address _from, uint8 _tokenType) internal {
+        if (_amount > 0) {
+            userRewardRecords[_user].push(RewardRecord({
+                rewardType: _type,
+                amount: _amount,
+                fromUser: _from,
+                timestamp: block.timestamp,
+                tokenType: _tokenType
+            }));
+        }
+    }
+
+    function _recordDQReward(address _user, uint256 _periodIndex, uint256 _amount) internal {
+        if (_amount > 0) {
+            userDQRewardRecords[_user].push(DQRewardRecord({
+                periodIndex: _periodIndex,
+                amount: _amount,
+                timestamp: block.timestamp
+            }));
+        }
+    }
+
+    function getUserRewardCount(address _user) external view returns (uint256) {
+        return userRewardRecords[_user].length;
+    }
+
+    function getUserRewardRecord(address _user, uint256 _index) external view returns (uint8, uint256, address, uint256, uint8) {
+        RewardRecord memory r = userRewardRecords[_user][_index];
+        return (r.rewardType, r.amount, r.fromUser, r.timestamp, r.tokenType);
+    }
+
+    function getUserDQRewardCount(address _user) external view returns (uint256) {
+        return userDQRewardRecords[_user].length;
+    }
+
+    function getUserDQRewardRecord(address _user, uint256 _index) external view returns (uint256, uint256, uint256) {
+        DQRewardRecord memory r = userDQRewardRecords[_user][_index];
+        return (r.periodIndex, r.amount, r.timestamp);
+    }
     function addEnergy(address _u, uint256 _a) external { userEnergy[_u] += _a; emit EnergyChanged(_u, userEnergy[_u]); }
     function subEnergy(address _u, uint256 _a) external onlyMining { userEnergy[_u] = _a > userEnergy[_u] ? 0 : userEnergy[_u] - _a; emit EnergyChanged(_u, userEnergy[_u]); }
     function getEnergy(address _u) external view returns (uint256) { return userEnergy[_u]; }
@@ -158,22 +219,24 @@ contract DQMiningStakeCore is ReentrancyGuard {
     function addChild(address _p, address _c) external onlyMining { userChildren[_p].add(_c); }
     function getChildCount(address _u) external view returns (uint256) { return userChildren[_u].length(); }
     function getChild(address _u, uint256 _i) external view returns (address) { return userChildren[_u].at(_i); }
+    function setUserNodeLevel(address _u, uint8 _lvl) external onlyM { userNodeLevel[_u] = _lvl; }
 
     // ============ 动态分币 ============
     function distReward(address _u, uint256 _a) external {
         if (_a == 0) return;
         address ref = userReferrer[_u];
         if (ref == address(0)) return;
-        _distDirect(ref, _a);
+        _distDirect(_u, ref, _a);
         _distMgr(_u, _a * 30 / 100);
-        _distSee(_u, ref, _a * 15 / 100, 1);
+        _distSee(_u, ref, _a * 1 / 100, 1);
     }
     // 直推奖励：不需要考核，有能量就能拿
-    function _distDirect(address _ref, uint256 _dyn) internal {
+    function _distDirect(address _from, address _ref, uint256 _dyn) internal {
         uint256 direct = _dyn * 30 / 100;
         if (userEnergy[_ref] >= direct) {
             userEnergy[_ref] -= direct;
             userPendingSOL[_ref] += direct;
+            _recordReward(_ref, 1, direct, _from, 0);  // 1=直推奖, 0=SOL
         }
     }
     function _distMgr(address _u, uint256 _mgrPool) internal {
@@ -181,7 +244,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
         uint8 prevRate;
         for (uint8 lvl = 1; lvl <= 6; lvl++) {
             if (cur == address(0)) break;
-            uint8 curLvl = _getRequiredLevel(_calcSmallTeam(cur));
+            uint8 curLvl = userNodeLevel[cur];  // 直接使用注册等级
             if (curLvl > 0 && lvl >= curLvl) {
                 uint8 curRate = mgrRates[curLvl - 1];
                 uint8 diffRate = curRate > prevRate ? curRate - prevRate : 0;
@@ -189,6 +252,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
                 if (mgrR > 0 && userEnergy[cur] >= mgrR) {
                     userEnergy[cur] -= mgrR;
                     userPendingSOL[cur] += mgrR;
+                    _recordReward(cur, 3, mgrR, _u, 0);  // 3=管理奖, 0=SOL
                 }
                 prevRate = curRate;
             }
@@ -202,18 +266,23 @@ contract DQMiningStakeCore is ReentrancyGuard {
         if (ds >= 1 && _d <= 3 && userEnergy[_ref] >= _seePool) {
             userEnergy[_ref] -= _seePool;
             userPendingSOL[_ref] += _seePool;
+            _recordReward(_ref, 2, _seePool, _u, 0);  // 2=见点奖, 0=SOL
         } else if (ds >= 2 && _d <= 6 && userEnergy[_ref] >= _seePool) {
             userEnergy[_ref] -= _seePool;
             userPendingSOL[_ref] += _seePool;
+            _recordReward(_ref, 2, _seePool, _u, 0);  // 2=见点奖, 0=SOL
         } else if (ds >= 3 && _d <= 9 && userEnergy[_ref] >= _seePool) {
             userEnergy[_ref] -= _seePool;
             userPendingSOL[_ref] += _seePool;
+            _recordReward(_ref, 2, _seePool, _u, 0);  // 2=见点奖, 0=SOL
         } else if (ds >= 4 && _d <= 12 && userEnergy[_ref] >= _seePool) {
             userEnergy[_ref] -= _seePool;
             userPendingSOL[_ref] += _seePool;
+            _recordReward(_ref, 2, _seePool, _u, 0);  // 2=见点奖, 0=SOL
         } else if (ds >= 5 && _d <= 15 && userEnergy[_ref] >= _seePool) {
             userEnergy[_ref] -= _seePool;
             userPendingSOL[_ref] += _seePool;
+            _recordReward(_ref, 2, _seePool, _u, 0);  // 2=见点奖, 0=SOL
         }
         _distSee(_u, userReferrer[_ref], _seePool, _d + 1);
     }
@@ -243,7 +312,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
     function claimLP(address _u) external onlyM {
         if (lpS[_u] == 0) return;
         uint256 r = lA * lpS[_u] / 1e12 - lpD[_u];
-        if (r > 0) { lpD[_u] = lA * lpS[_u] / 1e12; userPendingSOL[_u] += r; }
+        if (r > 0) { lpD[_u] = lA * lpS[_u] / 1e12; userBlockDQ[_u] += r; _recordReward(_u, 4, r, address(0), 1); }  // 4=LP奖励, 1=DQ
     }
     function withdrawLP(address _u) external onlyM {
         require(!isB[_u] && lpS[_u] > 0, "!lp");
@@ -286,7 +355,8 @@ contract DQMiningStakeCore is ReentrancyGuard {
         }
         if (reward > 0) {
             userNftF[_u][0] = nA[0]; userNftF[_u][1] = nA[1]; userNftF[_u][2] = nA[2];
-            userPendingSOL[_u] += reward;
+            userBlockDQ[_u] += reward;
+            _recordReward(_u, 5, reward, address(0), 1);  // 5=节点奖励, 1=DQ
         }
     }
     function claimFee(address _u) external onlyM {
@@ -298,7 +368,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
             else if (t == 2) reward += nD1[_u];
             else if (t == 3) reward += nD2[_u];
         }
-        if (reward > 0) { nD0[_u] = 0; nD1[_u] = 0; nD2[_u] = 0; userPendingSOL[_u] += reward; }
+        if (reward > 0) { nD0[_u] = 0; nD1[_u] = 0; nD2[_u] = 0; userBlockDQ[_u] += reward; _recordReward(_u, 5, reward, address(0), 1); }  // 5=节点奖励, 1=DQ
     }
 
     // ============ D等级奖励 ============
@@ -313,7 +383,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
         uint8 lvl = userDLevel[_u];
         if (lvl == 0 || dLevelCount[lvl - 1] == 0) return;
         uint256 reward = dLevelAccReward[lvl - 1] - dLevelRewardDebt[_u];
-        if (reward > 0) { dLevelRewardDebt[_u] = dLevelAccReward[lvl - 1]; userPendingSOL[_u] += reward; }
+        if (reward > 0) { dLevelRewardDebt[_u] = dLevelAccReward[lvl - 1]; userBlockDQ[_u] += reward; _recordReward(_u, 6, reward, address(0), 1); }  // 6=D等级奖励, 1=DQ
     }
     function getDLevelReward(address _u) external view returns (uint256) {
         uint8 lvl = userDLevel[_u];
@@ -394,6 +464,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
         if (p > 0) {
             sDebt[_u][_i] = sAmt[_u][_i] * sA[_i] / 1e12;
             userPendingDQ[_u][_i] += p;
+            _recordReward(_u, 7, p, address(0), 1);  // 7=DQ分红, 1=DQ
         }
     }
     
@@ -403,6 +474,15 @@ contract DQMiningStakeCore is ReentrancyGuard {
         uint256 amt = userPendingDQ[_u][_i];
         if (amt > 0) {
             userPendingDQ[_u][_i] = 0;
+            IERC20(DQ_TOKEN).safeTransfer(_u, amt);
+        }
+    }
+    
+    // 提取待领取DQ爆块奖励(LP/节点/D等级)
+    function withdrawBlockDQ(address _u) external onlyM {
+        uint256 amt = userBlockDQ[_u];
+        if (amt > 0) {
+            userBlockDQ[_u] = 0;
             IERC20(DQ_TOKEN).safeTransfer(_u, amt);
         }
     }
@@ -445,36 +525,6 @@ contract DQMiningStakeCore is ReentrancyGuard {
     // 查询待领取DQ
     function getPendingDQ(address _u, uint _i) external view returns (uint256) {
         return userPendingDQ[_u][_i];
-    }
-    
-    // 一次性查询用户所有质押记录
-    function getAllStakeRecords(address _u) external view returns (
-        uint256[] memory amounts,
-        uint256[] memory startTimes,
-        uint256[] memory durations,
-        uint256[] memory pendingRewards,
-        bool[] memory actives,
-        bool[] memory canUnstakes
-    ) {
-        uint256 len = stakeRecords[_u].length;
-        amounts = new uint256[](len);
-        startTimes = new uint256[](len);
-        durations = new uint256[](len);
-        pendingRewards = new uint256[](len);
-        actives = new bool[](len);
-        canUnstakes = new bool[](len);
-        
-        for (uint256 i; i < len; i++) {
-            StakeRecord storage record = stakeRecords[_u][i];
-            uint256 periodIndex = _getPeriodIndex(record.duration);
-            
-            amounts[i] = record.amount;
-            startTimes[i] = record.startTime;
-            durations[i] = record.duration;
-            pendingRewards[i] = record.amount * sA[periodIndex] / 1e12 - record.rewardDebt;
-            actives[i] = record.active;
-            canUnstakes[i] = record.duration == 0 || block.timestamp >= record.startTime + record.duration;
-        }
     }
 
     // ============ DQ费用分配 ============
