@@ -241,9 +241,6 @@ export async function getChainUserInfo(userAddress: string): Promise<{
   directCount: number;
   level: number;
   totalInvest: string;
-  teamInvest: string;
-  energy: string;
-  pendingSOL: string;
 } | null> {
   try {
     const contract = getContract();
@@ -252,20 +249,12 @@ export async function getChainUserInfo(userAddress: string): Promise<{
       () => contract.getUser(userAddress),
       `getUser(${userAddress})`
     ) as any[];
-    // getUserStake 返回: [teamInvest, energy, pendingSOL]
-    const stakeInfo = await withRpcRetry(
-      () => contract.getUserStake(userAddress),
-      `getUserStake(${userAddress})`
-    ) as any[];
 
     return {
       referrer: userInfo[0],
       directCount: Number(userInfo[1]),
       level: Number(userInfo[2]),
       totalInvest: userInfo[3].toString(),
-      teamInvest: stakeInfo[0].toString(),
-      energy: stakeInfo[1].toString(),
-      pendingSOL: stakeInfo[2].toString(),
     };
   } catch (error) {
     console.error(`[ChainSync] 获取用户 ${userAddress} 信息失败:`, error);
@@ -286,9 +275,6 @@ async function syncUserToDatabase(
     directCount: number;
     level: number;
     totalInvest: string;
-    teamInvest: string;
-    energy: string;
-    pendingSOL: string;
   },
   fields?: string[]
 ): Promise<boolean> {
@@ -307,14 +293,11 @@ async function syncUserToDatabase(
       ? await getUserRegisterTxHash(userAddress)
       : existingUser?.activation_tx_hash ?? null;
 
-    // 定义可同步的字段映射（注意：合约无 lpShares 字段）
-    const fieldMap: Record<string, { chainKey: string; dbKey: string }> = {
+    // 定义可同步的字段映射（与 getChainUserInfo 返回字段对应）
+    const fieldMap: Record<string, { chainKey: keyof typeof userInfo; dbKey: string }> = {
       direct_count: { chainKey: 'directCount', dbKey: 'direct_count' },
       level: { chainKey: 'level', dbKey: 'level' },
       total_invest: { chainKey: 'totalInvest', dbKey: 'total_invest' },
-      team_invest: { chainKey: 'teamInvest', dbKey: 'team_invest' },
-      energy: { chainKey: 'energy', dbKey: 'energy' },
-      pending_sol: { chainKey: 'pendingSOL', dbKey: 'pending_sol' },
       referrer_address: { chainKey: 'referrer', dbKey: 'referrer_address' },
     };
 
@@ -334,7 +317,7 @@ async function syncUserToDatabase(
 
       for (const field of fieldsToSync) {
         if (fieldMap[field]) {
-          updateData[fieldMap[field].dbKey] = userInfo[fieldMap[field].chainKey as keyof typeof userInfo];
+          updateData[fieldMap[field].dbKey] = userInfo[fieldMap[field].chainKey];
         }
       }
 
@@ -378,7 +361,7 @@ async function syncUserToDatabase(
 
       for (const field of fieldsToSync) {
         if (fieldMap[field]) {
-          insertData[fieldMap[field].dbKey] = userInfo[fieldMap[field].chainKey as keyof typeof userInfo];
+          insertData[fieldMap[field].dbKey] = userInfo[fieldMap[field].chainKey];
         }
       }
 
