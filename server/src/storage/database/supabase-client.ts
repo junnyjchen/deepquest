@@ -757,6 +757,18 @@ CREATE TABLE IF NOT EXISTS admins (
     last_login TIMESTAMPTZ
 );
 
+  -- Team closure table
+  CREATE TABLE IF NOT EXISTS team_closure (
+    id BIGSERIAL PRIMARY KEY,
+    ancestor_id BIGINT NOT NULL REFERENCES users(id),
+    descendant_id BIGINT NOT NULL REFERENCES users(id),
+    depth INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  );
+
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_team_closure_ancestor_descendant_unique
+  ON team_closure(ancestor_id, descendant_id);
+
 -- Initialize data
 INSERT INTO pools (pool_name, balance) VALUES
     ('management', '0'), ('dao', '0'), ('insurance', '0'),
