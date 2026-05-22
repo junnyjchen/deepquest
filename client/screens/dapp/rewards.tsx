@@ -317,56 +317,58 @@ export default function RewardsScreen() {
         {/* 奖励 Tab */}
         {activeTab === 'rewards' && (
           <>
-            {showSolRewards && (
-              <>
-                <Text style={styles.sectionTitle}>{t('rewards.solRewards')}</Text>
-                <View style={styles.rewardRow}>
-                  <TouchableOpacity
-                    style={[styles.rewardCard, { backgroundColor: COLORS.solBg, borderColor: COLORS.solBorder }]}
-                    onPress={() => handleClaim('sol')}
-                    disabled={loading !== null}
-                  >
-                    <Text style={styles.rewardLabel}>{t('rewards.directReferral')}</Text>
-                    <Text style={[styles.rewardAmount, { color: COLORS.solAccent }]}>
-                      {parseFloat(solRewards.directReferral || '0').toFixed(4)} SOL
-                    </Text>
-                    <TouchableOpacity
-                      style={[styles.claimButton, { backgroundColor: COLORS.solBorder }]}
-                      onPress={() => handleClaim('sol')}
-                      disabled={loading === 'sol'}
-                    >
-                      {loading === 'sol' ? (
-                        <ActivityIndicator size="small" color="#000" />
-                      ) : (
-                        <Text style={styles.claimButtonText}>{t('rewards.claim.btn')}</Text>
-                      )}
-                    </TouchableOpacity>
-                  </TouchableOpacity>
+            <Text style={styles.sectionTitle}>{t('rewards.solRewards')}</Text>
+            <View style={styles.rewardRow}>
+              <TouchableOpacity
+                style={[styles.rewardCard, { backgroundColor: COLORS.solBg, borderColor: COLORS.solBorder }]}
+                onPress={() => handleClaim('sol')}
+                disabled={loading !== null}
+              >
+                <Text style={styles.rewardLabel}>{t('rewards.directReferral')}</Text>
+                <Text style={[styles.rewardAmount, { color: COLORS.solAccent }]}>
+                  {parseFloat(solRewards.directReferral || '0').toFixed(4)} SOL
+                </Text>
+                { showSolRewards && (
+                <TouchableOpacity
+                  style={[styles.claimButton, { backgroundColor: COLORS.solBorder }]}
+                  onPress={() => handleClaim('sol')}
+                  disabled={loading === 'sol'}
+                >
+                  {loading === 'sol' ? (
+                    <ActivityIndicator size="small" color="#000" />
+                  ) : (
+                    <Text style={styles.claimButtonText}>{t('rewards.claim.btn')}</Text>
+                  )}
+                </TouchableOpacity>
+                )}
+              </TouchableOpacity>
 
+              <TouchableOpacity
+                style={[styles.rewardCard, { backgroundColor: COLORS.solBg, borderColor: COLORS.solBorder }]}
+                onPress={() => handleClaim('fee')}
+                disabled={loading !== null}
+              >
+                <Text style={styles.rewardLabel}>{t('rewards.fee')}</Text>
+                <Text style={[styles.rewardAmount, { color: COLORS.solAccent }]}>
+                  {parseFloat(solRewards.fee || '0').toFixed(4)} SOL
+                </Text>
+                { showSolRewards && (
                   <TouchableOpacity
-                    style={[styles.rewardCard, { backgroundColor: COLORS.solBg, borderColor: COLORS.solBorder }]}
+                    style={[styles.claimButton, { backgroundColor: COLORS.solBorder }]}
                     onPress={() => handleClaim('fee')}
-                    disabled={loading !== null}
+                    disabled={loading === 'fee'}
                   >
-                    <Text style={styles.rewardLabel}>{t('rewards.fee')}</Text>
-                    <Text style={[styles.rewardAmount, { color: COLORS.solAccent }]}>
-                      {parseFloat(solRewards.fee || '0').toFixed(4)} SOL
-                    </Text>
-                    <TouchableOpacity
-                      style={[styles.claimButton, { backgroundColor: COLORS.solBorder }]}
-                      onPress={() => handleClaim('fee')}
-                      disabled={loading === 'fee'}
-                    >
-                      {loading === 'fee' ? (
-                        <ActivityIndicator size="small" color="#000" />
-                      ) : (
-                        <Text style={styles.claimButtonText}>{t('rewards.claim.btn')}</Text>
-                      )}
-                    </TouchableOpacity>
+                    {loading === 'fee' ? (
+                      <ActivityIndicator size="small" color="#000" />
+                    ) : (
+                      <Text style={styles.claimButtonText}>{t('rewards.claim.btn')}</Text>
+                    )}
                   </TouchableOpacity>
-                </View>
-              </>
-            )}
+                )}
+              </TouchableOpacity>
+            </View>
+          
+
 
             {/* DQ 奖励 */}
             <Text style={styles.sectionTitle}>{t('rewards.dqRewards')}</Text>
