@@ -5,6 +5,7 @@ import { ethers } from 'ethers';
 import { getSupabaseClient } from '../storage/database/supabase-client';
 import { getUserRegisterTxHash, isUserRegisteredOnChain, getUserInfoFromChain } from '../utils/bsc-web3';
 import { AVE_PAIR_ABI, AVE_PAIR_ADDRESS, DQTOKEN_CONTRACT_ADDRESS } from '../config/contracts';
+import { getCardConfigFromChain, getCardStatsFromChain, getUserCardsFromChain, syncAllCardsFromChainToDatabase } from '../utils/sync-chain-service';
 
 const supabase = getSupabaseClient();
 const router = Router();
@@ -588,28 +589,9 @@ router.get('/check-binding/:wallet_address', async (req, res) => {
 // 获取NFT卡牌配置
 router.get('/card-config', async (req, res) => {
   try {
-    // 从配置表获取卡牌配置
-    const { data: config, error } = await supabase
-      .from('configs')
-      .select('config_key, config_value')
-      .eq('config_key', 'card_config')
-      .single();
-
-    if (error || !config) {
-      // 返回默认配置
-      return res.json({
-        code: 0,
-        data: {
-          A: { price: '500', total: 1000, remaining: 1000, reward_rate: 4, name: 'S1节点卡', level: 'S1', fee_rate: 10 },
-          B: { price: '1500', total: 500, remaining: 500, reward_rate: 5, name: 'S2节点卡', level: 'S2', fee_rate: 15 },
-          C: { price: '5000', total: 100, remaining: 100, reward_rate: 6, name: 'S3节点卡', level: 'S3', fee_rate: 15 },
-        }
-      });
-    }
-
     res.json({
       code: 0,
-      data: config.config_value
+      data: await getCardConfigFromChain()
     });
   } catch (error) {
     console.error('获取卡牌配置失败:', error);
@@ -743,22 +725,9 @@ router.get('/my-cards/:wallet_address', async (req, res) => {
   try {
     const { wallet_address } = req.params;
 
-    const { data: cards, error } = await supabase
-      .from('cards')
-      .select('*')
-      .eq('owner_address', wallet_address.toLowerCase())
-      .order('minted_at', { ascending: false });
-
-    if (error) {
-      return res.status(500).json({
-        code: 500,
-        message: '查询失败'
-      });
-    }
-
     res.json({
       code: 0,
-      data: cards || []
+      data: await getUserCardsFromChain(wallet_address)
     });
   } catch (error) {
     console.error('获取NFT卡牌失败:', error);
@@ -813,49 +782,34 @@ router.get('/card-stats/:wallet_address', async (req, res) => {
   try {
     const { wallet_address } = req.params;
 
-    // 获取用户卡牌
-    const { data: cards } = await supabase
-      .from('cards')
-      .select('card_type, mint_price')
-      .eq('owner_address', wallet_address.toLowerCase())
-      .eq('status', 'active');
-
-    // 计算总投入
-    const totalInvest = cards?.reduce((sum: number, card: any) => sum + parseFloat(card.mint_price || '0'), 0) || 0;
-
-    // 获取累计收益
-    const { data: rewards } = await supabase
-      .from('card_rewards')
-      .select('amount')
-      .eq('user_address', wallet_address.toLowerCase())
-      .eq('status', 'claimed');
-
-    const totalReward = rewards?.reduce((sum: number, r: any) => sum + parseFloat(r.amount || '0'), 0) || 0;
-
-    // 获取待领取收益
-    const { data: pendingRewards } = await supabase
-      .from('card_rewards')
-      .select('amount')
-      .eq('user_address', wallet_address.toLowerCase())
-      .eq('status', 'pending');
-
-    const pendingReward = pendingRewards?.reduce((sum: number, r: any) => sum + parseFloat(r.amount || '0'), 0) || 0;
-
     res.json({
       code: 0,
-      data: {
-        cards: cards || [],
-        cardCount: cards?.length || 0,
-        totalInvest: totalInvest.toFixed(2),
-        totalReward: totalReward.toFixed(2),
-        pendingReward: pendingReward.toFixed(2)
-      }
+      data: await getCardStatsFromChain(wallet_address)
     });
   } catch (error) {
     console.error('获取卡牌统计失败:', error);
     res.status(500).json({
       code: 500,
       message: '服务器错误'
+    });
+  }
+});
+
+// 全量同步链上卡牌到本地 cards 表
+router.post('/card-sync/full', async (req, res) => {
+  try {
+    const result = await syncAllCardsFromChainToDatabase();
+
+    res.json({
+      code: 0,
+      message: '链上卡牌已同步到本地接口',
+      data: result,
+    });
+  } catch (error: any) {
+    console.error('全量同步链上卡牌失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: error.message || '全量同步链上卡牌失败',
     });
   }
 });
