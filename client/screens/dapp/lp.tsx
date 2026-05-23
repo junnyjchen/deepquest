@@ -251,7 +251,7 @@ export default function DappLP() {
   const handleCopyAddress = async () => {
     if (!walletAddress) return;
     await Clipboard.setStringAsync(walletAddress);
-    showToast.success(t('common.success'), '钱包地址已复制到剪贴板');
+    showToast.success(t('common.success'), t('profile.walletCopied'));
   };
 
   const handleDisconnect = async () => {

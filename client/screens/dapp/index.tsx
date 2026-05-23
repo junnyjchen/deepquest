@@ -138,10 +138,10 @@ export default function DappIndex() {
 
   // 质押周期配置
   const stakePeriods = [
-    { days: 30, label: '30天', reward: '5%' },
-    { days: 90, label: '90天', reward: '10%' },
-    { days: 180, label: '180天', reward: '15%' },
-    { days: 360, label: '360天', reward: '20%' },
+    { days: 30, label: `${30}${t('common.daysUnit')}`, reward: '5%' },
+    { days: 90, label: `${90}${t('common.daysUnit')}`, reward: '10%' },
+    { days: 180, label: `${180}${t('common.daysUnit')}`, reward: '15%' },
+    { days: 360, label: `${360}${t('common.daysUnit')}`, reward: '20%' },
   ] as const;
 
   // 激活相关状态
@@ -258,7 +258,7 @@ export default function DappIndex() {
       };
       
       init();
-    }, [])
+    }, [fetchChainBalances])
   );
   
   // 检查邀请绑定状态
@@ -493,7 +493,6 @@ export default function DappIndex() {
       if (alreadyRegistered) {
         setIsOnChainRegistered(true);
         setActivationModalVisible(false);
-        showToast.info('提示', '账户已经激活，无需重复激活！');
         showToast.info(t('common.tips'), t('index.accountAlreadyActivated'));
         return;
       }
@@ -605,13 +604,11 @@ export default function DappIndex() {
     
     if (!walletAddress) {
       console.log('[handleSwap] 钱包未连接，返回');
-      showToast.info('提示', '请先连接钱包');
       showToast.info(t('common.tips'), t('common.pleaseConnectWallet'));
       return;
     }
     if (!sellAmount || parseFloat(sellAmount) <= 0) {
       console.log('[handleSwap] 兑换数量无效，返回');
-      showToast.info('提示', '请输入兑换数量');
       showToast.info(t('common.tips'), t('index.pleaseInputSwapAmount'));
       return;
     }
@@ -621,7 +618,6 @@ export default function DappIndex() {
     const sellAmountNum = parseFloat(sellAmount);
     if (sellAmountNum > dqBalance) {
       console.log('[handleSwap] DQ 余额不足', { sellAmountNum, dqBalance });
-      showToast.info('提示', 'DQ 余额不足');
       showToast.info(t('common.tips'), t('index.insufficientDqBalance'));
       return;
     }
@@ -791,7 +787,7 @@ export default function DappIndex() {
                 );
                 await tx.wait();
                 await dappApi.stake(walletAddress, stakeAmount, tx.hash, stakePeriod);
-                showToast.success(t('common.success'), t('index.stakeSuccess') || '质押成功');
+                showToast.success(t('common.success'), t('index.stakeSuccess'));
                 setStakeAmount('');
               } catch (error: any) {
                 console.error('授权或质押失败:', error);
@@ -816,7 +812,7 @@ export default function DappIndex() {
         );
         await tx.wait();
         await dappApi.stake(walletAddress, stakeAmount, tx.hash, stakePeriod);
-        showToast.success(t('common.success'), t('index.stakeSuccess') || '质押成功');
+        showToast.success(t('common.success'), t('index.stakeSuccess'));
         setStakeAmount('');
       } else {
         // 模拟模式 - 调用后端 API
@@ -867,7 +863,7 @@ export default function DappIndex() {
   const handleCopyAddress = async () => {
     if (walletAddress) {
       await Clipboard.setStringAsync(walletAddress);
-      showToast.success('已复制', '钱包地址已复制到剪贴板');
+      showToast.success(t('profile.copied'), t('profile.walletCopied'));
     }
   };
 
@@ -891,7 +887,7 @@ export default function DappIndex() {
       <Screen>
         <View className="flex-1 items-center justify-center" style={{ backgroundColor: BG_DARK }}>
           <ActivityIndicator size="large" color={YELLOW} />
-          <Text className="text-white mt-4">加载中...</Text>
+          <Text className="text-white mt-4">{t('common.loading')}</Text>
         </View>
       </Screen>
     );
@@ -1061,7 +1057,7 @@ export default function DappIndex() {
                     onPress={handleActivateClick}
                   >
                     <Ionicons name="warning" size={14} color={YELLOW} />
-                    <Text className="text-sm" style={{ color: YELLOW }}>激活</Text>
+                      <Text className="text-sm" style={{ color: YELLOW }}>{t('dapp.activate')}</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
@@ -1092,7 +1088,7 @@ export default function DappIndex() {
           >
             <Ionicons name="globe-outline" size={14} color={YELLOW} />
             <Text className="text-xs" style={{ color: YELLOW }}>
-              {t('home.language')}：{languages.find(l => l.code === language)?.nativeName || '繁體中文'}
+              {t('home.language')}：{languages.find(l => l.code === language)?.nativeName || languages[0]?.nativeName || ''}
             </Text>
             <Ionicons name="chevron-down" size={12} color={YELLOW} />
           </TouchableOpacity>
@@ -1157,24 +1153,24 @@ export default function DappIndex() {
             <View style={styles.activationModalContent}>
               <View style={styles.activationModalHeader}>
                 <Ionicons name="warning" size={48} color={YELLOW} />
-                <Text style={styles.activationModalTitle}>激活账户</Text>
+                <Text style={styles.activationModalTitle}>{t('dapp.activationModalTitle')}</Text>
               </View>
               
               <Text style={styles.activationModalDesc}>
-                您的账户尚未在合约上激活，需要发起一笔激活交易才能使用完整功能。
+                {t('dapp.activationModalDesc')}
               </Text>
               
               <View style={styles.activationInfoBox}>
-                <Text style={styles.activationInfoLabel}>激活说明:</Text>
-                <Text style={styles.activationInfoText}>1. 激活需要有效的节点推荐人地址</Text>
-                <Text style={styles.activationInfoText}>2. 点击下方「立即激活」按钮</Text>
-                <Text style={styles.activationInfoText}>3. 在钱包中确认交易</Text>
-                <Text style={styles.activationInfoText}>4. 等待区块链确认（约15-30秒）</Text>
+                <Text style={styles.activationInfoLabel}>{t('dapp.activationInfoLabel')}</Text>
+                <Text style={styles.activationInfoText}>{t('dapp.activationStep1')}</Text>
+                <Text style={styles.activationInfoText}>{t('dapp.activationStep2')}</Text>
+                <Text style={styles.activationInfoText}>{t('dapp.activationStep3')}</Text>
+                <Text style={styles.activationInfoText}>{t('dapp.activationStep4')}</Text>
               </View>
 
               {/* 推荐人地址输入 */}
               <View style={styles.referrerInputBox}>
-                <Text style={styles.referrerInputLabel}>节点推荐人地址:</Text>
+                <Text style={styles.referrerInputLabel}>{t('dapp.referrerInputLabel')}</Text>
                 <TextInput
                   style={styles.referrerInput}
                   value={activationReferrer}
@@ -1191,7 +1187,7 @@ export default function DappIndex() {
                   style={[styles.activationModalBtn, styles.skipBtn]}
                   onPress={() => setActivationModalVisible(false)}
                 >
-                  <Text style={styles.skipBtnText}>稍后激活</Text>
+                  <Text style={styles.skipBtnText}>{t('dapp.activateLater')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.activationModalBtn, styles.activateBtn]}
@@ -1201,7 +1197,7 @@ export default function DappIndex() {
                   {activating ? (
                     <ActivityIndicator size="small" color="#0A0A12" />
                   ) : (
-                    <Text style={styles.activateBtnText}>立即激活</Text>
+                    <Text style={styles.activateBtnText}>{t('index.activateNow')}</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -1220,16 +1216,16 @@ export default function DappIndex() {
             <View style={styles.inviteModalContent}>
               <View style={styles.inviteModalHeader}>
                 <Ionicons name="people-circle" size={48} color={YELLOW} />
-                <Text style={styles.inviteModalTitle}>邀请绑定</Text>
+                <Text style={styles.inviteModalTitle}>{t('dapp.inviteModalTitle')}</Text>
               </View>
               
               <Text style={styles.inviteModalDesc}>
-                您有一个待绑定的推荐人，绑定后可以获得邀请奖励
+                {t('dapp.inviteModalDesc')}
               </Text>
               
               {pendingInviteReferrer && (
                 <View style={styles.referrerAddressBox}>
-                  <Text style={styles.referrerLabel}>推荐人地址:</Text>
+                  <Text style={styles.referrerLabel}>{t('dapp.referrerAddressLabel')}</Text>
                   <Text style={styles.referrerAddress} numberOfLines={1} ellipsizeMode="middle">
                     {pendingInviteReferrer}
                   </Text>
@@ -1241,7 +1237,7 @@ export default function DappIndex() {
                   style={[styles.inviteModalBtn, styles.skipBtn]}
                   onPress={handleSkipInvite}
                 >
-                  <Text style={styles.skipBtnText}>暂不绑定</Text>
+                  <Text style={styles.skipBtnText}>{t('dapp.skipBind')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.inviteModalBtn, styles.bindBtn]}
@@ -1251,7 +1247,7 @@ export default function DappIndex() {
                   {bindLoading ? (
                     <ActivityIndicator size="small" color="#0A0A12" />
                   ) : (
-                    <Text style={styles.bindBtnText}>确认绑定</Text>
+                    <Text style={styles.bindBtnText}>{t('dapp.confirmBind')}</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -1296,10 +1292,10 @@ export default function DappIndex() {
                   <View className="w-8 h-8 rounded-full items-center justify-center" style={{ backgroundColor: CYAN }}>
                     <Ionicons name="diamond" size={16} color="#0A0A12" />
                   </View>
-                  <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>质押 DQ</Text>
+                  <Text className="text-base font-semibold" style={{ color: TEXT_WHITE }}>{t('dapp.stakeDqTitle')}</Text>
                 </View>
                 <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                  余额: {dqtBalance} DQ
+                  {t('dapp.balanceLabel')}: {dqtBalance} DQ
                 </Text>
               </View>
 
@@ -1342,7 +1338,7 @@ export default function DappIndex() {
 
               {/* 质押周期选择 */}
               <View className="mb-3">
-                <Text className="text-sm mb-2" style={{ color: TEXT_MUTED }}>选择质押周期</Text>
+                <Text className="text-sm mb-2" style={{ color: TEXT_MUTED }}>{t('dapp.selectStakePeriod')}</Text>
                 <View className="flex-row gap-2">
                   {stakePeriods.map((period) => (
                     <TouchableOpacity
@@ -1379,10 +1375,12 @@ export default function DappIndex() {
                   <Text className="text-sm font-medium" style={{ color: CYAN }}>{t('home.stakeInfo')}</Text>
                 </View>
                 <Text className="text-xs" style={{ color: TEXT_MUTED }}>
-                  • 单币质押，爆块产出{'\n'}
-                  • 质押 {stakePeriod} 天，享 {stakePeriods.find(p => p.days === stakePeriod)?.reward} 加权分红{'\n'}
-                  • 加权按权重分配卖出手续费6%{'\n'}
-                  • 质押锁定期内不可提前解押
+                  • {t('dapp.stakeInfoLine1')}{'\n'}
+                  • {t('dapp.stakeInfoLine2')
+                    .replace('{days}', String(stakePeriod))
+                    .replace('{reward}', stakePeriods.find((period) => period.days === stakePeriod)?.reward || '')}{'\n'}
+                  • {t('dapp.stakeInfoLine3')}{'\n'}
+                  • {t('dapp.stakeInfoLine4')}
                 </Text>
               </View>
             </View>
@@ -1406,7 +1404,7 @@ export default function DappIndex() {
                     </Text>
                   </View>
                   <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                    余额: {dqtBalance} DQ
+                      {t('dapp.balanceLabel')}: {dqtBalance} DQ
                   </Text>
                 </View>
 
@@ -1466,7 +1464,7 @@ export default function DappIndex() {
                     </Text>
                   </View>
                   <Text className="text-sm" style={{ color: TEXT_MUTED }}>
-                    余额: {solBalance} SOL
+                      {t('dapp.balanceLabel')}: {solBalance} SOL
                   </Text>
                 </View>
 
@@ -1523,7 +1521,7 @@ export default function DappIndex() {
               className="w-[calc(50%-4px)] p-3 rounded-xl"
               style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 1, borderColor: CYAN }}
             >
-              <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>全网算力(T/H)</Text>
+              <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('dapp.networkPowerLabel')}</Text>
               <Text className="text-lg font-bold" style={{ color: CYAN }}>
                 {statsLoading ? '...' : stats.networkPower}
               </Text>
@@ -1534,7 +1532,7 @@ export default function DappIndex() {
               className="w-[calc(50%-4px)] p-3 rounded-xl"
               style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 1, borderColor: PURPLE }}
             >
-              <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>总销毁</Text>
+              <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('dapp.totalBurnedLabel')}</Text>
               <Text className="text-lg font-bold" style={{ color: PURPLE }}>
                 {statsLoading ? '...' : stats.totalBurned}
               </Text>
@@ -1545,7 +1543,7 @@ export default function DappIndex() {
               className="w-[calc(50%-4px)] p-3 rounded-xl"
               style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 1, borderColor: TEXT_MUTED }}
             >
-              <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>总用户数</Text>
+              <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('dapp.totalUsersLabel')}</Text>
               <Text className="text-lg font-bold" style={{ color: TEXT_WHITE }}>
                 {statsLoading ? '...' : stats.totalUsers}
               </Text>
@@ -1556,7 +1554,7 @@ export default function DappIndex() {
         {/* 底池数据 */}
         <View className="px-4 pt-4 pb-2">
           <Text className="text-base font-semibold mb-3" style={{ color: TEXT_WHITE }}>
-            底池数据
+            {t('dapp.poolDataTitle')}
           </Text>
           <View className="flex-row flex-wrap gap-2">
             {/* SOL池 */}
@@ -1564,7 +1562,7 @@ export default function DappIndex() {
               className="w-[calc(50%-4px)] p-3 rounded-xl"
               style={{ backgroundColor: SOL_PURPLE }}
             >
-              <Text className="text-xs mb-1" style={{ color: '#FFF' }}>SOL池</Text>
+              <Text className="text-xs mb-1" style={{ color: '#FFF' }}>{t('dapp.solPoolLabel')}</Text>
               <Text className="text-lg font-bold" style={{ color: '#FFF' }}>
                 {statsLoading ? '...' : stats.solPoolBalance}
               </Text>
@@ -1575,7 +1573,7 @@ export default function DappIndex() {
               className="w-[calc(50%-4px)] p-3 rounded-xl"
               style={{ backgroundColor: CYAN }}
             >
-              <Text className="text-xs mb-1" style={{ color: '#0A0A12' }}>DQ池</Text>
+              <Text className="text-xs mb-1" style={{ color: '#0A0A12' }}>{t('dapp.dqPoolLabel')}</Text>
               <Text className="text-lg font-bold" style={{ color: '#0A0A12' }}>
                 {statsLoading ? '...' : stats.dqtPoolBalance}
               </Text>
