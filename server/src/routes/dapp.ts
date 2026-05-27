@@ -4,7 +4,7 @@ import path from 'path';
 import { ethers } from 'ethers';
 import { getSupabaseClient } from '../storage/database/supabase-client';
 import { getUserRegisterTxHash, isUserRegisteredOnChain, getUserInfoFromChain } from '../utils/bsc-web3';
-import { AVE_PAIR_ABI, AVE_PAIR_ADDRESS, DQTOKEN_CONTRACT_ADDRESS } from '../config/contracts';
+import { AVE_PAIR_ABI, AVE_PAIR_ADDRESS, DQTOKEN_CONTRACT_ADDRESS } from '../config/contracts.ts';
 import { getCardConfigFromChain, getCardStatsFromChain, getUserCardsFromChain, syncAllCardsFromChainToDatabase } from '../utils/sync-chain-service';
 
 const supabase = getSupabaseClient();

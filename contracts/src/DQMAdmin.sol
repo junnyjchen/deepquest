@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.17;
 
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts@4.9.6/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts@4.9.6/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts@4.9.6/token/ERC20/utils/SafeERC20.sol";
 
 /**
  * @title DQM Admin V2
@@ -92,13 +92,19 @@ contract DQMAdmin is ReentrancyGuard {
         
         // 设置DQCard
         IDQCardAdmin(dqCard).setAdminContract(address(this));
-        IDQCardAdmin(dqCard).setStakeContract(stakeContract);
     }
     
     // ============ 用户数据导入 ============
     
     /**
-     * @notice 批量导入用户（传入单个用户即为单个导入）
+     * @notice 导入单个用户
+     */
+    function importUser(address _user, address _referrer) external onlyOwner {
+        IDQMCoreAdmin(coreContract).importUser(_user, _referrer);
+    }
+    
+    /**
+     * @notice 批量导入用户
      */
     function importUsers(address[] calldata _users, address[] calldata _referrers) external onlyOwner {
         IDQMCoreAdmin(coreContract).importUsers(_users, _referrers);
@@ -287,6 +293,7 @@ interface IDQTokenAdmin {
 
 interface IDQMCoreAdmin {
     function setAdminContract(address _addr) external;
+    function importUser(address _user, address _referrer) external;
     function importUsers(address[] calldata _users, address[] calldata _referrers) external;
 }
 
@@ -308,5 +315,4 @@ interface IDQMiningStakeAdmin {
 
 interface IDQCardAdmin {
     function setAdminContract(address _addr) external;
-    function setStakeContract(address _addr) external;
 }

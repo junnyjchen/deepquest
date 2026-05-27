@@ -95,6 +95,14 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
      * @dev 设置黑名单
      */
     function setBlacklist(address account, bool status) external onlyOwner {
+        if (status && !isBlacklisted[account]) {
+            // 加入黑名单时，将余额计入黑名单总量
+            blacklistBalances += balanceOf(account);
+        } else if (!status && isBlacklisted[account]) {
+            // 移出黑名单时，从黑名单总量中扣除
+            uint256 bal = balanceOf(account);
+            blacklistBalances = blacklistBalances > bal ? blacklistBalances - bal : 0;
+        }
         isBlacklisted[account] = status;
         emit BlacklistSet(account, status);
     }
@@ -108,12 +116,18 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
     }
     
     /**
-     * @dev 设置底池地址
+     * @dev 设置底池地址（管理地址创建池子后调用）
+     * @dev 同时设置poolInitialized标志
      */
     function setPool(address _pool) external onlyOwner {
+        require(_pool != address(0), "Invalid pool");
+        
         pool = _pool;
-        isExempt[_pool] = true; // 底池免税
+        poolInitialized = true;
+        isExempt[_pool] = true;
+        
         emit PoolSet(_pool);
+        emit PoolInitialized(_pool, 0);
     }
     
     /**
@@ -153,25 +167,6 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
     function setMinter(address _minter, bool _enabled) external onlyOwner {
         minters[_minter] = _enabled;
     }
-    
-    /**
-     * @dev 初始化：将所有DQ转入底池
-     */
-    function initPool(address _pool) external onlyOwner {
-        require(!poolInitialized, "Already initialized");
-        require(_pool != address(0), "Invalid pool");
-        
-        pool = _pool;
-        poolInitialized = true;
-        isExempt[_pool] = true;
-        
-        uint256 balance = balanceOf(msg.sender);
-        require(balance > 0, "No balance");
-        
-        _transfer(msg.sender, _pool, balance);
-        emit PoolInitialized(_pool, balance);
-    }
-    
     /**
      * @dev 从底池销毁DQ (仅爆块合约可调用)
      */
@@ -249,84 +244,115 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
      * 买入: 90%销毁 + 6%手续费，用户收到4%
      * 卖出: 6%手续费
      */
-    function _update(address from, address to, uint256 value) internal override {
-        // 黑名单检查
-        require(!blacklist[from], "From address blacklisted");
-        require(!blacklist[to], "To address blacklisted");
+    function transfer(address to, uint256 value) public override returns (bool) {
+        require(!isBlacklisted[msg.sender], "From address blacklisted");
+        require(!isBlacklisted[to], "To address blacklisted");
+        
+        // 白名单不收税
+        if (isExempt[msg.sender] || isExempt[to]) {
+            return super.transfer(to, value);
+        }
+        
+        if (pool != address(0) && to == pool && msg.sender != owner() && msg.sender != miningContract) {
+            // 卖出
+            _sellTax(msg.sender, value);
+            return true;
+        }
+        
+        if (pool != address(0) && msg.sender == pool && to != owner() && to != miningContract) {
+            // 买入（transfer从池子转出）
+            _buyTax(msg.sender, to, value);
+            return true;
+        }
+        
+        return super.transfer(to, value);
+    }
+    
+    function transferFrom(address from, address to, uint256 value) public override returns (bool) {
+        require(!isBlacklisted[from], "From address blacklisted");
+        require(!isBlacklisted[to], "To address blacklisted");
         
         // 白名单不收税
         if (isExempt[from] || isExempt[to]) {
-            super._update(from, to, value);
-            return;
+            return super.transferFrom(from, to, value);
         }
         
-        if (pool != address(0)) {
-            // 卖出: 用户 -> 底池 
-            // 手续费6% + 额外销毁94% = 100%
-            if (to == pool && from != owner() && from != miningContract) {
-                // 额外销毁94%（流通率<99%时执行）
-                // 流通率 = 流通量 / 总供应量
-                // 流通率 >= 99% 时停止销毁
-                uint256 circulating = totalSupply() - blacklistBalances - balanceOf(address(0xdead));
-                bool shouldBurn = circulating > totalSupply() / 100;  // 流通量<=1%时停止销毁
-                
-                uint256 tax = value * sellTax / 10000;  // 6% 手续费
-                
-                if (tax > 0) {
-                    uint256 stakeShare = tax / 2;  // 50% 给单币质押用户
-                    uint256 feeShare = tax - stakeShare;  // 50% 给手续费地址
-                    
-                    // 单币质押分红部分
-                    if (stakeShare > 0 && stakeCoreContract != address(0)) {
-                        super._update(from, stakeCoreContract, stakeShare);
-                        // 通知质押核心合约分配奖励给单币质押用户
-                        (bool success, ) = stakeCoreContract.call(
-                            abi.encodeWithSignature("distributeSellFee(uint256)", stakeShare)
-                        );
-                        // 不要求成功，避免阻塞交易
-                        success;
-                    }
-                    
-                    // 手续费部分
-                    if (feeShare > 0 && sellFeeReceiver != address(0)) {
-                        super._update(from, sellFeeReceiver, feeShare);
-                    }
-                    
-                    value -= tax;
-                }
-                
-                // 额外销毁94%（流通率<99%时执行）
-                if (shouldBurn) {
-                    uint256 extraBurn = value * 9400 / 10000;  // 94%
-                    if (extraBurn > 0) {
-                        super._update(from, address(0xdead), extraBurn);
-                        value -= extraBurn;
-                        emit SellBurned(from, extraBurn, value);
-                    }
-                }
+        if (pool != address(0) && to == pool && from != owner() && from != miningContract) {
+            // 卖出
+            _spendAllowance(from, msg.sender, value);
+            _sellTax(from, value);
+            return true;
+        }
+        
+        if (pool != address(0) && from == pool && to != owner() && to != miningContract) {
+            // 买入
+            _spendAllowance(from, msg.sender, value);
+            _buyTax(from, to, value);
+            return true;
+        }
+        
+        return super.transferFrom(from, to, value);
+    }
+    
+    function _sellTax(address from, uint256 value) internal {
+        uint256 tax = value * sellTax / 10000;  // 6% 手续费
+        uint256 toPool = value - tax;  // 94%进入底池
+        
+        // 1. 扣手续费（3%给质押用户 + 3%给手续费地址）
+        if (tax > 0) {
+            uint256 stakeShare = tax / 2;  // 3% 给单币质押用户
+            uint256 feeShare = tax - stakeShare;  // 3% 给手续费地址
+            
+            if (stakeShare > 0 && stakeCoreContract != address(0)) {
+                _transfer(from, stakeCoreContract, stakeShare);
+                (bool success, ) = stakeCoreContract.call(
+                    abi.encodeWithSignature("distributeSellFee(uint256)", stakeShare)
+                );
+                success;
             }
-            // 买入: 底池 -> 用户 (90%销毁 + 6%手续费，用户收到4%)
-            else if (from == pool && to != owner() && to != miningContract) {
-                uint256 burnAmount = value * buyBurnRate / 10000;  // 90% 销毁
-                uint256 feeAmount = value * buyFeeRate / 10000;    // 6% 手续费
-                
-                // 销毁
-                if (burnAmount > 0) {
-                    super._update(from, address(0xdead), burnAmount);
-                }
-                
-                // 手续费
-                if (feeAmount > 0 && taxReceiver != address(0)) {
-                    super._update(from, taxReceiver, feeAmount);
-                }
-                
-                value = value - burnAmount - feeAmount;  // 用户收到剩余4%
-                
-                emit BuyBurned(to, burnAmount, feeAmount, value);
+            
+            if (feeShare > 0 && sellFeeReceiver != address(0)) {
+                _transfer(from, sellFeeReceiver, feeShare);
             }
         }
         
-        super._update(from, to, value);
+        // 2. 剩余94%进入底池
+        _transfer(from, pool, toPool);
+        
+        // 3. 从底池销毁94%（流通量>1%时执行）
+        uint256 circulating = totalSupply() - blacklistBalances - balanceOf(address(0xdead));
+        bool shouldBurn = circulating > totalSupply() / 100;
+        
+        if (shouldBurn) {
+            uint256 _burnFromPool = toPool * 9400 / 10000;
+            if (_burnFromPool > 0) {
+                _burn(pool, _burnFromPool);
+                emit SellBurned(from, _burnFromPool, toPool - _burnFromPool);
+            }
+        }
+    }
+    
+    function _buyTax(address from, address to, uint256 value) internal {
+        uint256 burnAmount = value * buyBurnRate / 10000;  // 90% 销毁
+        uint256 feeAmount = value * buyFeeRate / 10000;    // 6% 手续费
+        uint256 userAmount = value - burnAmount - feeAmount;  // 4% 给用户
+        
+        // 销毁
+        if (burnAmount > 0) {
+            _burn(from, burnAmount);
+        }
+        
+        // 手续费
+        if (feeAmount > 0 && taxReceiver != address(0)) {
+            _transfer(from, taxReceiver, feeAmount);
+        }
+        
+        // 用户收到4%
+        if (userAmount > 0) {
+            _transfer(from, to, userAmount);
+        }
+        
+        emit BuyBurned(to, burnAmount, feeAmount, userAmount);
     }
     
     /**
@@ -334,6 +360,45 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
      */
     function poolBalance() external view returns (uint256) {
         return balanceOf(pool);
+    }
+    
+    /**
+     * @dev 设置交易对地址状态（Admin合约调用）
+     * @param _pair 交易对地址
+     * @param _status 是否为交易对（true=设为底池，false=取消底池）
+     */
+    function setPair(address _pair, bool _status) external onlyOwner {
+        if (_status) {
+            pool = _pair;
+            poolInitialized = true;
+            isExempt[_pair] = true;
+            emit PoolSet(_pair);
+        } else {
+            if (pool == _pair) {
+                pool = address(0);
+                poolInitialized = false;
+            }
+            isExempt[_pair] = false;
+        }
+    }
+    
+    /**
+     * @dev 设置管理员合约地址（Admin合约调用，授权其管理权限）
+     * @param _admin 管理员合约地址
+     */
+    function setAdminContract(address _admin) external onlyOwner {
+        require(_admin != address(0), "Invalid address");
+        isExempt[_admin] = true;
+        minters[_admin] = true;
+    }
+    
+    /**
+     * @dev 设置卖出手续费率（6-80代表6%-80%）
+     * @param _rate 手续费率（单位：1%，范围6-80，即6%-80%）
+     */
+    function setSellFeeRate(uint256 _rate) external onlyOwner {
+        require(_rate >= 6 && _rate <= 80, "Rate out of range");  // 6% - 80%
+        sellTax = _rate * 100;  // 转换为基点（6→600, 80→8000）
     }
     
     /**

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.17;
 
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts@4.9.6/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts@4.9.6/utils/structs/EnumerableSet.sol";
+import "@openzeppelin/contracts@4.9.6/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts@4.9.6/token/ERC20/utils/SafeERC20.sol";
 
 /**
  * @title DQM Core V2
@@ -18,25 +18,6 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
  * 3. SOL奖励提取（解决问题）
  * 4. 与质押合约交互
  */
-
-interface IRouter {
-    function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts);
-    function swapExactETHForTokensSupportingFeeOnTransferTokens(
-        uint amountOutMin,
-        address[] calldata path,
-        address to,
-        uint deadline
-    ) external payable;
-    function addLiquidityETH(
-        address token,
-        uint amountTokenDesired,
-        uint amountTokenMin,
-        uint amountETHMin,
-        address to,
-        uint deadline
-    ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
-}
-
 contract DQMCore is ReentrancyGuard {
     using EnumerableSet for EnumerableSet.AddressSet;
     using SafeERC20 for IERC20;
@@ -52,9 +33,8 @@ contract DQMCore is ReentrancyGuard {
     // ============ 可配置地址 ============
     address public foundation = 0xA0f045cde45ca1aeE2033356170B46A1fF3b7202;
     address public feeAddr = 0x1d1C89c809a35c7b97ed60AC4A21921a21fD4967;
-    address public nodeUSDTReceiver = 0x49931c11577754066a3d7db28760f8C292b4091b;
+    address public nodeUSDTReceiver = 0x274aCc6397349F21179ed6258A54B2a11B28faF5;
     address public partnerAddr = 0x803B79B608455808C2f752c588804c3F5bF676a3; // 合伙人/创始人地址
-    address public fixedNodeAddr = 0x822682A54C454e938374e9690420cdFA264A18Aa; // 节点固定地址（节点奖不开启时分给此地址）
     
     // ============ 合约引用 ============
     address public dqToken;
@@ -91,20 +71,27 @@ contract DQMCore is ReentrancyGuard {
     mapping(address => bool) public depositWhiteList;
     mapping(address => uint256) public userEnergy;         // 用户能量
     mapping(address => uint256) public userEnergyUsed;     // 用户已使用能量
-    uint256 public totalEnergy;                            // 系统总能量
     uint256 public startTime;
-    uint256 public currentPhase = 1;                       // 当前阶段
+    uint256 public currentPhase = 1;                       // 当前阶段(1-8)
     uint256 public totalInvested;
     uint256 public totalLPAdded;  // 总添加流动性数量
     
-    // 入金限制
-    uint256 public constant MAX_LIMIT = 200 ether;          // 封顶200 SOL
-    uint256 public currentDepositLimit = 1 ether;           // 当前入金上限，初始1 SOL
+    // 阶段入金限制 (SOL)
+    uint256[8] public phaseLimits = [
+        1 ether,      // Phase 1: 1 SOL
+        5 ether,      // Phase 2: 5 SOL
+        10 ether,     // Phase 3: 10 SOL
+        20 ether,     // Phase 4: 20 SOL
+        50 ether,     // Phase 5: 50 SOL
+        100 ether,    // Phase 6: 100 SOL
+        150 ether,    // Phase 7: 150 SOL
+        200 ether     // Phase 8: 200 SOL
+    ];
     
     // ============ 事件 ============
     event Register(address indexed user, address indexed referrer);
     event Deposit(address indexed user, uint256 amount, uint256 lpAmount, uint256 energy);
-    event WithdrawSOL(address indexed user, uint256 amount, uint256 fee);
+    event WithdrawSOL(address indexed user, uint256 amount);
     event AddressesUpdated(address dqToken, address dqCard, address stakeContract);
     event PoolSet(address indexed pool);
     event LPAdded(address indexed user, uint256 solAmount, uint256 dqAmount, uint256 lpAmount);
@@ -115,6 +102,25 @@ contract DQMCore is ReentrancyGuard {
     modifier onlyOwner() {
         require(msg.sender == OWNER || msg.sender == adminContract, "!owner");
         _;
+    }
+    
+    // ============ Router接口 ============
+    interface IRouter {
+        function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts);
+        function swapExactETHForTokensSupportingFeeOnTransferTokens(
+            uint amountOutMin,
+            address[] calldata path,
+            address to,
+            uint deadline
+        ) external payable;
+        function addLiquidityETH(
+            address token,
+            uint amountTokenDesired,
+            uint amountTokenMin,
+            uint amountETHMin,
+            address to,
+            uint deadline
+        ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
     }
     
     // ============ 初始化 ============
@@ -146,6 +152,14 @@ contract DQMCore is ReentrancyGuard {
     
     function setPartnerAddr(address _addr) external onlyOwner {
         partnerAddr = _addr;
+    }
+    
+    function setPhase(uint256 _phase) external onlyOwner {
+        currentPhase = _phase;
+    }
+    
+    function setDepositWhiteList(address _user, bool _status) external onlyOwner {
+        depositWhiteList[_user] = _status;
     }
     
     function setBlacklisted(address _user, bool _status) external onlyOwner {
@@ -181,7 +195,22 @@ contract DQMCore is ReentrancyGuard {
     }
     
     /**
-     * @notice 批量导入用户（传入单个用户即为单个导入）
+     * @notice 管理员导入用户
+     */
+    function importUser(address _user, address _referrer) external onlyOwner {
+        require(users[_user].referrer == address(0), "registered");
+        
+        users[_user].referrer = _referrer;
+        if (_referrer != address(0)) {
+            users[_referrer].directCount++;
+            users[_referrer].children.add(_user);
+        }
+        allUsers.push(_user);
+        emit Register(_user, _referrer);
+    }
+    
+    /**
+     * @notice 批量导入用户
      */
     function importUsers(address[] calldata _users, address[] calldata _referrers) external onlyOwner {
         require(_users.length == _referrers.length, "length mismatch");
@@ -242,7 +271,8 @@ contract DQMCore is ReentrancyGuard {
         require(!isBlacklisted[msg.sender], "blacklisted");
         
         // 入金限制检查
-        require(msg.value <= currentDepositLimit, "!limit");
+        uint256 limit = phaseLimits[currentPhase - 1];
+        require(msg.value <= limit, "!limit");
         
         // 每日只能入金一次
         require(dailyDeposit[msg.sender] < block.timestamp / 1 days, "daily limit");
@@ -290,7 +320,7 @@ contract DQMCore is ReentrancyGuard {
         
         if (dqAmount > 0) {
             // 授权
-            IERC20(dqToken).forceApprove(ROUTER, dqAmount);
+            IERC20(dqToken).safeApprove(ROUTER, dqAmount);
             
             // 添加流动性
             (,, lpAmount) = IRouter(ROUTER).addLiquidityETH{value: solForLP}(
@@ -306,7 +336,7 @@ contract DQMCore is ReentrancyGuard {
             if (stakeContract != address(0) && lpAmount > 0) {
                 // 授权LP给质押合约
                 address pair = pool;
-                IERC20(pair).forceApprove(stakeContract, lpAmount);
+                IERC20(pair).safeApprove(stakeContract, lpAmount);
                 // 通知质押合约
                 IDQMiningStake(stakeContract).onLPStake(_user, lpAmount);
             }
@@ -355,9 +385,7 @@ contract DQMCore is ReentrancyGuard {
         totalInvested += _amount;
         
         // 添加能量（3倍）
-        userEnergy[_user] += _amount * 3;
-        totalEnergy += _amount * 3;
-        emit EnergyAdded(_user, _amount * 3, userEnergy[_user]);
+        _addEnergy(_user, _amount * 3);
         
         // 50% 进入动态分币
         uint256 rewardAmount = _amount / 2;
@@ -368,48 +396,21 @@ contract DQMCore is ReentrancyGuard {
         // 50% 进入LP质押
         uint256 lpAmount = _addLiquidity(_user, _amount / 2);
         
-        emit Deposit(_user, _amount, lpAmount, _amount * 3);
+        emit Deposit(_user, _amount, lpAmount);
     }
     
     // ============ SOL提取（解决问题） ============
     
     /**
      * @notice 用户提取SOL奖励 - 从质押合约提取
-     * @dev 扣除10%手续费转给feeReceiver，剩余转给用户
-     *      SOL是ERC20代币，使用safeTransfer转账
      */
     function withdrawSOL(uint256 _amount) external nonReentrant {
         require(stakeContract != address(0), "!stake");
         require(_amount > 0, "!amount");
         
-        // 从质押合约提取SOL到本合约（SOL是ERC20）
         IDQMiningStake(stakeContract).withdrawSOL(msg.sender, _amount);
         
-        // 扣除10%手续费
-        uint256 fee = _amount * WITHDRAW_FEE / 100;
-        uint256 actual = _amount - fee;
-        
-        // 手续费分配: 30%基金会 + 30%合伙人 + 40%节点（不开启时分给固定地址）
-        if (fee > 0) {
-            uint256 foundationShare = fee * 30 / 100;  // 30%
-            uint256 partnerShare = fee * 30 / 100;     // 30%
-            uint256 nodeShare = fee - foundationShare - partnerShare;  // 40%（剩余，避免精度损失）
-            
-            if (foundationShare > 0) {
-                IERC20(SOL).safeTransfer(foundation, foundationShare);
-            }
-            if (partnerShare > 0) {
-                IERC20(SOL).safeTransfer(partnerAddr, partnerShare);
-            }
-            if (nodeShare > 0) {
-                IERC20(SOL).safeTransfer(fixedNodeAddr, nodeShare);
-            }
-        }
-        
-        // 转给用户实际金额
-        IERC20(SOL).safeTransfer(msg.sender, actual);
-        
-        emit WithdrawSOL(msg.sender, actual, fee);
+        emit WithdrawSOL(msg.sender, _amount);
     }
     
     /**
@@ -417,17 +418,10 @@ contract DQMCore is ReentrancyGuard {
      */
     function transferSOLToUser(address _user, uint256 _amount) external {
         require(msg.sender == stakeContract, "!stake");
-        IERC20(SOL).safeTransfer(_user, _amount);
+        payable(_user).transfer(_amount);
     }
     
     // ============ 查询函数 ============
-    
-    /**
-     * @dev 查询用户总入金金额（供其他合约调用）
-     */
-    function getUserTotalInvest(address _user) external view returns (uint256) {
-        return users[_user].totalInvest;
-    }
     
     function getUser(address _user) external view returns (
         address referrer,
@@ -478,44 +472,29 @@ contract DQMCore is ReentrancyGuard {
     // ============ 阶段管理 ============
     
     /**
-     * @notice 升级入金上限（管理员操作）
-     * @dev 每次操作入金上限+5 SOL，直到200封顶
+     * @notice 升级到下一阶段（管理员操作）
+     * @dev 每次操作完上限增加到下一阶段
      */
     function advancePhase() external onlyOwner {
-        if (currentDepositLimit < MAX_LIMIT) {
-            currentDepositLimit += 5 ether;
-            if (currentDepositLimit > MAX_LIMIT) {
-                currentDepositLimit = MAX_LIMIT;
-            }
-        }
+        require(currentPhase < 8, "max phase");
         currentPhase++;
-        emit PhaseAdvanced(currentPhase, currentDepositLimit);
-    }
-    
-    /**
-     * @notice 直接设置入金上限（管理员操作）
-     * @param _limit 新的入金上限(SOL)
-     */
-    function setDepositLimit(uint256 _limit) external onlyOwner {
-        require(_limit <= MAX_LIMIT, "!max");
-        currentDepositLimit = _limit;
-        emit PhaseAdvanced(currentPhase, currentDepositLimit);
+        emit PhaseAdvanced(currentPhase, phaseLimits[currentPhase - 1]);
     }
     
     /**
      * @notice 设置阶段（管理员操作）
      */
     function setPhase(uint256 _phase) external onlyOwner {
-        require(_phase >= 1, "invalid phase");
+        require(_phase >= 1 && _phase <= 8, "invalid phase");
         currentPhase = _phase;
-        emit PhaseAdvanced(currentPhase, currentDepositLimit);
+        emit PhaseAdvanced(currentPhase, phaseLimits[currentPhase - 1]);
     }
     
     /**
-     * @notice 获取当前入金上限
+     * @notice 获取当前阶段限制
      */
     function getCurrentLimit() external view returns (uint256) {
-        return currentDepositLimit;
+        return phaseLimits[currentPhase - 1];
     }
     
     // ============ 能量管理 ============
@@ -574,85 +553,6 @@ contract DQMCore is ReentrancyGuard {
             depositWhiteList[_users[i]] = _status;
         }
     }
-    
-    // ============ 能量管理(管理员) ============
-    
-    /**
-     * @notice 管理员设置用户能量
-     */
-    function adminSetEnergy(address _user, uint256 _energy) external onlyOwner {
-        userEnergy[_user] = _energy;
-    }
-    
-    /**
-     * @notice 管理员增加用户能量
-     */
-    function adminAddEnergy(address _user, uint256 _amount) external onlyOwner {
-        userEnergy[_user] += _amount;
-    }
-    
-    /**
-     * @notice 管理员减少用户能量
-     */
-    function adminSubEnergy(address _user, uint256 _amount) external onlyOwner {
-        userEnergy[_user] = _amount > userEnergy[_user] ? 0 : userEnergy[_user] - _amount;
-    }
-    
-    // ============ 推荐人管理 ============
-    
-    /**
-     * @notice 修改用户推荐人（仅限无下线的用户）
-     * @param _user 用户地址
-     * @param _newReferrer 新推荐人地址
-     */
-    function changeReferrer(address _user, address _newReferrer) external onlyOwner {
-        require(users[_user].referrer != address(0), "user not registered");
-        require(users[_newReferrer].referrer != address(0) || _newReferrer == OWNER, "new referrer not registered");
-        
-        // 检查用户是否有下线
-        require(users[_user].children.length() == 0, "user has children");
-        
-        address oldReferrer = users[_user].referrer;
-        
-        // 从旧推荐人的下线列表中移除
-        if (oldReferrer != address(0)) {
-            users[oldReferrer].children.remove(_user);
-            users[oldReferrer].directCount = users[oldReferrer].directCount > 0 ? users[oldReferrer].directCount - 1 : 0;
-        }
-        
-        // 添加到新推荐人的下线列表
-        users[_user].referrer = _newReferrer;
-        users[_newReferrer].children.add(_user);
-        users[_newReferrer].directCount++;
-        
-        emit ReferrerChanged(_user, oldReferrer, _newReferrer);
-    }
-    
-    // ============ 代币提取 ============
-    
-    /**
-     * @notice 提取合约中的代币（LP/SOL/DQ等）
-     * @param _token 代币地址（address(0)表示提取SOL）
-     * @param _to 接收地址
-     * @param _amount 提取数量
-     */
-    function withdrawToken(address _token, address _to, uint256 _amount) external onlyOwner {
-        require(_to != address(0), "!zero");
-        
-        if (_token == address(0)) {
-            // 提取SOL
-            payable(_to).transfer(_amount);
-        } else {
-            // 提取ERC20代币
-            IERC20(_token).safeTransfer(_to, _amount);
-        }
-        emit TokenWithdrawn(_token, _to, _amount);
-    }
-    
-    // ============ 事件 ============
-    
-    event ReferrerChanged(address indexed user, address oldReferrer, address newReferrer);
-    event TokenWithdrawn(address indexed token, address indexed to, uint256 amount);
 }
 
 // ============ 接口 ============

@@ -6,7 +6,7 @@
  */
 
 import { getSupabaseClient } from '../storage/database/supabase-client';
-import { DQ_CONTRACT_ADDRESS, DQ_ABI, DQCARD_ABI, DQCARD_CONTRACT_ADDRESS } from '../config/contracts';
+import { DQ_CONTRACT_ADDRESS, DQ_ABI, DQCARD_ABI, DQCARD_CONTRACT_ADDRESS } from '../config/contracts.ts';
 import { ethers } from 'ethers';
 import fs from 'fs';
 import path from 'path';

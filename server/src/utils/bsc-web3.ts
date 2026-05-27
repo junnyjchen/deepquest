@@ -3,8 +3,10 @@ import fs from 'fs';
 import path from 'path';
 import {
   DQ_CONTRACT_ADDRESS,
+  DQSTAKE_CONTRACT_ADDRESS,
   DQ_ABI as DQ_MINING_ABI,
-} from '../config/contracts';
+  DQSTAKE_ABI,
+} from '../config/contracts.ts';
 
 // BSC 主网 RPC
 const BSC_RPC_URL = process.env.BSC_RPC_URL || 'https://bsc-dataseed.binance.org/';
@@ -24,6 +26,7 @@ const RPC_RETRY_BASE_DELAY_MS = Number(process.env.BSC_RPC_RETRY_BASE_DELAY_MS |
 // 合约地址/ABI：统一从配置读取，避免与前端/链上部署版本不一致
 const DQ_CONTRACT = DQ_CONTRACT_ADDRESS;
 const DQ_ABI = DQ_MINING_ABI;
+const DQ_STAKE_CONTRACT = DQSTAKE_CONTRACT_ADDRESS;
 
 // 复用 Provider，避免重复创建连接
 const provider = new ethers.JsonRpcProvider(BSC_RPC_URL, undefined, {
@@ -392,6 +395,10 @@ function getContract() {
   return new ethers.Contract(DQ_CONTRACT, DQ_ABI, provider);
 }
 
+function getStakeContract() {
+  return new ethers.Contract(DQ_STAKE_CONTRACT, DQSTAKE_ABI, provider);
+}
+
 /**
  * 获取用户在链上的注册交易 hash
  * 通过查询 Register 事件来找到用户的首次注册交易
@@ -504,21 +511,25 @@ export async function getUserInfoFromChain(walletAddress: string) {
     }
 
     const contract = getContract();
+    const stakeContract = getStakeContract();
 
-    // getUser 返回数组: [referrer, directCount, level, totalInvest]
+    // getUser 返回数组: [referrer, directCount, level, totalInvest, childrenCount]
     const userInfo = await withRpcRetry(
       () => contract.getUser(walletAddress),
       `getUser(${walletAddress})`
     );
 
-    // 额外字段：合约已拆分到单独的只读接口（兼容 getUser 只返回 4 个字段的版本）
-    const [stakeInfo, dLevel, validAddressCount] = await Promise.all([
-      withRpcRetry(() => contract.getUserStake(walletAddress), `getUserStake(${walletAddress})`).catch(() => null),
-      withRpcRetry(() => contract.getDLevel(walletAddress), `getDLevel(${walletAddress})`).catch(() => null),
+    // 额外字段：新版合约已拆分到 StakeCore 只读接口。
+    const [teamInvest, energy, pendingSOL, dLevel, validAddressCount, nodeLevel] = await Promise.all([
+      withRpcRetry(() => stakeContract.getTeamSales(walletAddress), `getTeamSales(${walletAddress})`).catch(() => 0n),
+      withRpcRetry(() => contract.getAvailableEnergy(walletAddress), `getAvailableEnergy(${walletAddress})`).catch(() => 0n),
+      withRpcRetry(() => stakeContract.getPendingSOL(walletAddress), `getPendingSOL(${walletAddress})`).catch(() => 0n),
+      withRpcRetry(() => stakeContract.userDLevel(walletAddress), `userDLevel(${walletAddress})`).catch(() => 0n),
       withRpcRetry(
-        () => contract.getValidAddressCount(walletAddress),
-        `getValidAddressCount(${walletAddress})`
-      ).catch(() => null),
+        () => stakeContract.countValidAddresses(walletAddress),
+        `countValidAddresses(${walletAddress})`
+      ).catch(() => 0n),
+      withRpcRetry(() => stakeContract.getUserNodeLevel(walletAddress), `getUserNodeLevel(${walletAddress})`).catch(() => 0n),
     ]);
 
     return {
@@ -526,11 +537,13 @@ export async function getUserInfoFromChain(walletAddress: string) {
       directCount: userInfo[1]?.toString() || '0',
       level: userInfo[2]?.toString() || '0',
       totalInvest: userInfo[3]?.toString() || '0',
-      teamInvest: stakeInfo?.[0]?.toString?.() || '0',
-      energy: stakeInfo?.[1]?.toString?.() || '0',
-      pendingSOL: stakeInfo?.[2]?.toString?.() || '0',
+      childrenCount: userInfo[4]?.toString?.() || '0',
+      teamInvest: teamInvest?.toString?.() || '0',
+      energy: energy?.toString?.() || '0',
+      pendingSOL: pendingSOL?.toString?.() || '0',
       dLevel: dLevel?.toString?.() || '0',
       validAddressCount: validAddressCount?.toString?.() || '0',
+      nodeLevel: nodeLevel?.toString?.() || '0',
     };
   } catch (error) {
     console.error(`[BSC] 获取用户信息失败:`, error);

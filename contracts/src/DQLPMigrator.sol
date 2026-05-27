@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts@4.9.6/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts@4.9.6/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts@4.9.6/token/ERC20/utils/SafeERC20.sol";
 
 /**
  * @title DQLPMigrator - LP迁移合约
@@ -161,7 +161,7 @@ contract DQLPMigrator is ReentrancyGuard {
         migratedAmount[msg.sender] += _amount;
         
         // 4. 授权并质押到新合约
-        IERC20(newLP).forceApprove(newStakeContract, newLPAmount);
+        IERC20(newLP).safeApprove(newStakeContract, newLPAmount);
         
         (bool success, ) = newStakeContract.call(
             abi.encodeWithSignature("migrateLP(address,uint256)", msg.sender, newLPAmount)

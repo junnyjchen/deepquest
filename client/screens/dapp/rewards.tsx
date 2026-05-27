@@ -50,6 +50,8 @@ const COLORS = {
   cardBg: 'rgba(26, 26, 48, 0.6)',
 };
 
+const noop = () => undefined;
+
 export default function RewardsScreen() {
   const router = useSafeRouter();
   const { wallet, isConnected } = useWallet();
@@ -84,7 +86,7 @@ export default function RewardsScreen() {
     message: '',
     confirmText: '',
     cancelText: '',
-    onConfirm: () => {},
+    onConfirm: noop,
   });
 
   const [alertDialog, setAlertDialog] = useState({
@@ -157,7 +159,7 @@ export default function RewardsScreen() {
       if (isConnected) {
         loadData();
       }
-      return () => {};
+      return noop;
     }, [loadData, isConnected])
   );
 
@@ -199,26 +201,18 @@ export default function RewardsScreen() {
               await waitForTransaction(tx);
               break;
             case 'lp': {
-              // 第一步：将 LP 分红积累到 userBlockDQ
-              const tx1 = await claimLPOnChain(signer);
-              await waitForTransaction(tx1);
-              // 第二步：将 userBlockDQ 转出给用户
-              const tx2 = await claimBlockDQOnChain(signer);
-              await waitForTransaction(tx2);
+              tx = await claimLPOnChain(signer);
+              await waitForTransaction(tx);
               break;
             }
             case 'nft': {
-              const tx1 = await claimNFTOnChain(signer);
-              await waitForTransaction(tx1);
-              const tx2 = await claimBlockDQOnChain(signer);
-              await waitForTransaction(tx2);
+              tx = await claimNFTOnChain(signer);
+              await waitForTransaction(tx);
               break;
             }
             case 'dTeam': {
-              const tx1 = await claimDTeamOnChain(signer);
-              await waitForTransaction(tx1);
-              const tx2 = await claimBlockDQOnChain(signer);
-              await waitForTransaction(tx2);
+              tx = await claimDTeamOnChain(signer);
+              await waitForTransaction(tx);
               break;
             }
             case 'block':
@@ -255,12 +249,8 @@ export default function RewardsScreen() {
             showAlert(t('common.error'), t('lp.alert.connectFailed'), 'danger');
             return;
           }
-          // 第一步：将质押分红积累到 userPendingDQ
-          const tx1 = await claimStakeRewardOnChain(signer, periodIndex);
-          await waitForTransaction(tx1);
-          // 第二步：将 userPendingDQ 转出给用户
-          const tx2 = await withdrawDQRewardOnChain(signer, periodIndex);
-          await waitForTransaction(tx2);
+          const tx = await claimStakeRewardOnChain(signer, periodIndex);
+          await waitForTransaction(tx);
           showAlert(t('common.success'), t('rewards.claim.success'));
           await loadData();
         } catch (error: any) {

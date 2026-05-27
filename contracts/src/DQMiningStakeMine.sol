@@ -345,7 +345,7 @@ contract DQMiningStakeMine is Ownable, ReentrancyGuard {
     /**
      * @dev 查询底池余额
      */
-    function getPoolBalance() public view returns (uint256) {
+    function getPoolBalance() external view returns (uint256) {
         (bool success, bytes memory data) = address(dqToken).staticcall(
             abi.encodeWithSignature("poolBalance()")
         );
