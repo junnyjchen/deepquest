@@ -50,7 +50,16 @@ const COLORS = {
   cardBg: 'rgba(26, 26, 48, 0.6)',
 };
 
-const noop = () => undefined;
+const noop = (): void => {};
+
+type ConfirmDialogState = {
+  visible: boolean;
+  title: string;
+  message: string;
+  confirmText: string;
+  cancelText: string;
+  onConfirm: () => void;
+};
 
 export default function RewardsScreen() {
   const router = useSafeRouter();
@@ -80,7 +89,7 @@ export default function RewardsScreen() {
   const [claimRecords, setClaimRecords] = useState<any[]>([]);
   const [withdrawalRecords, setWithdrawalRecords] = useState<any[]>([]);
 
-  const [confirmDialog, setConfirmDialog] = useState({
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
     visible: false,
     title: '',
     message: '',

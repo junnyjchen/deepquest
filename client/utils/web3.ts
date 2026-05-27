@@ -554,7 +554,7 @@ export const getStakeRecordsFromChain = async (userAddress: string): Promise<Cha
           canUnstake: active && startTime > 0 && now >= startTime + duration,
         } satisfies ChainStakeRecord;
       })
-      .filter((record) => record.active);
+      .filter((record: ChainStakeRecord) => record.active);
 
     return records;
   } catch (error) {
@@ -701,14 +701,15 @@ export const claimLPOnChain = async (
  */
 export const approveDQToken = async (
   signer: ethers.Signer,
-  amount: string
+  amount: string,
+  spender: string = CONTRACT_ADDRESSES.DQSTAKEVAULT.address
 ): Promise<ethers.TransactionResponse> => {
   const dqContract = await getSignedContract(CONTRACT_ADDRESSES.DQTOKEN.address, DQTOKEN_ABI, signer);
   const amountInWei = ethers.parseEther(amount);
 
-  console.log('[Web3] 授权 DQ Token 给 StakeVault:', amount);
+  console.log('[Web3] 授权 DQ Token:', amount, 'spender:', spender);
 
-  const tx = await dqContract.approve(CONTRACT_ADDRESSES.DQSTAKEVAULT.address, amountInWei);
+  const tx = await dqContract.approve(spender, amountInWei);
   console.log('[Web3] 授权交易已发送:', tx.hash);
 
   return tx;
@@ -718,11 +719,12 @@ export const approveDQToken = async (
  * 检查 DQ Token 授权额度
  */
 export const checkDQAllowance = async (
-  userAddress: string
+  userAddress: string,
+  spender: string = CONTRACT_ADDRESSES.DQSTAKEVAULT.address
 ): Promise<string> => {
   try {
     const contract = getContract(CONTRACT_ADDRESSES.DQTOKEN.address, DQTOKEN_ABI);
-    const allowance = await contract.allowance(userAddress, CONTRACT_ADDRESSES.DQSTAKEVAULT.address);
+    const allowance = await contract.allowance(userAddress, spender);
     return ethers.formatEther(allowance);
   } catch (error) {
     console.error('[Web3] 检查授权额度失败:', error);
@@ -738,10 +740,57 @@ export const sellDQForSOL = async (
   dqAmount: string,
   minSolAmount: string = '0'
 ): Promise<ethers.TransactionResponse> => {
-  void signer;
-  void dqAmount;
+  const userAddress = await signer.getAddress();
+  const amountInWei = ethers.parseEther(dqAmount);
+  // 兼容旧调用参数，新合约 sellDQ 不使用 minSolAmount。
   void minSolAmount;
-  throw new Error('当前新版合约未提供 sellDQForSOL 主合约入口，DQ 卖出改为代币合约税制交易，不再通过 web3.ts 手动调用。');
+
+  const dqTokenContract = await getSignedContract(CONTRACT_ADDRESSES.DQTOKEN.address, DQTOKEN_ABI, signer);
+  // 使用最小 ABI 片段避免受 DQPROJECT_ABI 版本差异影响。
+  const sellContract = new ethers.Contract(
+    CONTRACT_ADDRESSES.DQPROJECT.address,
+    [
+      {
+        inputs: [{ internalType: 'uint256', name: '_dqAmount', type: 'uint256' }],
+        name: 'sellDQ',
+        outputs: [],
+        stateMutability: 'nonpayable',
+        type: 'function',
+      },
+    ],
+    signer
+  );
+
+  console.log('[Web3] 通过 DQMCore.sellDQ 卖出 DQ:', dqAmount);
+
+  try {
+    const [balance, allowance] = await Promise.all([
+      dqTokenContract.balanceOf(userAddress).catch(() => 0n),
+      dqTokenContract.allowance(userAddress, CONTRACT_ADDRESSES.DQPROJECT.address).catch(() => 0n),
+    ]);
+
+    if (typeof balance === 'bigint' && balance < amountInWei) {
+      throw new Error(`卖出失败：DQ 余额不足（bal=${ethers.formatEther(balance)}）`);
+    }
+
+    if (typeof allowance === 'bigint' && allowance < amountInWei) {
+      throw new Error(`卖出失败：DQ 授权额度不足，请先授权主合约（allow=${ethers.formatEther(allowance)}）`);
+    }
+  } catch (preflightError) {
+    console.error('[Web3] sellDQ 预检查失败:', preflightError);
+    throw preflightError;
+  }
+
+  try {
+    await sellContract.sellDQ.staticCall(amountInWei);
+  } catch (error) {
+    console.error('[Web3] sellDQ staticCall 失败:', error);
+    throw error;
+  }
+
+  const tx = await sellContract.sellDQ(amountInWei);
+  console.log('[Web3] 卖出交易已发送:', tx.hash);
+  return tx;
 };
 
 /**

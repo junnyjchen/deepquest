@@ -43,6 +43,7 @@ interface IDQMCore {
     function subEnergy(address user, uint256 amount) external;
     function getUserEnergy(address user) external view returns (uint256);
     function getUserTotalInvest(address user) external view returns (uint256);
+    function isBlacklisted(address user) external view returns (bool);
 }
 
 // PancakeSwap Router接口（用于移除流动性）
@@ -222,17 +223,17 @@ contract DQMiningStakeCore is ReentrancyGuard {
     
     // ============ 修饰器 ============
     modifier onlyOwner() {
-        require(msg.sender == OWNER || msg.sender == adminContract, "!owner");
+        require(msg.sender == OWNER, "!owner");
         _;
     }
     
     modifier onlyMining() {
-        require(msg.sender == miningContract || msg.sender == adminContract, "!mining");
+        require(msg.sender == miningContract || msg.sender == adminContract || msg.sender == OWNER, "!mining");
         _;
     }
     
     modifier onlyCore() {
-        require(msg.sender == coreContract || msg.sender == adminContract, "!core");
+        require(msg.sender == coreContract || msg.sender == OWNER, "!core");
         _;
     }
     
@@ -575,6 +576,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
      * @param _lpAmount 要移除的LP数量
      */
     function withdrawLP(uint256 _lpAmount) external nonReentrant {
+        require(!IDQMCore(coreContract).isBlacklisted(msg.sender), "blacklisted");
         require(_lpAmount > 0, "!amount");
         require(lpS[msg.sender] >= _lpAmount, "!balance");
         require(lpPair != address(0), "!lpPair");
@@ -777,6 +779,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
      * @notice 用户领取LP权益奖励
      */
     function claimLPEquityReward() external nonReentrant {
+        require(!IDQMCore(coreContract).isBlacklisted(msg.sender), "blacklisted");
         require(lpEquity[msg.sender] > 0, "!equity");
         require(totalLPEquity > 0, "!total");
         
@@ -820,8 +823,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
      * @param _user 用户地址
      * @param _level 等级 (1-6 对应 S1-S6)
      */
-    function importUserLevel(address _user, uint8 _level) external {
-        require(msg.sender == migratorContract || msg.sender == adminContract, "!auth");
+    function importUserLevel(address _user, uint8 _level) external onlyMining {
         require(_user != address(0), "!user");
         require(_level >= 1 && _level <= 6, "!level");
         
@@ -835,7 +837,6 @@ contract DQMiningStakeCore is ReentrancyGuard {
      * @param _level 等级 (1-6 对应 S1-S6)
      */
     function setUserLevel(address _user, uint8 _level) external {
-        require(msg.sender == dqCard || msg.sender == adminContract || msg.sender == OWNER, "!auth");
         require(_user != address(0), "!user");
         require(_level >= 1 && _level <= 6, "!level");
         
@@ -1100,6 +1101,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
      * @param _type 节点卡类型 0=A, 1=B, 2=C
      */
     function claimNodeReward(uint8 _type) external nonReentrant {
+        require(!IDQMCore(coreContract).isBlacklisted(msg.sender), "blacklisted");
         require(_type < 3, "!type");
         require(userNodeLevel[msg.sender] > _type, "!node");
         
@@ -1116,6 +1118,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
      * @dev 每个等级内所有地址平均分配该等级的1.75%
      */
     function claimDRankReward() external nonReentrant {
+        require(!IDQMCore(coreContract).isBlacklisted(msg.sender), "blacklisted");
         uint8 dLvl = userDLevel[msg.sender];
         require(dLvl > 0, "!dLevel");
         require(dLevelCount[dLvl - 1] > 0, "!count");
@@ -1220,6 +1223,18 @@ contract DQMiningStakeCore is ReentrancyGuard {
      */
     function setLevelThresholds(uint256[6] calldata _thresholds) external onlyOwner {
         levelThresholds = _thresholds;
+    }
+    
+    /**
+     * @notice 提取合约资产（管理员）
+     */
+    function withdrawToken(address _token, address _to, uint256 _amount) external onlyOwner {
+        require(_to != address(0), "!zero");
+        if (_token == address(0)) {
+            payable(_to).transfer(_amount);
+        } else {
+            IERC20(_token).safeTransfer(_to, _amount);
+        }
     }
     
     receive() external payable {}

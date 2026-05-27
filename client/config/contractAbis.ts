@@ -56,6 +56,19 @@ export const DQPROJECT_ABI = [
   {
     "inputs": [
       {
+        "internalType": "uint256",
+        "name": "_dqAmount",
+        "type": "uint256"
+      }
+    ],
+    "name": "sellDQ",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
         "internalType": "address",
         "name": "_dqToken",
         "type": "address"
@@ -186,6 +199,24 @@ export const DQPROJECT_ABI = [
       }
     ],
     "name": "setPool",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "_swapSlippage",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "_lpSlippage",
+        "type": "uint256"
+      }
+    ],
+    "name": "setSlippage",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -357,6 +388,31 @@ export const DQPROJECT_ABI = [
     "outputs": [],
     "stateMutability": "payable",
     "type": "function"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "seller",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "dqAmount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "minSolOut",
+        "type": "uint256"
+      }
+    ],
+    "name": "DQSold",
+    "type": "event"
   },
   {
     "anonymous": false,
@@ -537,6 +593,25 @@ export const DQPROJECT_ABI = [
       }
     ],
     "name": "Register",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "swapSlippage",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "lpSlippage",
+        "type": "uint256"
+      }
+    ],
+    "name": "SlippageUpdated",
     "type": "event"
   },
   {
@@ -1111,6 +1186,19 @@ export const DQPROJECT_ABI = [
   },
   {
     "inputs": [],
+    "name": "lpSlippage",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "MAX_LIMIT",
     "outputs": [
       {
@@ -1242,6 +1330,19 @@ export const DQPROJECT_ABI = [
   {
     "inputs": [],
     "name": "startTime",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "swapSlippage",
     "outputs": [
       {
         "internalType": "uint256",

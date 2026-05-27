@@ -125,6 +125,56 @@ contract DQMAdmin is ReentrancyGuard {
     }
     
     /**
+     * @notice 批量设置用户L等级 (S1-S6对应1-6)
+     */
+    function batchSetUserLevel(address[] calldata _users, uint8[] calldata _levels) external onlyOwner {
+        require(_users.length == _levels.length, "length mismatch");
+        for (uint256 i = 0; i < _users.length; i++) {
+            IDQMiningStakeAdmin(stakeContract).setUserLevel(_users[i], _levels[i]);
+        }
+    }
+    
+    /**
+     * @notice 批量增加用户能量(StakeCore)
+     */
+    function batchAddEnergy(address[] calldata _users, uint256[] calldata _amounts) external onlyOwner {
+        require(_users.length == _amounts.length, "length mismatch");
+        for (uint256 i = 0; i < _users.length; i++) {
+            IDQMiningStakeAdmin(stakeContract).addEnergy(_users[i], _amounts[i]);
+        }
+    }
+    
+    /**
+     * @notice 批量设置用户能量(StakeCore)
+     */
+    function batchSetEnergy(address[] calldata _users, uint256[] calldata _amounts) external onlyOwner {
+        require(_users.length == _amounts.length, "length mismatch");
+        for (uint256 i = 0; i < _users.length; i++) {
+            IDQMiningStakeAdmin(stakeContract).setEnergy(_users[i], _amounts[i]);
+        }
+    }
+    
+    /**
+     * @notice 批量增加用户能量(DQMCore)
+     */
+    function batchAdminAddEnergy(address[] calldata _users, uint256[] calldata _amounts) external onlyOwner {
+        require(_users.length == _amounts.length, "length mismatch");
+        for (uint256 i = 0; i < _users.length; i++) {
+            IDQMCoreAdmin(coreContract).adminAddEnergy(_users[i], _amounts[i]);
+        }
+    }
+    
+    /**
+     * @notice 批量设置用户能量(DQMCore)
+     */
+    function batchAdminSetEnergy(address[] calldata _users, uint256[] calldata _amounts) external onlyOwner {
+        require(_users.length == _amounts.length, "length mismatch");
+        for (uint256 i = 0; i < _users.length; i++) {
+            IDQMCoreAdmin(coreContract).adminSetEnergy(_users[i], _amounts[i]);
+        }
+    }
+    
+    /**
      * @notice 同步用户数据到质押合约
      */
     function syncUserToStake(
@@ -288,6 +338,8 @@ interface IDQTokenAdmin {
 interface IDQMCoreAdmin {
     function setAdminContract(address _addr) external;
     function importUsers(address[] calldata _users, address[] calldata _referrers) external;
+    function adminSetEnergy(address _user, uint256 _energy) external;
+    function adminAddEnergy(address _user, uint256 _amount) external;
 }
 
 interface IDQMiningStakeAdmin {
@@ -295,7 +347,9 @@ interface IDQMiningStakeAdmin {
     function registerUser(address _user, address _referrer) external;
     function addDirectSales(address _user, uint256 _amount) external;
     function setUserNodeLevel(address _user, uint8 _level) external;
+    function setUserLevel(address _user, uint8 _level) external;
     function setEnergy(address _user, uint256 _energy) external;
+    function addEnergy(address _user, uint256 _amount) external;
     function registerDLevel(address _user, uint8 _level) external;
     function mine() external;
     function getMineInfo() external view returns (

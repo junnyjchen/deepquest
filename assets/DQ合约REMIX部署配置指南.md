@@ -349,6 +349,7 @@ constructor()  // 无状态初始化
 | 2 | `setAdminContract` | `ADMIN_ADDRESS` | 管理合约 |
 | 3 | `setPool` | `0x06f4596b1e7dc90a5173c5ce742a470e8efacdbc` | 底池地址 |
 | 4 | `setMigratorContract` | `MIGRATOR_ADDRESS` | 迁移合约 |
+| 5 | `setSlippage` | `50`, `50` | 入金swap滑点5%，LP滑点5%（流动性差时建议设100=10%） |
 
 ### 4.4 配置 DQMiningStakeCore 合约
 
@@ -437,7 +438,129 @@ constructor()  // 无状态初始化
 
 ---
 
-## 五、初始化底池（关键步骤）
+## 五、管理员功能清单（REMIX操作）
+
+> 以下函数均通过 REMIX "At Address" 加载对应合约后调用
+
+### 5.1 用户能量管理（DQMCore合约）
+
+| 功能 | 函数 | 参数 |
+|------|------|------|
+| 设置用户能量 | `adminSetEnergy` | `_user`, `_energy` |
+| 增加用户能量 | `adminAddEnergy` | `_user`, `_amount` |
+| 减少用户能量 | `adminSubEnergy` | `_user`, `_amount` |
+
+### 5.2 黑名单功能
+
+**两个合约都需设置**（DQMCore 拦截入金，DQT 拦截交易）：
+
+| 合约 | 函数 | 参数 | 效果 |
+|------|------|------|------|
+| DQMCore | `setBlacklisted` | `_user`, `true/false` | 拉黑后无法入金 |
+| DQT | `setBlacklist` | `account`, `true/false` | 拉黑后无法交易DQ |
+
+> 黑名单用户还会被拦截以下操作：领取节点奖、领取D等级奖、领取LP权益奖、领取LP奖励、领取质押奖励、质押/解质押、移除LP（以上均在 StakeCore/Vault 合约中自动检查）
+
+### 5.3 入金限制阶段（DQMCore合约）
+
+| 功能 | 函数 | 参数 | 说明 |
+|------|------|------|------|
+| 设置阶段 | `setPhase` | `phase` | 直接设置阶段号(1-40) |
+| 升级阶段 | `advancePhase` | 无 | 入金上限+5 SOL，封顶200 SOL |
+
+### 5.4 节点分配模式（DQMiningStakeCore合约）
+
+| 功能 | 函数 | 参数 | 说明 |
+|------|------|------|------|
+| 设置节点奖励模式 | `setNodeRewardMode` | `_toFixed`, `_fixedAddress` | true=给固定地址, false=给NFT持有者 |
+
+### 5.5 批量导入用户关系（DQMCore合约或DQMAdmin合约）
+
+**方式一：通过 DQMCore 合约**
+| 函数 | 参数 | 说明 |
+|------|------|------|
+| `importUsers` | `_users[]`, `_referrers[]` | 批量导入，传入单个用户即为单个导入 |
+
+**方式二：通过 DQMAdmin 合约**
+| 函数 | 参数 | 说明 |
+|------|------|------|
+| `importUsers` | `_users[]`, `_referrers[]` | 代理调用DQMCore.importUsers |
+
+### 5.6 批量设置用户等级（DQMAdmin合约）
+
+| 功能 | 函数 | 参数 | 说明 |
+|------|------|------|------|
+| 批量设置节点等级 | `setUserNodeLevel` | `_users[]`, `_levels[]` | 节点等级 1-10 |
+| 批量设置D等级 | `setUserDLevel` | `_users[]`, `_levels[]` | D等级 D1=1 ~ D8=8 |
+| 批量设置L等级 | `batchSetUserLevel` | `_users[]`, `_levels[]` | L等级 S1=1 ~ S6=6 |
+| 同步用户全部数据 | `syncUserToStake` | `_user`, `_referrer`, `_directCount`, `_nodeLevel`, `_energy` | 一次性同步用户到质押合约 |
+
+> - `setUserNodeLevel` 即需求文档13.6和13.7的批量导入节点和批量配置用户等级
+> - `batchSetUserLevel` 对应 StakeCore 的 `setUserLevel`，通过 adminContract 代理调用（owner 直接调用 StakeCore 会报 `!auth`）
+> - 所有批量函数传入单个用户即为单个设置
+
+### 5.7 批量能量管理（DQMAdmin合约）
+
+| 功能 | 函数 | 参数 | 目标合约 | 说明 |
+|------|------|------|---------|------|
+| 批量增加能量 | `batchAddEnergy` | `_users[]`, `_amounts[]` | StakeCore | 通过adminContract调用，owner直接调StakeCore会报`!mining` |
+| 批量设置能量 | `batchSetEnergy` | `_users[]`, `_amounts[]` | StakeCore | 设置绝对值 |
+| 批量增加能量 | `batchAdminAddEnergy` | `_users[]`, `_amounts[]` | DQMCore | owner可直接调用DQMCore的adminAddEnergy |
+| 批量设置能量 | `batchAdminSetEnergy` | `_users[]`, `_amounts[]` | DQMCore | 设置绝对值 |
+
+> **两个合约各有一套独立的 `userEnergy`**：
+> - **DQMCore.userEnergy**：用于入金判断（入金金额 × 3倍），owner可通过 `adminAddEnergy`/`adminSetEnergy` 直接操作
+> - **StakeCore.userEnergy**：用于奖励分配计算，只能通过 `adminContract`(DQMAdmin) 或 `miningContract`(Mine) 调用 `addEnergy`/`setEnergy`
+>
+> 如果两边能量需要同步，请同时调用 DQMAdmin 的 `batchAdminAddEnergy` + `batchAddEnergy`
+
+### 5.8 提取合约资产
+
+**DQMCore 合约**：
+| 函数 | 参数 | 说明 |
+|------|------|------|
+| `withdrawToken` | `_token`, `_to`, `_amount` | `_token=0x0...0`提取SOL，其他提取ERC20 |
+
+**DQMiningStakeCore 合约**：
+| 函数 | 参数 | 说明 |
+|------|------|------|
+| `withdrawToken` | `_token`, `_to`, `_amount` | 同上 |
+
+**DQMiningStakeVault 合约**：
+| 函数 | 参数 | 说明 |
+|------|------|------|
+| `withdrawToken` | `_token`, `_to`, `_amount` | 同上 |
+
+**DQC 合约**：
+| 函数 | 参数 | 说明 |
+|------|------|------|
+| `withdrawToken` | `_token`, `_to`, `_amount` | 提取USDT等代币 |
+
+**DQMiningStakeMine 合约**：
+| 函数 | 参数 | 说明 |
+|------|------|------|
+| `emergencyWithdraw` | `token`, `to`, `amount` | 提取任意代币 |
+
+**DQT 合约**：
+| 函数 | 参数 | 说明 |
+|------|------|------|
+| `emergencyWithdraw` | `token`, `to`, `amount` | 提取任意代币 |
+
+**DQMAdmin 合约（统一提取入口）**：
+| 函数 | 参数 | 说明 |
+|------|------|------|
+| `adminWithdrawDQ` | `_amount` | 提取DQ到owner |
+| `adminWithdrawSOL` | `_amount` | 提取SOL到owner |
+| `adminWithdrawUSDT` | `_amount` | 提取USDT到owner |
+| `adminWithdrawLP` | `_lpToken`, `_amount` | 提取LP到owner |
+| `adminWithdrawAnyToken` | `_token`, `_amount` | 提取任意ERC20到owner |
+| `adminWithdrawBNB` | `_amount` | 提取BNB到owner |
+
+> 注意：DQMAdmin 的提取函数只提取 Admin 合约自身持有的资产。其他合约的资产需分别通过各自合约的 `withdrawToken` 提取。
+
+---
+
+## 七、初始化底池（关键步骤）
 
 > 合约部署完毕后，需要将 DQT 总量转入 PancakeSwap 底池
 
@@ -467,7 +590,7 @@ setPool(DQPAIR_ADDRESS)
 
 ---
 
-## 六、REMIX 操作技巧
+## 八、REMIX 操作技巧
 
 ### 6.1 加载已部署合约
 
@@ -570,7 +693,7 @@ DQMAdmin.mineContract() → MINE 地址
 
 ---
 
-## 七、已部署合约的 REMIX 地址代入值
+## 九、已部署合约的 REMIX 地址代入值
 
 由于合约已部署，以下为直接可用的配置参数：
 
@@ -600,7 +723,7 @@ VAULT_ADDRESS    = 0xF879Cb65dD6f741242cB654180eBD0d770029b25
 
 ---
 
-## 八、地址一致性校验结果
+## 十、地址一致性校验结果
 
 合约硬编码地址与用户提供地址对比：
 
@@ -621,7 +744,7 @@ VAULT_ADDRESS    = 0xF879Cb65dD6f741242cB654180eBD0d770029b25
 
 ---
 
-## 九、注意事项
+## 十一、注意事项
 
 1. **部署账户**：必须使用 `0x274aCc6397349F21179ed6258A54B2a11B28faF5`（OWNER）部署所有合约，否则权限控制会失效
 2. **DQMiningStakeVault** 的 immutable 变量在构造函数中设置后不可修改，部署时务必确保参数正确

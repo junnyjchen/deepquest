@@ -27,6 +27,13 @@ interface IRouter {
         address to,
         uint deadline
     ) external payable;
+    function swapExactTokensForETHSupportingFeeOnTransferTokens(
+        uint amountIn,
+        uint amountOutMin,
+        address[] calldata path,
+        address to,
+        uint deadline
+    ) external;
     function addLiquidityETH(
         address token,
         uint amountTokenDesired,
@@ -97,6 +104,10 @@ contract DQMCore is ReentrancyGuard {
     uint256 public totalInvested;
     uint256 public totalLPAdded;  // 总添加流动性数量
     
+    // 滑点保护（基点，1000 = 100%）
+    uint256 public swapSlippage = 50;     // swap滑点 50 = 5%
+    uint256 public lpSlippage = 50;       // LP滑点 50 = 5%
+    
     // 入金限制
     uint256 public constant MAX_LIMIT = 200 ether;          // 封顶200 SOL
     uint256 public currentDepositLimit = 1 ether;           // 当前入金上限，初始1 SOL
@@ -110,10 +121,11 @@ contract DQMCore is ReentrancyGuard {
     event LPAdded(address indexed user, uint256 solAmount, uint256 dqAmount, uint256 lpAmount);
     event PhaseAdvanced(uint256 newPhase, uint256 newLimit);
     event EnergyAdded(address indexed user, uint256 amount, uint256 totalEnergy);
+    event SlippageUpdated(uint256 swapSlippage, uint256 lpSlippage);
     
     // ============ 修饰器 ============
     modifier onlyOwner() {
-        require(msg.sender == OWNER || msg.sender == adminContract, "!owner");
+        require(msg.sender == OWNER, "!owner");
         _;
     }
     
@@ -142,6 +154,13 @@ contract DQMCore is ReentrancyGuard {
     function setPool(address _pool) external onlyOwner {
         pool = _pool;
         emit PoolSet(_pool);
+    }
+    
+    function setSlippage(uint256 _swapSlippage, uint256 _lpSlippage) external onlyOwner {
+        require(_swapSlippage <= 500 && _lpSlippage <= 500, "max 50%");
+        swapSlippage = _swapSlippage;
+        lpSlippage = _lpSlippage;
+        emit SlippageUpdated(_swapSlippage, _lpSlippage);
     }
     
     function setPartnerAddr(address _addr) external onlyOwner {
@@ -202,8 +221,7 @@ contract DQMCore is ReentrancyGuard {
      * @param _user 用户地址
      * @param _referrer 推荐人地址
      */
-    function importUserRelation(address _user, address _referrer) external {
-        require(msg.sender == migratorContract || msg.sender == OWNER || msg.sender == adminContract, "!auth");
+    function importUserRelation(address _user, address _referrer) external onlyOwner {
         require(_user != address(0), "zero user");
         
         if (users[_user].referrer == address(0)) {
@@ -292,12 +310,16 @@ contract DQMCore is ReentrancyGuard {
             // 授权
             IERC20(dqToken).forceApprove(ROUTER, dqAmount);
             
+            // 计算最小输出（滑点保护）
+            uint256 minToken = dqAmount * (1000 - lpSlippage) / 1000;
+            uint256 minETH = solForLP * (1000 - lpSlippage) / 1000;
+            
             // 添加流动性
             (,, lpAmount) = IRouter(ROUTER).addLiquidityETH{value: solForLP}(
                 dqToken,
                 dqAmount,
-                0,  // min DQ
-                0,  // min SOL
+                minToken,
+                minETH,
                 address(this),  // LP代币给合约
                 block.timestamp
             );
@@ -332,8 +354,12 @@ contract DQMCore is ReentrancyGuard {
         path[0] = WBNB;
         path[1] = dqToken;
         
+        // 计算最小输出（滑点保护）
+        uint256[] memory amountsOut = IRouter(ROUTER).getAmountsOut(_solAmount, path);
+        uint256 minOut = amountsOut[1] * (1000 - swapSlippage) / 1000;
+        
         IRouter(ROUTER).swapExactETHForTokensSupportingFeeOnTransferTokens{value: _solAmount}(
-            0,  // 最小输出
+            minOut,
             path,
             address(this),
             block.timestamp
@@ -371,6 +397,48 @@ contract DQMCore is ReentrancyGuard {
         emit Deposit(_user, _amount, lpAmount, _amount * 3);
     }
     
+    // ============ DQ卖出（DApp内卖出DQ换SOL） ============
+    
+    /**
+     * @notice 用户在DApp内卖出DQ换SOL(BNB)
+     * @param _dqAmount 卖出的DQ数量
+     * @dev 用户需先approve本合约足够的DQ额度
+     *      卖出时DQT合约自动扣6%卖出税(3%→质押用户 + 3%→手续费地址)
+     *      剩余94%通过PancakeSwap兑换为SOL(BNB)转给用户
+     */
+    function sellDQ(uint256 _dqAmount) external nonReentrant {
+        require(_dqAmount > 0, "!amount");
+        require(!isBlacklisted[msg.sender], "blacklisted");
+        require(pool != address(0), "!pool");
+        
+        // 1. 转入用户的DQ
+        IERC20(dqToken).safeTransferFrom(msg.sender, address(this), _dqAmount);
+        
+        // 2. 计算最小输出（滑点保护）
+        address[] memory path = new address[](2);
+        path[0] = dqToken;
+        path[1] = WBNB;
+        
+        uint256[] memory amountsOut = IRouter(ROUTER).getAmountsOut(_dqAmount, path);
+        uint256 minOut = amountsOut[1] * (1000 - swapSlippage) / 1000;
+        
+        // 3. approve Router
+        IERC20(dqToken).forceApprove(address(ROUTER), _dqAmount);
+        
+        // 4. 通过PancakeSwap卖出DQ换BNB
+        IRouter(ROUTER).swapExactTokensForETHSupportingFeeOnTransferTokens(
+            _dqAmount,
+            minOut,
+            path,
+            msg.sender,  // BNB直接转给用户
+            block.timestamp
+        );
+        
+        emit DQSold(msg.sender, _dqAmount, minOut);
+    }
+    
+    event DQSold(address indexed seller, uint256 dqAmount, uint256 minSolOut);
+
     // ============ SOL提取（解决问题） ============
     
     /**
@@ -527,7 +595,7 @@ contract DQMCore is ReentrancyGuard {
      * @return success 是否成功
      */
     function useEnergy(address _user, uint256 _amount) external returns (bool) {
-        require(msg.sender == stakeContract || msg.sender == adminContract, "!auth");
+        require(msg.sender == stakeContract || msg.sender == adminContract || msg.sender == OWNER, "!auth");
         
         uint256 available = userEnergy[_user] - userEnergyUsed[_user];
         if (available >= _amount) {
