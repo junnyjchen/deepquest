@@ -445,11 +445,6 @@ export const depositSOLOnChain = async (
     if (!provider) {
       throw new Error('入金失败：钱包 provider 不可用');
     }
-
-    const nativeBalance = await provider.getBalance(userAddress).catch(() => 0n);
-    if (typeof nativeBalance === 'bigint' && nativeBalance < amountInWei) {
-      throw new Error(`入金失败：BNB 余额不足（bal=${ethers.formatEther(nativeBalance)}）`);
-    }
   } catch (preflightError) {
     console.error('[Web3] 入金预检查失败:', preflightError);
     throw preflightError;
