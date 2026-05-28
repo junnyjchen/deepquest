@@ -12,7 +12,7 @@ export const DQCARD_ABI = ABI_SOURCE.DQCARD_ABI as InterfaceAbi;
 
 export const CONTRACT_ADDRESSES = {
   DQPROJECT: {
-    address: '0xb74857877858E0181C44C22Ab01Ec61772A20B72',
+    address: '0x9979D6eC9499Ee3eA9ae915D72696CDC440e3ee7',
     name: 'DQMCore',
   },
   DQSTAKE: {
@@ -24,7 +24,7 @@ export const CONTRACT_ADDRESSES = {
     name: 'DQStakeMine',
   },
   DQSTAKEVAULT: {
-    address: '0xF3D93557E235a8fA53b82D9CC440E2D661cCdec7',
+    address: '0xaA46F6Bb13C408E1038A8DC9d907B68E0Ef7feD3',
     name: 'DQStakeVault',
   },
   DQTOKEN: {
