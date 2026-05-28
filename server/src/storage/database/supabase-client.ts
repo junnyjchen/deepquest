@@ -128,9 +128,9 @@ function getSupabaseClient(token?: string): SupabaseClient {
     return createClient(url, key, {
       global: {
         headers: { Authorization: `Bearer ${token}` },
-        fetch: (url: string | URL | Request, options = {}) => {
+        fetch: (url, options = {}) => {
           // 根据协议选择合适的 agent
-          const protocol = new URL(String(url)).protocol;
+          const protocol = new URL(url).protocol;
           const agent = protocol === 'https:' ? httpsAgent : httpAgent;
           
           return fetch(url, {
@@ -148,15 +148,14 @@ function getSupabaseClient(token?: string): SupabaseClient {
         autoRefreshToken: false,
         persistSession: false,
       },
-    } as any);
+    });
   }
 
   return createClient(url, key, {
     global: {
-      fetch: (url: string | URL | Request, options = {}) => {
+      fetch: (url, options = {}) => {
         // 根据协议选择合适的 agent
-        const urlStr = typeof url === 'string' ? url : (url instanceof URL ? url.toString() : String(url));
-        const protocol = urlStr ? new URL(urlStr).protocol : 'https:';
+        const protocol = new URL(url).protocol;
         const agent = protocol === 'https:' ? httpsAgent : httpAgent;
         
         return fetch(url, {
@@ -174,7 +173,7 @@ function getSupabaseClient(token?: string): SupabaseClient {
       autoRefreshToken: false,
       persistSession: false,
     },
-  } as any);
+  });
 }
 
 // 获取必需的表列表
