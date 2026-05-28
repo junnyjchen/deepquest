@@ -79,6 +79,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
     // ============ 常量地址 ============
     address public constant OWNER = 0x274aCc6397349F21179ed6258A54B2a11B28faF5;
     address public constant SOL = 0x570A5D26f7765Ecb712C0924E4De545B89fD43dF;
+    address public constant WBNB = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c;
     address public constant FOUNDATION = 0xA0f045cde45ca1aeE2033356170B46A1fF3b7202;
     address public constant PARTNER = 0x803B79B608455808C2f752c588804c3F5bF676a3;
     address public constant FIXED_NODE = 0x822682A54C454e938374e9690420cdFA264A18Aa;  // 固定节点地址
@@ -223,7 +224,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
     
     // ============ 修饰器 ============
     modifier onlyOwner() {
-        require(msg.sender == OWNER, "!owner");
+        require(msg.sender == OWNER || msg.sender == adminContract, "!owner");
         _;
     }
     
@@ -430,10 +431,13 @@ contract DQMiningStakeCore is ReentrancyGuard {
     // ============ 入金回调 ============
     
     /**
-     * @notice 从DQMCore接收入金
+     * @notice 从DQMCore接收入金（SOL ERC20已转入本合约）
      */
-    function onDeposit(address _user, uint256 _amount) external payable onlyCore {
-        // 能量已在DQMCore.deposit()中添加，此处不再重复添加
+    function onDeposit(address _user, uint256 _amount) external onlyCore {
+        // 同步添加能量到StakeCore（奖励扣减用的是此处的userEnergy）
+        uint256 energyAdd = _amount * energyMul;
+        userEnergy[_user] += energyAdd;
+        emit EnergyChanged(_user, userEnergy[_user]);
         
         // 更新团队业绩并检查自动升级
         _updateTeamSalesAndUpgrade(_user, _amount);
@@ -598,13 +602,13 @@ contract DQMiningStakeCore is ReentrancyGuard {
         lpS[msg.sender] -= _lpAmount;
         tLP -= _lpAmount;
         
-        // 从Pair移除流动性（获得SOL和DQ）
+        // 从Pair移除流动性（获得WBNB和DQ，因为LP pair是DQ/WBNB）
         IERC20(lpPair).safeTransferFrom(msg.sender, address(this), _lpAmount);
         IERC20(lpPair).forceApprove(lpRouter, _lpAmount);
         
-        (uint256 amountSOL, uint256 amountDQ) = IPancakeRouter01(lpRouter).removeLiquidity(
+        (uint256 amountWBNB, uint256 amountDQ) = IPancakeRouter01(lpRouter).removeLiquidity(
             dqToken,  // tokenA = DQ
-            SOL,  // tokenB = SOL
+            WBNB,     // tokenB = WBNB（LP pair是DQ/WBNB）
             _lpAmount,
             1,  // minDQ
             1,  // minWBNB
@@ -612,29 +616,27 @@ contract DQMiningStakeCore is ReentrancyGuard {
             block.timestamp + 3600
         );
         
-        // 计算手续费（SOL和DQ各50%）
-        uint256 solFee = amountSOL * feeRate / 10000;
+        // 计算手续费（WBNB和DQ各50%）
+        uint256 wbnbFee = amountWBNB * feeRate / 10000;
         uint256 dqFee = amountDQ * feeRate / 10000;
         
         // 用户获得（扣除手续费后）
-        uint256 userSOL = amountSOL - solFee;
+        uint256 userWBNB = amountWBNB - wbnbFee;
         uint256 userDQ = amountDQ - dqFee;
         
-        // 转给用户
-        (bool sent, ) = payable(msg.sender).call{value: userSOL}("");
-        require(sent, "!sol");
+        // 转给用户（WBNB + DQ ERC20）
+        IERC20(WBNB).safeTransfer(msg.sender, userWBNB);
         IERC20(dqToken).safeTransfer(msg.sender, userDQ);
         
-        // 手续费给手续费地址（SOL和DQ各50%）
-        if (solFee > 0) {
-            (bool feeSent, ) = payable(feeReceiver).call{value: solFee}("");
-            require(feeSent, "!fee");
+        // 手续费给手续费地址
+        if (wbnbFee > 0) {
+            IERC20(WBNB).safeTransfer(feeReceiver, wbnbFee);
         }
         if (dqFee > 0) {
             IERC20(dqToken).safeTransfer(feeReceiver, dqFee);
         }
         
-        emit LPWithdrawn(msg.sender, _lpAmount, solFee + dqFee, stakeTime);
+        emit LPWithdrawn(msg.sender, _lpAmount, wbnbFee + dqFee, stakeTime);
     }
     
     /**
@@ -886,21 +888,21 @@ contract DQMiningStakeCore is ReentrancyGuard {
         // 4. DAO 10% - 直接转账
         if (daoAddr != address(0)) {
             uint256 daoReward = _amount * DAO_RATE / 100;
-            (bool success, ) = daoAddr.call{value: daoReward}("");
+            IERC20(SOL).safeTransfer(daoAddr, daoReward);
             emit RewardDistributed(daoAddr, 4, daoReward);
         }
         
         // 5. 运营 8% - 直接转账
         if (operAddr != address(0)) {
             uint256 operReward = _amount * OPER_RATE / 100;
-            (bool success, ) = operAddr.call{value: operReward}("");
+            IERC20(SOL).safeTransfer(operAddr, operReward);
             emit RewardDistributed(operAddr, 5, operReward);
         }
         
         // 6. 保险 7% - 直接转账
         if (insureAddr != address(0)) {
             uint256 insureReward = _amount * INSURE_RATE / 100;
-            (bool success, ) = insureAddr.call{value: insureReward}("");
+            IERC20(SOL).safeTransfer(insureAddr, insureReward);
             emit RewardDistributed(insureAddr, 6, insureReward);
         }
     }

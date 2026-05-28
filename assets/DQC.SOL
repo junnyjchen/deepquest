@@ -12,6 +12,11 @@ interface IDQMiningStakeCore {
     function setUserLevel(address user, uint8 level) external;
 }
 
+// DQMCore合约接口（用于同步等级到DQMCore）
+interface IDQMCoreForCard {
+    function setUserLevel(address user, uint8 level) external;
+}
+
 /**
  * @title DQ Card V2
  * @notice DQC NFT节点卡合约
@@ -60,6 +65,7 @@ contract DQCard is ERC721Enumerable, Ownable {
     address public miningContract;
     address public adminContract;
     address public stakeContract;  // 质押核心合约（用于自动设置L等级）
+    address public coreContract;   // DQMCore合约（用于同步等级）
     
     // ============ 数据映射 ============
     mapping(uint256 => uint256) public cardType;           // tokenId -> 卡片类型
@@ -105,6 +111,10 @@ contract DQCard is ERC721Enumerable, Ownable {
     
     function setStakeContract(address _s) external onlyOwnerOrAdmin {
         stakeContract = _s;
+    }
+    
+    function setCoreContract(address _c) external onlyOwnerOrAdmin {
+        coreContract = _c;
     }
     
     function setMaxA(uint256 _max) external onlyOwnerOrAdmin {
@@ -187,6 +197,10 @@ contract DQCard is ERC721Enumerable, Ownable {
             
             if (targetLevel > 0) {
                 IDQMiningStakeCore(stakeContract).setUserLevel(msg.sender, targetLevel);
+                // 同步等级到DQMCore（前端查询展示）
+                if (coreContract != address(0)) {
+                    IDQMCoreForCard(coreContract).setUserLevel(msg.sender, targetLevel);
+                }
             }
         }
         
@@ -231,6 +245,10 @@ contract DQCard is ERC721Enumerable, Ownable {
             
             if (targetLevel > 0) {
                 IDQMiningStakeCore(stakeContract).setUserLevel(_to, targetLevel);
+                // 同步等级到DQMCore（前端查询展示）
+                if (coreContract != address(0)) {
+                    IDQMCoreForCard(coreContract).setUserLevel(_to, targetLevel);
+                }
             }
         }
         

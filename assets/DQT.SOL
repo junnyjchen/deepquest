@@ -69,12 +69,17 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
     event SellBurnStop(uint256 circulatingSupply);
     
     modifier onlyMinter() {
-        require(msg.sender == owner() || msg.sender == adminContract, "!minter");
+        require(msg.sender == adminContract || msg.sender == miningContract || msg.sender == owner(), "!minter");
         _;
     }
     
     modifier onlyMining() {
-        require(msg.sender == adminContract || msg.sender == owner(), "!mining");
+        require(msg.sender == miningContract || msg.sender == adminContract || msg.sender == owner(), "!mining");
+        _;
+    }
+    
+    modifier onlyOwnerOrAdmin() {
+        require(msg.sender == owner() || msg.sender == adminContract, "!auth");
         _;
     }
     
@@ -87,7 +92,7 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
     /**
      * @dev 设置白名单 (不收税)
      */
-    function setExempt(address account, bool status) external onlyOwner {
+    function setExempt(address account, bool status) external onlyOwnerOrAdmin {
         isExempt[account] = status;
         emit ExemptSet(account, status);
     }
@@ -95,7 +100,7 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
     /**
      * @dev 设置黑名单
      */
-    function setBlacklist(address account, bool status) external onlyOwner {
+    function setBlacklist(address account, bool status) external onlyOwnerOrAdmin {
         if (status && !isBlacklisted[account]) {
             // 加入黑名单时，将余额计入黑名单总量
             blacklistBalances += balanceOf(account);
@@ -111,7 +116,7 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
     /**
      * @dev 设置Router地址
      */
-    function setRouter(address _router) external onlyOwner {
+    function setRouter(address _router) external onlyOwnerOrAdmin {
         router = _router;
         emit RouterSet(_router);
     }
@@ -120,7 +125,7 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
      * @dev 设置底池地址（管理地址创建池子后调用）
      * @dev 同时设置poolInitialized标志
      */
-    function setPool(address _pool) external onlyOwner {
+    function setPool(address _pool) external onlyOwnerOrAdmin {
         require(_pool != address(0), "Invalid pool");
         
         pool = _pool;
@@ -134,7 +139,7 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
     /**
      * @dev 设置爆块合约
      */
-    function setMiningContract(address _mining) external onlyOwner {
+    function setMiningContract(address _mining) external onlyOwnerOrAdmin {
         miningContract = _mining;
         isExempt[_mining] = true; // 爆块合约免税
         emit MiningContractSet(_mining);
@@ -143,21 +148,21 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
     /**
      * @dev 设置买入手续费接收地址
      */
-    function setTaxReceiver(address _receiver) external onlyOwner {
+    function setTaxReceiver(address _receiver) external onlyOwnerOrAdmin {
         taxReceiver = _receiver;
     }
     
     /**
      * @dev 设置卖出手续费接收地址
      */
-    function setSellFeeReceiver(address _receiver) external onlyOwner {
+    function setSellFeeReceiver(address _receiver) external onlyOwnerOrAdmin {
         sellFeeReceiver = _receiver;
     }
     
     /**
      * @dev 设置质押核心合约地址
      */
-    function setStakeCoreContract(address _contract) external onlyOwner {
+    function setStakeCoreContract(address _contract) external onlyOwnerOrAdmin {
         stakeCoreContract = _contract;
         isExempt[_contract] = true;  // 质押核心合约免税
     }
@@ -165,7 +170,7 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
     /**
      * @dev 设置增发权限
      */
-    function setMinter(address _minter, bool _enabled) external onlyOwner {
+    function setMinter(address _minter, bool _enabled) external onlyOwnerOrAdmin {
         minters[_minter] = _enabled;
     }
     /**
@@ -368,7 +373,7 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
      * @param _pair 交易对地址
      * @param _status 是否为交易对（true=设为底池，false=取消底池）
      */
-    function setPair(address _pair, bool _status) external onlyOwner {
+    function setPair(address _pair, bool _status) external onlyOwnerOrAdmin {
         if (_status) {
             pool = _pair;
             poolInitialized = true;
@@ -387,7 +392,7 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
      * @dev 设置管理员合约地址（Admin合约调用，授权其管理权限）
      * @param _admin 管理员合约地址
      */
-    function setAdminContract(address _admin) external onlyOwner {
+    function setAdminContract(address _admin) external onlyOwnerOrAdmin {
         require(_admin != address(0), "Invalid address");
         isExempt[_admin] = true;
         minters[_admin] = true;
@@ -397,7 +402,7 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
      * @dev 设置卖出手续费率（6-80代表6%-80%）
      * @param _rate 手续费率（单位：1%，范围6-80，即6%-80%）
      */
-    function setSellFeeRate(uint256 _rate) external onlyOwner {
+    function setSellFeeRate(uint256 _rate) external onlyOwnerOrAdmin {
         require(_rate >= 6 && _rate <= 80, "Rate out of range");  // 6% - 80%
         sellTax = _rate * 100;  // 转换为基点（6→600, 80→8000）
     }
@@ -405,7 +410,7 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
     /**
      * @dev 紧急提取 (仅owner)
      */
-    function emergencyWithdraw(address token, address to, uint256 amount) external onlyOwner {
+    function emergencyWithdraw(address token, address to, uint256 amount) external onlyOwnerOrAdmin {
         if (token == address(0)) {
             payable(to).transfer(amount);
         } else {

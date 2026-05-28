@@ -222,10 +222,6 @@ const getStakeCoreContract = (
   provider?: ethers.BrowserProvider | ethers.JsonRpcProvider
 ): ethers.Contract => getStakeContractByRole('core', provider);
 
-const getStakeMineContract = (
-  provider?: ethers.BrowserProvider | ethers.JsonRpcProvider
-): ethers.Contract => getStakeContractByRole('mine', provider);
-
 const getStakeVaultContract = (
   provider?: ethers.BrowserProvider | ethers.JsonRpcProvider
 ): ethers.Contract => getStakeContractByRole('vault', provider);
@@ -237,6 +233,20 @@ const getSignedStakeVaultContract = async (
 const getSignedStakeCoreContract = async (
   signer: ethers.Signer
 ): Promise<ethers.Contract> => getSignedStakeContractByRole('core', signer);
+
+const callProjectDepositStatic = async (
+  contract: ethers.Contract,
+  amountInWei: bigint
+): Promise<void> => {
+  await contract.deposit.staticCall(amountInWei);
+};
+
+const callProjectDeposit = async (
+  contract: ethers.Contract,
+  amountInWei: bigint
+): Promise<ethers.TransactionResponse> => {
+  return contract.deposit(amountInWei);
+};
 
 
 // ============ DQProject 合约交互 ============
@@ -410,7 +420,7 @@ export const depositSOLOnChain = async (
 
   console.log('[Web3] 链上入金:', amount, 'BNB');
 
-  // ── 预检查：把常见 payable 入金失败原因提前暴露出来 ──
+  // ── 预检查：把常见入金失败原因提前暴露出来 ──
   try {
     const [stakeAddr, minInvest, isBlacklisted, isWhitelisted] = await Promise.all([
       contract.stakeContract().catch(() => ethers.ZeroAddress),
@@ -451,13 +461,13 @@ export const depositSOLOnChain = async (
   }
 
   try {
-    await contract.deposit.staticCall({ value: amountInWei });
+    await callProjectDepositStatic(contract, amountInWei);
   } catch (error) {
     console.error('[Web3] deposit staticCall 失败:', error);
     throw error;
   }
 
-  const tx = await contract.deposit({ value: amountInWei });
+  const tx = await callProjectDeposit(contract, amountInWei);
   console.log('[Web3] 交易已发送:', tx.hash);
 
   return tx;
@@ -640,13 +650,13 @@ export interface StakeMineLPEquityInfo {
 }
 
 /**
- * 获取 StakeMine 中的 LP 权益信息
+ * 获取 StakeCore 中登记的 LP 权益信息
  */
 export const getStakeMineLPEquityInfo = async (
   userAddress: string
 ): Promise<StakeMineLPEquityInfo | null> => {
   try {
-    const contract = getStakeMineContract();
+    const contract = getStakeCoreContract();
     const [stakedLP, equityLP, totalEquity, walletLP] = await contract.getLPEquityInfo(userAddress);
 
     return {
@@ -656,21 +666,21 @@ export const getStakeMineLPEquityInfo = async (
       walletLP: ethers.formatEther(walletLP),
     };
   } catch (error) {
-    console.error('[Web3] 获取 StakeMine LP 权益信息失败:', error);
+    console.error('[Web3] 获取 StakeCore LP 权益信息失败:', error);
     return null;
   }
 };
 
 /**
- * 获取 StakeMine 中待领取的 LP 权益奖励
+ * 获取 StakeCore 中待领取的 LP 权益奖励
  */
 export const getStakeMineLPEquityPending = async (userAddress: string): Promise<string> => {
   try {
-    const contract = getStakeMineContract();
+    const contract = getStakeCoreContract();
     const pending = await contract.getLPEquityPending(userAddress);
     return ethers.formatEther(pending);
   } catch (error) {
-    console.error('[Web3] 获取 StakeMine LP 权益奖励失败:', error);
+    console.error('[Web3] 获取 StakeCore LP 权益奖励失败:', error);
     return '0';
   }
 };
@@ -1153,7 +1163,7 @@ export const buyNodeOnChain = async (
 export const getUserNFTCount = async (address: string): Promise<number> => {
   try {
     const contract = getContract(CONTRACT_ADDRESSES.DQCARD.address, DQCARD_ABI);
-    return await contract.balanceOf(address);
+    return Number(await contract.balanceOf(address));
   } catch (error) {
     console.error('[Web3] 获取 NFT 数量失败:', error);
     return 0;
@@ -1345,7 +1355,7 @@ export const approveSOL = async (
 
 /**
  * 添加 LP（入金）
- * 新版通过 DQMCore.deposit 自动完成换币和加池
+ * 当前 ABI 下通过 DQMCore.deposit(amount) 完成入金逻辑
  */
 export const addLiquidityOnChain = async (
   signer: ethers.Signer,
@@ -1355,9 +1365,9 @@ export const addLiquidityOnChain = async (
   const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
   const amountInWei = ethers.parseUnits(solAmount, 18);
 
-  console.log('[Web3] 添加 LP（新版通过 DQMCore.deposit 自动完成）:', solAmount, 'BNB', 'minLp 参数未在当前合约使用:', minLpAmount);
+  console.log('[Web3] 添加 LP（当前 ABI 通过 DQMCore.deposit(amount)）:', solAmount, 'BNB', 'minLp 参数未在当前合约使用:', minLpAmount);
 
-  const tx = await contract.deposit({ value: amountInWei });
+  const tx = await callProjectDeposit(contract, amountInWei);
   console.log('[Web3] LP 添加交易已发送:', tx.hash);
 
   return tx;
