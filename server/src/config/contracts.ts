@@ -1,8 +1,7 @@
 import type { InterfaceAbi } from 'ethers';
 import * as contractAbisModule from '../../../client/config/contractAbis.ts';
 
-const ABI_SOURCE = ((contractAbisModule as { default?: Record<string, unknown> }).default ??
-  contractAbisModule) as Record<string, unknown>;
+const ABI_SOURCE = contractAbisModule as Record<string, unknown>;
 
 export const DQPROJECT_ABI = ABI_SOURCE.DQPROJECT_ABI as InterfaceAbi;
 export const DQSTAKE_ABI = ABI_SOURCE.DQSTAKE_ABI as InterfaceAbi;
