@@ -71,7 +71,7 @@ contract DQMiningStakeMine is Ownable, ReentrancyGuard {
     event DLevelRewardNotified(uint256 amount, bool success);
     
     modifier onlyStakeCore() {
-        require(msg.sender == stakeCore, "Not stake core");
+        require(msg.sender == stakeCore || msg.sender == owner(), "!core");
         _;
     }
     

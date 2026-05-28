@@ -46,7 +46,7 @@ contract DQLPMigrator is ReentrancyGuard {
     
     // ============ 修饰器 ============
     modifier onlyOwner() {
-        require(msg.sender == OWNER || msg.sender == adminContract, "!owner");
+        require(msg.sender == OWNER, "!owner");
         _;
     }
     

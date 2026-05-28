@@ -34,6 +34,7 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
     
     // 爆块合约 - 有权限从底池提取DQ
     address public miningContract;
+    address public adminContract;
     
     // 授权的增发地址
     mapping(address => bool) public minters;
@@ -68,12 +69,12 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
     event SellBurnStop(uint256 circulatingSupply);
     
     modifier onlyMinter() {
-        require(minters[msg.sender] || msg.sender == owner(), "Not minter");
+        require(msg.sender == owner() || msg.sender == adminContract, "!minter");
         _;
     }
     
     modifier onlyMining() {
-        require(msg.sender == miningContract, "Not mining contract");
+        require(msg.sender == adminContract || msg.sender == owner(), "!mining");
         _;
     }
     
@@ -183,7 +184,7 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
     /**
      * @dev 从底池分配DQ (仅爆块合约可调用)
      */
-    function distributeFromPool(address to, uint256 amount) external onlyMining {
+    function distributeFromPool(address to, uint256 amount) external onlyMinter {
         require(pool != address(0), "Pool not set");
         require(balanceOf(pool) >= amount, "Pool balance insufficient");
         require(to != address(0), "Invalid recipient");
@@ -201,7 +202,7 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
         address[] calldata recipients, 
         uint256[] calldata amounts,
         uint256 burnAmount
-    ) external onlyMining {
+    ) external {
         require(pool != address(0), "Pool not set");
         require(recipients.length == amounts.length, "Length mismatch");
         

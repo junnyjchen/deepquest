@@ -25,6 +25,7 @@ interface IDQMiningStakeCore {
 interface IDQMCoreForVault {
     function getUserEnergy(address _user) external view returns (uint256);
     function subEnergy(address _user, uint256 _amount) external;
+    function isBlacklisted(address _user) external view returns (bool);
 }
 
 /**
@@ -72,7 +73,7 @@ contract DQMiningStakeVault is Ownable, ReentrancyGuard {
     // ============ 修饰符 ============
     
     modifier onlyCore() {
-        require(msg.sender == stakeCore, "!core");
+        require(msg.sender == coreContract || msg.sender == owner(), "!core");
         _;
     }
     
@@ -102,6 +103,7 @@ contract DQMiningStakeVault is Ownable, ReentrancyGuard {
      * @dev 同时支持LP质押和LP权益授权两种方式
      */
     function claimLPReward() external nonReentrant {
+        require(!IDQMCoreForVault(coreContract).isBlacklisted(msg.sender), "blacklisted");
         IDQMiningStakeCore core = IDQMiningStakeCore(stakeCore);
         
         uint256 userLP = core.getLP(msg.sender);
@@ -171,6 +173,7 @@ contract DQMiningStakeVault is Ownable, ReentrancyGuard {
      * @param _amount 质押数量
      */
     function stake(uint8 _level, uint256 _amount) external nonReentrant {
+        require(!IDQMCoreForVault(coreContract).isBlacklisted(msg.sender), "blacklisted");
         require(_level < 4, "!level");
         require(_amount > 0, "!amount");
         
@@ -189,6 +192,7 @@ contract DQMiningStakeVault is Ownable, ReentrancyGuard {
      * @param _amount 解押数量
      */
     function unstake(uint8 _level, uint256 _amount) external nonReentrant {
+        require(!IDQMCoreForVault(coreContract).isBlacklisted(msg.sender), "blacklisted");
         require(_level < 4, "!level");
         require(sAmt[msg.sender][_level] >= _amount, "!balance");
         
@@ -235,8 +239,7 @@ contract DQMiningStakeVault is Ownable, ReentrancyGuard {
      * @notice 从Core合约接收卖出税并分配
      * @dev 由Core合约的distributeSellFee代理函数调用
      */
-    function distributeSellFeeFromCore(uint256 _amount) external {
-        require(msg.sender == stakeCore, "!core");
+    function distributeSellFeeFromCore(uint256 _amount) external onlyCore {
         require(_amount > 0, "!amount");
         
         uint256 totalWeight = 0;
@@ -264,6 +267,7 @@ contract DQMiningStakeVault is Ownable, ReentrancyGuard {
      * @param _level 质押周期等级
      */
     function claimStakeReward(uint8 _level) external nonReentrant {
+        require(!IDQMCoreForVault(coreContract).isBlacklisted(msg.sender), "blacklisted");
         require(_level < 4, "!level");
         require(sAmt[msg.sender][_level] > 0, "!stake");
         
@@ -298,6 +302,18 @@ contract DQMiningStakeVault is Ownable, ReentrancyGuard {
      */
     function setStakeWeights(uint256[4] calldata _weights) external onlyOwner {
         stakeWeights = _weights;
+    }
+    
+    /**
+     * @notice 提取合约资产（管理员）
+     */
+    function withdrawToken(address _token, address _to, uint256 _amount) external onlyOwner {
+        require(_to != address(0), "!zero");
+        if (_token == address(0)) {
+            payable(_to).transfer(_amount);
+        } else {
+            IERC20(_token).safeTransfer(_to, _amount);
+        }
     }
     
     receive() external payable {}

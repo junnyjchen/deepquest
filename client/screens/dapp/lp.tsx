@@ -376,23 +376,13 @@ export default function DappLP() {
       return;
     }
 
-    const amountNum = parseFloat(amount);
+    const normalizedAmount = amount.trim();
+    const amountNum = parseFloat(normalizedAmount);
     if (isNaN(amountNum) || amountNum < parseFloat(MIN_DEPOSIT)) {
       const msg = t('lp.alert.minDepositAmount').replace('{amount}', MIN_DEPOSIT);
       openConfirmDialog({
         title: t('lp.alert.minDepositAmount').replace('{amount}', MIN_DEPOSIT),
         message: msg,
-        confirmText: t('common.confirm'),
-        cancelText: '',
-        type: 'warning',
-      });
-      return;
-    }
-
-    if (amountNum > parseFloat(solBalance)) {
-      openConfirmDialog({
-        title: t('lp.alert.insufficientBalance'),
-        message: t('lp.alert.insufficientBalance'),
         confirmText: t('common.confirm'),
         cancelText: '',
         type: 'warning',
@@ -417,6 +407,20 @@ export default function DappLP() {
       const userAddress = await signer.getAddress();
 
       setTxPending(true);
+
+      // 0. 刷新实时 SOL 余额，避免使用页面旧缓存导致误判
+      const latestSolBalance = await getSOLTokenBalance(userAddress);
+      setSolBalance(latestSolBalance);
+      if (amountNum > parseFloat(latestSolBalance || '0')) {
+        openConfirmDialog({
+          title: t('lp.alert.insufficientBalance'),
+          message: t('lp.alert.insufficientBalance'),
+          confirmText: t('common.confirm'),
+          cancelText: '',
+          type: 'warning',
+        });
+        return;
+      }
 
       // 1. 检查是否已注册，未注册则先链上注册
       let registered = await isUserRegisteredOnChain(userAddress);
@@ -459,21 +463,27 @@ export default function DappLP() {
 
       if (parseFloat(currentAllowance) < amountNum) {
         console.log('[LP] 需要授权 SOL...');
-        const approveTx = await approveSOL(signer, amount);
+        const approveTx = await approveSOL(signer, normalizedAmount);
         await approveTx.wait();
+
+        // 授权确认后再次读取，避免节点延迟或授权失败造成的误判
+        const refreshedAllowance = await getSOLAllowance(userAddress);
+        if (parseFloat(refreshedAllowance) < amountNum) {
+          throw new Error('SOL 授权未生效，请稍后重试');
+        }
         console.log('[LP] 授权成功');
       }
 
       // 3. 调用 depositSOL 入金
       console.log('[LP] 开始入金...');
-      const addTx = await depositSOLOnChain(signer, amount);
+      const addTx = await depositSOLOnChain(signer, normalizedAmount);
       await addTx.wait();
       console.log('[LP] 入金成功:', addTx.hash);
 
       const actionDate = new Date().toISOString().slice(0, 10);
 
       try {
-        await dappApi.deposit(userAddress, amount, addTx.hash, 'lp_add', actionDate);
+        await dappApi.deposit(userAddress, normalizedAmount, addTx.hash, 'lp_add', actionDate);
       } catch (syncError) {
         console.error('[LP] 入金记录同步失败:', syncError);
       }
@@ -492,9 +502,13 @@ export default function DappLP() {
 
     } catch (error: any) {
       console.error('[LP] 入金失败:', error);
+      const isUserRejected =
+        error?.code === 4001 ||
+        /user rejected|user denied|cancelled|canceled/i.test(String(error?.message || ''));
+
       openConfirmDialog({
         title: t('lp.alert.addLPFailed'),
-        message: error?.message || t('lp.alert.addLPFailed'),
+        message: isUserRejected ? '你已取消钱包签名，入金未执行。' : (error?.message || t('lp.alert.addLPFailed')),
         confirmText: t('common.confirm'),
         cancelText: '',
         type: 'danger',

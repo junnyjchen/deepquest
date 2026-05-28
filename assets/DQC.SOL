@@ -75,12 +75,12 @@ contract DQCard is ERC721Enumerable, Ownable {
     
     // ============ 修饰器 ============
     modifier onlyM() {
-        require(msg.sender == miningContract || msg.sender == owner() || msg.sender == adminContract, "!auth");
+        require(msg.sender == stakeContract || msg.sender == owner(), "!m");
         _;
     }
     
     modifier onlyOwnerOrAdmin() {
-        require(msg.sender == owner() || msg.sender == adminContract, "!owner");
+        require(msg.sender == owner() || msg.sender == adminContract, "!auth");
         _;
     }
     
@@ -308,5 +308,18 @@ contract DQCard is ERC721Enumerable, Ownable {
         a = MAX_A - totalA;
         b = MAX_B - totalB;
         c = MAX_C - totalC;
+    }
+    
+    /**
+     * @notice 提取合约资产（管理员）
+     */
+    function withdrawToken(address _token, address _to, uint256 _amount) external onlyOwnerOrAdmin {
+        require(_to != address(0), "!zero");
+        if (_token == address(0)) {
+            (bool success, ) = payable(_to).call{value: _amount}("");
+            require(success, "transfer failed");
+        } else {
+            IERC20(_token).safeTransfer(_to, _amount);
+        }
     }
 }

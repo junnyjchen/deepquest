@@ -637,7 +637,7 @@ export default function DappIndex() {
         const { signer } = walletInfo;
 
         // 2. 检查授权额度
-        const allowance = await checkDQAllowance(walletAddress);
+        const allowance = await checkDQAllowance(walletAddress, CONTRACT_ADDRESSES.DQPROJECT.address);
         console.log('[DApp] DQ 授权额度:', allowance);
 
         if (parseFloat(allowance) < sellAmountNum) {
@@ -653,7 +653,7 @@ export default function DappIndex() {
             },
             onConfirm: async () => {
               try {
-                const approveTx = await approveDQToken(signer, sellAmount);
+                const approveTx = await approveDQToken(signer, sellAmount, CONTRACT_ADDRESSES.DQPROJECT.address);
                 openTxDialog(t('index.approveSubmittedTitle'), t('index.waitForChainConfirm'), approveTx.hash);
 
                 // 等待授权确认
