@@ -7,7 +7,7 @@ import {
   DQ_ABI,
   DQCARD_CONTRACT_ADDRESS,
   DQCARD_ABI,
-} from '../config/contracts.js';
+} from '../config/contracts.ts';
 
 const router = Router();
 

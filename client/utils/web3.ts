@@ -2,7 +2,15 @@
  * Web3 工具库 - 钱包连接和链上交互
  */
 import { ethers } from 'ethers';
-import { CONTRACT_ADDRESSES, DQPROJECT_ABI, DQTOKEN_ABI, DQCARD_ABI, DQSTAKE_ABI } from '../config/contracts';
+import {
+  CONTRACT_ADDRESSES,
+  DQPROJECT_ABI,
+  DQTOKEN_ABI,
+  DQCARD_ABI,
+  DQSTAKE_ABI,
+  DQSTAKEMINE_ABI,
+  DQSTAKEVAULT_ABI,
+} from '../config/contracts';
 
 // BSC 主网配置
 const BSC_CHAIN_ID = 56;
@@ -177,6 +185,70 @@ export const getSignedContract = async (
   return new ethers.Contract(address, abi, signer);
 };
 
+type StakeContractRole = 'core' | 'mine' | 'vault';
+
+const STAKE_CONTRACTS: Record<StakeContractRole, { address: string; abi: any[] }> = {
+  core: {
+    address: CONTRACT_ADDRESSES.DQSTAKE.address,
+    abi: DQSTAKE_ABI,
+  },
+  mine: {
+    address: CONTRACT_ADDRESSES.DQSTAKEMINE.address,
+    abi: DQSTAKEMINE_ABI,
+  },
+  vault: {
+    address: CONTRACT_ADDRESSES.DQSTAKEVAULT.address,
+    abi: DQSTAKEVAULT_ABI,
+  },
+};
+
+const getStakeContractByRole = (
+  role: StakeContractRole,
+  provider?: ethers.BrowserProvider | ethers.JsonRpcProvider
+): ethers.Contract => {
+  const { address, abi } = STAKE_CONTRACTS[role];
+  return getContract(address, abi, provider);
+};
+
+const getSignedStakeContractByRole = async (
+  role: StakeContractRole,
+  signer: ethers.Signer
+): Promise<ethers.Contract> => {
+  const { address, abi } = STAKE_CONTRACTS[role];
+  return getSignedContract(address, abi, signer);
+};
+
+const getStakeCoreContract = (
+  provider?: ethers.BrowserProvider | ethers.JsonRpcProvider
+): ethers.Contract => getStakeContractByRole('core', provider);
+
+const getStakeVaultContract = (
+  provider?: ethers.BrowserProvider | ethers.JsonRpcProvider
+): ethers.Contract => getStakeContractByRole('vault', provider);
+
+const getSignedStakeVaultContract = async (
+  signer: ethers.Signer
+): Promise<ethers.Contract> => getSignedStakeContractByRole('vault', signer);
+
+const getSignedStakeCoreContract = async (
+  signer: ethers.Signer
+): Promise<ethers.Contract> => getSignedStakeContractByRole('core', signer);
+
+const callProjectDepositStatic = async (
+  contract: ethers.Contract,
+  amountInWei: bigint
+): Promise<void> => {
+  await contract.deposit.staticCall(amountInWei);
+};
+
+const callProjectDeposit = async (
+  contract: ethers.Contract,
+  amountInWei: bigint
+): Promise<ethers.TransactionResponse> => {
+  return contract.deposit(amountInWei);
+};
+
+
 // ============ DQProject 合约交互 ============
 
 /**
@@ -186,14 +258,15 @@ export const getUserFromChain = async (userAddress: string) => {
   const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
 
   try {
-    // getUser 当前仅返回 4 个字段（与 assets/DQM.SOL 对齐）：
-    // (referrer, directCount, level, totalInvest)
-    // 其余信息需分别从 getUserStake 获取。
+    // 最新 getUser 返回 5 个字段：
+    // (referrer, directCount, level, totalInvest, childrenCount)
+    // 当前前端暂未使用 childrenCount。
     const [
       referrer,
       directCount,
       level,
       totalInvest,
+      _childrenCount,
     ] = await contract.getUser(userAddress);
 
     // const owner = await contract.owner();
@@ -249,7 +322,7 @@ export const getInvestRange = async (): Promise<{ min: string; max: string }> =>
     const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
     const [min, max] = await Promise.all([
       contract.INVEST_MIN(),
-      contract.getDailyLimit(),
+      contract.currentDepositLimit(),
     ]);
 
     return {
@@ -296,7 +369,7 @@ const diagnoseDepositOverflow = async (
   const directReward = amountInWei * 50n / 100n * 30n / 100n;
 
   try {
-    const diagStakeContract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
+    const diagStakeContract = getStakeCoreContract();
     const [userRes, dqCardAddr, userEnergyRaw] = await Promise.all([
       contract.getUser(userAddress),
       contract.dqCard().catch(() => CONTRACT_ADDRESSES.DQCARD.address),
@@ -333,26 +406,26 @@ const diagnoseDepositOverflow = async (
   }
 };
 
-/**
- * 质押 SOL（链上）
- */
 export const depositSOLOnChain = async (
   signer: ethers.Signer,
   amount: string
 ): Promise<ethers.TransactionResponse> => {
   const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+  const solContract = getContract(CONTRACT_ADDRESSES.SOL.address, DQTOKEN_ABI);
   const amountInWei = ethers.parseEther(amount);
   const userAddress = (await signer.getAddress()).toLowerCase();
 
-  console.log('[Web3] 链上质押:', amount, 'SOL');
+  console.log('[Web3] 链上入金:', amount, 'SOL');
 
-  // ── 预检查：把常见 require/transferFrom 失败原因提前暴露出来 ──
+  // ── 预检查：当前合约 deposit(amount) 会从用户地址 transferFrom SOL ERC20 ──
   try {
-    const [stakeAddr, minInvest, isBlacklisted, isWhitelisted] = await Promise.all([
+    const [stakeAddr, minInvest, isBlacklisted, isWhitelisted, solBalance, solAllowance] = await Promise.all([
       contract.stakeContract().catch(() => ethers.ZeroAddress),
       contract.INVEST_MIN().catch(() => 0n),
       contract.isBlacklisted(userAddress).catch(() => false),
       contract.depositWhiteList(userAddress).catch(() => false),
+      solContract.balanceOf(userAddress).catch(() => 0n),
+      solContract.allowance(userAddress, CONTRACT_ADDRESSES.DQPROJECT.address).catch(() => 0n),
     ]);
 
     if (isBlacklisted) {
@@ -365,11 +438,17 @@ export const depositSOLOnChain = async (
       // DQMiningV3.depositSOL 会在 swapAndAddLP 时 require(!stake)
       throw new Error('入金失败：stakeContract 未设置（!stake），需管理员先 setStakeContract');
     }
+    if (typeof solBalance === 'bigint' && solBalance < amountInWei) {
+      throw new Error(`入金失败：SOL 代币余额不足（bal=${ethers.formatEther(solBalance)}）`);
+    }
+    if (typeof solAllowance === 'bigint' && solAllowance < amountInWei) {
+      throw new Error(`入金失败：SOL 授权额度不足，请先授权主合约（allow=${ethers.formatEther(solAllowance)}）`);
+    }
 
     if (!isWhitelisted) {
       const [daily, limit] = await Promise.all([
         contract.dailyDeposit(userAddress).catch(() => 0n),
-        contract.getDailyLimit().catch(() => 0n),
+        contract.currentDepositLimit().catch(() => 0n),
       ]);
       if (typeof daily === 'bigint' && typeof limit === 'bigint' && daily + amountInWei > limit) {
         throw new Error(
@@ -377,26 +456,25 @@ export const depositSOLOnChain = async (
         );
       }
     }
-
-    // ERC20: balance/allowance
-    const solContract = await getSignedContract(CONTRACT_ADDRESSES.SOL.address, DQTOKEN_ABI, signer);
-    const [balance, allowance] = await Promise.all([
-      solContract.balanceOf(userAddress).catch(() => 0n),
-      solContract.allowance(userAddress, CONTRACT_ADDRESSES.DQPROJECT.address).catch(() => 0n),
-    ]);
-
-    if (typeof balance === 'bigint' && balance < amountInWei) {
-      throw new Error(`入金失败：SOL 余额不足（bal=${ethers.formatEther(balance)}）`);
-    }
-    if (typeof allowance === 'bigint' && allowance < amountInWei) {
-      throw new Error(`入金失败：SOL 授权额度不足，请先授权（allow=${ethers.formatEther(allowance)}）`);
-    }
   } catch (preflightError) {
     console.error('[Web3] 入金预检查失败:', preflightError);
     throw preflightError;
   }
 
-  const tx = await contract.depositSOL(amountInWei);
+  try {
+    await callProjectDepositStatic(contract, amountInWei);
+  } catch (error) {
+    console.error('[Web3] deposit staticCall 失败:', error);
+
+    const panicCode = getPanicCode(error);
+    if (panicCode === 17) {
+      throw new Error(await diagnoseDepositOverflow(contract, userAddress, amountInWei));
+    }
+
+    throw error;
+  }
+
+  const tx = await callProjectDeposit(contract, amountInWei);
   console.log('[Web3] 交易已发送:', tx.hash);
 
   return tx;
@@ -410,36 +488,27 @@ export const stakeDQOnChain = async (
   amount: string,
   periodIndex: number
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+  const contract = await getSignedStakeVaultContract(signer);
   const amountInWei = ethers.parseEther(amount);
   const userAddress = (await signer.getAddress()).toLowerCase();
 
-  console.log('[Web3] 链上质押 DQ:', amount, 'periodIndex:', periodIndex);
+  console.log('[Web3] 链上质押 DQ:', amount, 'level:', periodIndex);
 
   try {
-    const [stakeAddr, balance, allowance] = await Promise.all([
-      contract.stakeContract().catch(() => ethers.ZeroAddress),
-      contract.dqToken().then(async (dqAddr: string) => {
-        const dqContract = getContract(dqAddr, DQTOKEN_ABI);
-        return dqContract.balanceOf(userAddress).catch(() => 0n);
-      }).catch(() => 0n),
-      contract.dqToken().then(async (dqAddr: string) => {
-        const dqContract = getContract(dqAddr, DQTOKEN_ABI);
-        return dqContract.allowance(userAddress, CONTRACT_ADDRESSES.DQPROJECT.address).catch(() => 0n);
-      }).catch(() => 0n),
+    const dqContract = getContract(CONTRACT_ADDRESSES.DQTOKEN.address, DQTOKEN_ABI);
+    const [balance, allowance] = await Promise.all([
+      dqContract.balanceOf(userAddress).catch(() => 0n),
+      dqContract.allowance(userAddress, CONTRACT_ADDRESSES.DQSTAKEVAULT.address).catch(() => 0n),
     ]);
 
-    if (stakeAddr === ethers.ZeroAddress) {
-      throw new Error('质押失败：stakeContract 未设置（!stake）');
-    }
     if (periodIndex < 0 || periodIndex > 3) {
-      throw new Error('质押失败：质押周期索引无效（!i）');
+      throw new Error('质押失败：质押等级无效（0-3）');
     }
     if (typeof balance === 'bigint' && balance < amountInWei) {
       throw new Error(`质押失败：DQ 余额不足（bal=${ethers.formatEther(balance)}）`);
     }
     if (typeof allowance === 'bigint' && allowance < amountInWei) {
-      throw new Error(`质押失败：DQ 授权额度不足，请先授权（allow=${ethers.formatEther(allowance)}）`);
+      throw new Error(`质押失败：DQ 授权额度不足，请先授权 Vault（allow=${ethers.formatEther(allowance)}）`);
     }
   } catch (preflightError) {
     console.error('[Web3] 质押 DQ 预检查失败:', preflightError);
@@ -447,13 +516,13 @@ export const stakeDQOnChain = async (
   }
 
   try {
-    await contract.stakeDQ.staticCall(amountInWei, periodIndex);
+    await contract.stake.staticCall(periodIndex, amountInWei);
   } catch (error) {
-    console.error('[Web3] stakeDQ staticCall 失败:', error);
+    console.error('[Web3] stake staticCall 失败:', error);
     throw error;
   }
 
-  const tx = await contract.stakeDQ(amountInWei, periodIndex);
+  const tx = await contract.stake(periodIndex, amountInWei);
   console.log('[Web3] 交易已发送:', tx.hash);
 
   return tx;
@@ -474,30 +543,32 @@ export interface ChainStakeRecord {
  */
 export const getStakeRecordsFromChain = async (userAddress: string): Promise<ChainStakeRecord[]> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
-    const count = Number(await contract.getStakeRecordCount(userAddress));
+    const contract = getStakeVaultContract();
+    const [[amounts, times, pendingRewards], durations] = await Promise.all([
+      contract.getStakeInfo(userAddress),
+      Promise.all([0, 1, 2, 3].map((level) => contract.stakeDurations(level))),
+    ]);
 
-    if (count === 0) {
-      return [];
-    }
-
-    const records = await Promise.all(
-      Array.from({ length: count }, async (_, index) => {
-        const [amount, startTime, duration, pendingReward, active, canUnstake] = await contract.getStakeRecord(userAddress, index);
+    const now = Math.floor(Date.now() / 1000);
+    const records = amounts
+      .map((amount: bigint, index: number) => {
+        const startTime = Number(times[index]);
+        const duration = Number(durations[index]);
+        const active = BigInt(amount) > 0n;
 
         return {
           recordIndex: index,
           amount: ethers.formatEther(amount),
-          startTime: Number(startTime),
-          duration: Number(duration),
-          pendingReward: ethers.formatEther(pendingReward),
-          active: Boolean(active),
-          canUnstake: Boolean(canUnstake),
+          startTime,
+          duration,
+          pendingReward: ethers.formatEther(pendingRewards[index]),
+          active,
+          canUnstake: active && startTime > 0 && now >= startTime + duration,
         } satisfies ChainStakeRecord;
       })
-    );
+      .filter((record: ChainStakeRecord) => record.active);
 
-    return records.reverse();
+    return records;
   } catch (error) {
     console.error('[Web3] 获取链上质押记录失败:', error);
     return [];
@@ -512,11 +583,15 @@ export const unstakeDQOnChain = async (
   recordIndex: number
 ): Promise<ethers.TransactionResponse> => {
   const userAddress = await signer.getAddress();
-  const projectContract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
-  const stakeContract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
+  const stakeContract = await getSignedStakeVaultContract(signer);
 
   try {
-    const [, , , , active, canUnstake] = await stakeContract.getStakeRecord(userAddress, recordIndex);
+    const [amounts, times] = await stakeContract.getStakeInfo(userAddress);
+    const amount = BigInt(amounts[recordIndex] ?? 0n);
+    const startTime = Number(times[recordIndex] ?? 0n);
+    const duration = Number(await stakeContract.stakeDurations(recordIndex));
+    const active = amount > 0n;
+    const canUnstake = active && startTime > 0 && Math.floor(Date.now() / 1000) >= startTime + duration;
 
     if (!active) {
       throw new Error('该质押记录已解押');
@@ -524,21 +599,97 @@ export const unstakeDQOnChain = async (
     if (!canUnstake) {
       throw new Error('该质押记录尚未到期，暂不可解押');
     }
+
+    try {
+      await stakeContract.unstake.staticCall(recordIndex, amount);
+    } catch (error) {
+      console.error('[Web3] unstake staticCall 失败:', error);
+      throw error;
+    }
+
+    const tx = await stakeContract.unstake(recordIndex, amount);
+    console.log('[Web3] 解押交易已发送:', tx.hash);
+    return tx;
   } catch (preflightError) {
     console.error('[Web3] 解押预检查失败:', preflightError);
     throw preflightError;
   }
+};
 
-  try {
-    await projectContract.unstakeDQ.staticCall(recordIndex);
-  } catch (error) {
-    console.error('[Web3] unstakeDQ staticCall 失败:', error);
-    throw error;
-  }
+/**
+ * 从 StakeVault 领取 LP 奖励（Vault 合约入口）
+ */
+export const claimLPRewardFromVaultOnChain = async (
+  signer: ethers.Signer
+): Promise<ethers.TransactionResponse> => {
+  const contract = await getSignedStakeVaultContract(signer);
 
-  const tx = await projectContract.unstakeDQ(recordIndex);
-  console.log('[Web3] 解押交易已发送:', tx.hash);
+  console.log('[Web3] 通过 StakeVault 领取 LP 奖励');
+
+  const tx = await contract.claimLPReward();
+  console.log('[Web3] 交易已发送:', tx.hash);
+
   return tx;
+};
+
+/**
+ * 从 StakeVault 领取等级质押奖励（Vault 合约入口）
+ */
+export const claimStakeRewardFromVaultOnChain = async (
+  signer: ethers.Signer,
+  level: number
+): Promise<ethers.TransactionResponse> => {
+  const contract = await getSignedStakeVaultContract(signer);
+
+  console.log('[Web3] 通过 StakeVault 领取等级质押奖励，等级:', level);
+
+  const tx = await contract.claimStakeReward(level);
+  console.log('[Web3] 交易已发送:', tx.hash);
+
+  return tx;
+};
+
+export interface StakeMineLPEquityInfo {
+  stakedLP: string;
+  equityLP: string;
+  totalEquity: string;
+  walletLP: string;
+}
+
+/**
+ * 获取 StakeCore 中登记的 LP 权益信息
+ */
+export const getStakeMineLPEquityInfo = async (
+  userAddress: string
+): Promise<StakeMineLPEquityInfo | null> => {
+  try {
+    const contract = getStakeCoreContract();
+    const [stakedLP, equityLP, totalEquity, walletLP] = await contract.getLPEquityInfo(userAddress);
+
+    return {
+      stakedLP: ethers.formatEther(stakedLP),
+      equityLP: ethers.formatEther(equityLP),
+      totalEquity: ethers.formatEther(totalEquity),
+      walletLP: ethers.formatEther(walletLP),
+    };
+  } catch (error) {
+    console.error('[Web3] 获取 StakeCore LP 权益信息失败:', error);
+    return null;
+  }
+};
+
+/**
+ * 获取 StakeCore 中待领取的 LP 权益奖励
+ */
+export const getStakeMineLPEquityPending = async (userAddress: string): Promise<string> => {
+  try {
+    const contract = getStakeCoreContract();
+    const pending = await contract.getLPEquityPending(userAddress);
+    return ethers.formatEther(pending);
+  } catch (error) {
+    console.error('[Web3] 获取 StakeCore LP 权益奖励失败:', error);
+    return '0';
+  }
 };
 
 /**
@@ -547,29 +698,30 @@ export const unstakeDQOnChain = async (
 export const claimLPOnChain = async (
   signer: ethers.Signer
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+  const contract = await getSignedStakeVaultContract(signer);
 
-  console.log('[Web3] 链上领取 LP 奖励');
+  console.log('[Web3] 通过 StakeVault 领取 LP 奖励');
 
-  const tx = await contract.claimLP();
+  const tx = await contract.claimLPReward();
   console.log('[Web3] 交易已发送:', tx.hash);
 
   return tx;
 };
 
 /**
- * 授权 DQ Token 给主合约（用于兑换）
+ * 授权 DQ Token 给 StakeVault（用于单币质押）
  */
 export const approveDQToken = async (
   signer: ethers.Signer,
-  amount: string
+  amount: string,
+  spender: string = CONTRACT_ADDRESSES.DQSTAKEVAULT.address
 ): Promise<ethers.TransactionResponse> => {
   const dqContract = await getSignedContract(CONTRACT_ADDRESSES.DQTOKEN.address, DQTOKEN_ABI, signer);
   const amountInWei = ethers.parseEther(amount);
 
-  console.log('[Web3] 授权 DQ Token:', amount);
+  console.log('[Web3] 授权 DQ Token:', amount, 'spender:', spender);
 
-  const tx = await dqContract.approve(CONTRACT_ADDRESSES.DQPROJECT.address, amountInWei);
+  const tx = await dqContract.approve(spender, amountInWei);
   console.log('[Web3] 授权交易已发送:', tx.hash);
 
   return tx;
@@ -579,11 +731,12 @@ export const approveDQToken = async (
  * 检查 DQ Token 授权额度
  */
 export const checkDQAllowance = async (
-  userAddress: string
+  userAddress: string,
+  spender: string = CONTRACT_ADDRESSES.DQSTAKEVAULT.address
 ): Promise<string> => {
   try {
     const contract = getContract(CONTRACT_ADDRESSES.DQTOKEN.address, DQTOKEN_ABI);
-    const allowance = await contract.allowance(userAddress, CONTRACT_ADDRESSES.DQPROJECT.address);
+    const allowance = await contract.allowance(userAddress, spender);
     return ethers.formatEther(allowance);
   } catch (error) {
     console.error('[Web3] 检查授权额度失败:', error);
@@ -599,41 +752,56 @@ export const sellDQForSOL = async (
   dqAmount: string,
   minSolAmount: string = '0'
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
-  const dqAmountInWei = ethers.parseEther(dqAmount);
-  const userAddress = (await signer.getAddress()).toLowerCase();
+  const userAddress = await signer.getAddress();
+  const amountInWei = ethers.parseEther(dqAmount);
+  // 兼容旧调用参数，新合约 sellDQ 不使用 minSolAmount。
+  void minSolAmount;
 
-  console.log('[Web3] 链上兑换 DQ 为 SOL:', dqAmount, 'DQ, 最小获得(前端兼容参数，当前合约未使用):', minSolAmount, 'SOL');
+  const dqTokenContract = await getSignedContract(CONTRACT_ADDRESSES.DQTOKEN.address, DQTOKEN_ABI, signer);
+  // 使用最小 ABI 片段避免受 DQPROJECT_ABI 版本差异影响。
+  const sellContract = new ethers.Contract(
+    CONTRACT_ADDRESSES.DQPROJECT.address,
+    [
+      {
+        inputs: [{ internalType: 'uint256', name: '_dqAmount', type: 'uint256' }],
+        name: 'sellDQ',
+        outputs: [],
+        stateMutability: 'nonpayable',
+        type: 'function',
+      },
+    ],
+    signer
+  );
+
+  console.log('[Web3] 通过 DQMCore.sellDQ 卖出 DQ:', dqAmount);
 
   try {
-    const dqTokenAddress = await contract.dqToken().catch(() => CONTRACT_ADDRESSES.DQTOKEN.address);
-    const dqContract = getContract(dqTokenAddress, DQTOKEN_ABI);
     const [balance, allowance] = await Promise.all([
-      dqContract.balanceOf(userAddress).catch(() => 0n),
-      dqContract.allowance(userAddress, CONTRACT_ADDRESSES.DQPROJECT.address).catch(() => 0n),
+      dqTokenContract.balanceOf(userAddress).catch(() => 0n),
+      dqTokenContract.allowance(userAddress, CONTRACT_ADDRESSES.DQPROJECT.address).catch(() => 0n),
     ]);
 
-    if (typeof balance === 'bigint' && balance < dqAmountInWei) {
-      throw new Error(`兑换失败：DQ 余额不足（bal=${ethers.formatEther(balance)}）`);
+    if (typeof balance === 'bigint' && balance < amountInWei) {
+      throw new Error(`卖出失败：DQ 余额不足（bal=${ethers.formatEther(balance)}）`);
     }
-    if (typeof allowance === 'bigint' && allowance < dqAmountInWei) {
-      throw new Error(`兑换失败：DQ 授权额度不足，请先授权（allow=${ethers.formatEther(allowance)}）`);
+
+    if (typeof allowance === 'bigint' && allowance < amountInWei) {
+      throw new Error(`卖出失败：DQ 授权额度不足，请先授权主合约（allow=${ethers.formatEther(allowance)}）`);
     }
   } catch (preflightError) {
-    console.error('[Web3] sellDQForSOL 预检查失败:', preflightError);
+    console.error('[Web3] sellDQ 预检查失败:', preflightError);
     throw preflightError;
   }
 
   try {
-    await contract.sellDQForSOL.staticCall(dqAmountInWei);
+    await sellContract.sellDQ.staticCall(amountInWei);
   } catch (error) {
-    console.error('[Web3] sellDQForSOL staticCall 失败:', error);
+    console.error('[Web3] sellDQ staticCall 失败:', error);
     throw error;
   }
 
-  const tx = await contract.sellDQForSOL(dqAmountInWei);
-  console.log('[Web3] 交易已发送:', tx.hash);
-
+  const tx = await sellContract.sellDQ(amountInWei);
+  console.log('[Web3] 卖出交易已发送:', tx.hash);
   return tx;
 };
 
@@ -643,11 +811,17 @@ export const sellDQForSOL = async (
 export const claimNFTOnChain = async (
   signer: ethers.Signer
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+  const contract = await getSignedStakeCoreContract(signer);
+  const userAddress = await signer.getAddress();
 
-  console.log('[Web3] 链上领取 NFT 奖励');
+  const nodeLevel = Number(await contract.getUserNodeLevel(userAddress).catch(() => 0));
+  if (nodeLevel <= 0) {
+    throw new Error('当前地址没有可领取节点奖励的节点等级');
+  }
 
-  const tx = await contract.claimNft();
+  console.log('[Web3] 通过 StakeCore 领取节点奖励（当前奖励池为 A 桶）');
+
+  const tx = await contract.claimNodeReward(0);
   console.log('[Web3] 交易已发送:', tx.hash);
 
   return tx;
@@ -659,11 +833,11 @@ export const claimNFTOnChain = async (
 export const claimDTeamOnChain = async (
   signer: ethers.Signer
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+  const contract = await getSignedStakeCoreContract(signer);
 
-  console.log('[Web3] 链上领取 D 团队奖励');
+  console.log('[Web3] 通过 StakeCore 领取 D 等级奖励');
 
-  const tx = await contract.claimDTeam();
+  const tx = await contract.claimDRankReward();
   console.log('[Web3] 交易已发送:', tx.hash);
 
   return tx;
@@ -686,10 +860,17 @@ export const claimSOLOnChain = async (
   signer: ethers.Signer
 ): Promise<ethers.TransactionResponse> => {
   const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+  const userAddress = await signer.getAddress();
+  const stakeContract = getStakeCoreContract();
+  const pending = await stakeContract.getPendingSOL(userAddress).catch(() => 0n);
 
-  console.log('[Web3] 链上领取 SOL 奖励（直推+见点+管理）');
+  if (BigInt(pending) <= 0n) {
+    throw new Error('当前没有可领取的 SOL 奖励');
+  }
 
-  const tx = await contract.claimReward();
+  console.log('[Web3] 通过 DQMCore 提取 SOL 奖励（直推+见点+管理）');
+
+  const tx = await contract.withdrawSOL(pending);
   console.log('[Web3] 交易已发送:', tx.hash);
 
   return tx;
@@ -701,14 +882,8 @@ export const claimSOLOnChain = async (
 export const claimFeeOnChain = async (
   signer: ethers.Signer
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
-
-  console.log('[Web3] 链上领取节点手续费分红');
-
-  const tx = await contract.claimFee();
-  console.log('[Web3] 交易已发送:', tx.hash);
-
-  return tx;
+  void signer;
+  throw new Error('当前新版合约未提供独立的 claimFee 入口，旧版节点手续费分红接口已废弃。');
 };
 
 /**
@@ -717,14 +892,8 @@ export const claimFeeOnChain = async (
 export const claimBlockDQOnChain = async (
   signer: ethers.Signer
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
-
-  console.log('[Web3] 链上领取所有爆块奖励');
-
-  const tx = await contract.claimBlockReward();
-  console.log('[Web3] 交易已发送:', tx.hash);
-
-  return tx;
+  void signer;
+  throw new Error('当前新版合约未提供用户侧 claimBlockDQ 入口，爆块奖励已拆分为 LP/节点/D 等级不同领取路径。');
 };
 
 /**
@@ -736,23 +905,36 @@ export const withdrawDQRewardOnChain = async (
   signer: ethers.Signer,
   periodIndex: number
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+  console.log('[Web3] 新版合约中质押奖励为单步领取，直接调用 Vault.claimStakeReward，等级:', periodIndex);
+  return claimStakeRewardOnChain(signer, periodIndex);
+};
 
-  console.log('[Web3] 链上提取质押奖励，周期:', periodIndex);
+/**
+ * 领取质押奖励（链上）
+ * @param signer 签名者
+ * @param periodIndex 质押等级索引
+ */
+export const claimStakeRewardOnChain = async (
+  signer: ethers.Signer,
+  periodIndex: number
+): Promise<ethers.TransactionResponse> => {
+  const contract = await getSignedStakeVaultContract(signer);
 
-  const tx = await contract.withdrawDQReward(periodIndex);
+  console.log('[Web3] 通过 StakeVault 领取单币质押奖励，等级:', periodIndex);
+
+  const tx = await contract.claimStakeReward(periodIndex);
   console.log('[Web3] 交易已发送:', tx.hash);
 
   return tx;
 };
 
 /**
- * 获取待领取直推+见点+管理奖励（SOL）
+ * 获取待领取直推 SOL 奖励（从 DQSTAKE 合约读取 getPendingSOL）
  */
 export const getPendingReward = async (userAddress: string): Promise<string> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
-    const pending = await contract.getPendingReward(userAddress);
+    const contract = getStakeCoreContract();
+    const pending = await contract.getPendingSOL(userAddress);
     return ethers.formatEther(pending);
   } catch (error) {
     console.error('[Web3] 获取待领取直推奖励失败:', error);
@@ -762,25 +944,20 @@ export const getPendingReward = async (userAddress: string): Promise<string> => 
 
 /**
  * 获取待领取节点手续费分红（SOL）
+ * 新版合约已移除独立 feePool 口径，保留兼容返回 0
  */
 export const getPendingFee = async (userAddress: string): Promise<string> => {
-  try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
-    const pending = await contract.getPendingFee(userAddress);
-    return ethers.formatEther(pending);
-  } catch (error) {
-    console.error('[Web3] 获取待领取手续费分红失败:', error);
-    return '0';
-  }
+  void userAddress;
+  return '0';
 };
 
 /**
- * 获取待领取爆块奖励（DQ）
+ * 获取已积累的爆块 DQ 奖励（LP/NFT/D等级 积累后待提取，从 DQSTAKE userBlockDQ 读取）
  */
 export const getPendingBlockReward = async (userAddress: string): Promise<string> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
-    const pending = await contract.getPendingBlockReward(userAddress);
+    const contract = getStakeCoreContract();
+    const pending = await contract.userBlockDQ(userAddress);
     return ethers.formatEther(pending);
   } catch (error) {
     console.error('[Web3] 获取待领取爆块奖励失败:', error);
@@ -789,13 +966,13 @@ export const getPendingBlockReward = async (userAddress: string): Promise<string
 };
 
 /**
- * 获取待领取质押奖励（DQ）
+ * 获取待领取质押奖励（DQ），使用 DQSTAKE getStk 返回实时 + 已积累总量
  */
 export const getPendingStakeReward = async (userAddress: string, periodIndex: number): Promise<string> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
-    const pending = await contract.getPendingStakeReward(userAddress, periodIndex);
-    return ethers.formatEther(pending);
+    const contract = getStakeVaultContract();
+    const [, , pendingRewards] = await contract.getStakeInfo(userAddress);
+    return ethers.formatEther(pendingRewards[periodIndex] ?? 0n);
   } catch (error) {
     console.error('[Web3] 获取待领取质押奖励失败:', error);
     return '0';
@@ -807,8 +984,8 @@ export const getPendingStakeReward = async (userAddress: string, periodIndex: nu
  */
 export const getUserTeamInvest = async (userAddress: string): Promise<string> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
-    const value = await contract.getTeamInvest(userAddress);
+    const contract = getStakeCoreContract();
+    const value = await contract.getTeamSales(userAddress);
     return ethers.formatEther(value);
   } catch (error) {
     console.error('[Web3] 获取团队业绩失败:', error);
@@ -817,12 +994,12 @@ export const getUserTeamInvest = async (userAddress: string): Promise<string> =>
 };
 
 /**
- * 获取用户能量值（从质押合约）
+ * 获取用户可用能量值（从 DQMCore 合约）
  */
 export const getUserEnergy = async (userAddress: string): Promise<string> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
-    const value = await contract.getEnergy(userAddress);
+    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
+    const value = await contract.getAvailableEnergy(userAddress);
     return ethers.formatEther(value);
   } catch (error) {
     console.error('[Web3] 获取用户能量失败:', error);
@@ -835,8 +1012,8 @@ export const getUserEnergy = async (userAddress: string): Promise<string> => {
  */
 export const getUserDLevel = async (userAddress: string): Promise<number | null> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
-    const value = await contract.getDLevel(userAddress);
+    const contract = getStakeCoreContract();
+    const value = await contract.userDLevel(userAddress);
     return Number(value);
   } catch (error) {
     console.error('[Web3] 获取用户 D 等级失败:', error);
@@ -845,11 +1022,11 @@ export const getUserDLevel = async (userAddress: string): Promise<number | null>
 };
 
 /**
- * 获取待领取 SOL 金额（从链上）
+ * 获取待领取 SOL 金额（从 DQSTAKE 合约读取）
  */
 export const getPendingSOL = async (userAddress: string): Promise<string> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI);
+    const contract = getStakeCoreContract();
     const pending = await contract.getPendingSOL(userAddress);
     return ethers.formatEther(pending);
   } catch (error) {
@@ -928,9 +1105,9 @@ export const approveUSDT = async (
   const usdtContract = await getSignedContract(usdtAddress, DQTOKEN_ABI, signer);
   const amountInWei = ethers.parseUnits(amount, 18); // USDT 也是 18 位小数
 
-  console.log('[Web3] 授权 USDT:', amount);
+  console.log('[Web3] 授权 USDT 给 DQCard:', amount);
 
-  const tx = await usdtContract.approve(CONTRACT_ADDRESSES.DQPROJECT.address, amountInWei);
+  const tx = await usdtContract.approve(CONTRACT_ADDRESSES.DQCARD.address, amountInWei);
   console.log('[Web3] USDT 授权交易已发送:', tx.hash);
 
   return tx;
@@ -945,7 +1122,7 @@ export const checkUSDTAllowance = async (
   try {
     const usdtAddress = await getUSDTAddress();
     const contract = getContract(usdtAddress, DQTOKEN_ABI);
-    const allowance = await contract.allowance(userAddress, CONTRACT_ADDRESSES.DQPROJECT.address);
+    const allowance = await contract.allowance(userAddress, CONTRACT_ADDRESSES.DQCARD.address);
     return ethers.formatUnits(allowance, 18);
   } catch (error) {
     console.error('[Web3] 检查 USDT 授权额度失败:', error);
@@ -975,11 +1152,11 @@ export const buyNodeOnChain = async (
   signer: ethers.Signer,
   cardType: number // 1=A, 2=B, 3=C
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQCARD.address, DQCARD_ABI, signer);
 
-  console.log('[Web3] 链上购买 Node:', 'CardType:', cardType);
+  console.log('[Web3] 通过 DQCard 购买 Node:', 'CardType:', cardType);
 
-  const tx = await contract.buyNode(cardType);
+  const tx = await contract.buyCard(cardType);
   console.log('[Web3] 交易已发送:', tx.hash);
 
   return tx;
@@ -993,7 +1170,7 @@ export const buyNodeOnChain = async (
 export const getUserNFTCount = async (address: string): Promise<number> => {
   try {
     const contract = getContract(CONTRACT_ADDRESSES.DQCARD.address, DQCARD_ABI);
-    return await contract.balanceOf(address);
+    return Number(await contract.balanceOf(address));
   } catch (error) {
     console.error('[Web3] 获取 NFT 数量失败:', error);
     return 0;
@@ -1050,7 +1227,7 @@ export const formatAddress = (address: string, start: number = 6, end: number = 
  */
 export const getLPReward = async (address: string): Promise<{ lpShare: string; pendingReward: string }> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
+    const contract = getStakeCoreContract();
     const [lpShareValue, lpDebtValue, lpAccRewardValue] = await Promise.all([
       contract.lpS(address),
       contract.lpD(address),
@@ -1081,48 +1258,22 @@ export const getLPReward = async (address: string): Promise<{ lpShare: string; p
  */
 export const getNFTReward = async (address: string): Promise<string> => {
   try {
-    const dqCardContract = getContract(CONTRACT_ADDRESSES.DQCARD.address, DQCARD_ABI);
-    const stakeContract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
-    
-    // 1. 获取用户持有的NFT数量
-    const nftCount = await dqCardContract.balanceOf(address);
-    const count = Number(nftCount);
-    
-    if (count === 0) {
+    const stakeContract = getStakeCoreContract();
+    const nodeLevel = Number(await stakeContract.getUserNodeLevel(address));
+    if (nodeLevel <= 0) {
       return '0';
     }
-    
-    // 2. 获取累计奖励系数 nA[0], nA[1], nA[2] (需要从合约状态读取)
-    // 注意：这些是合约内部状态，可能需要合约提供查询函数
-    // 这里我们通过计算每个NFT的分红来累加
-    
-    // 3. 遍历用户的每个NFT
-    for (let i = 0; i < count; i++) {
-      try {
-        // 获取NFT的tokenId
-        const tokenId = await dqCardContract.tokenOfOwnerByIndex(address, i);
-        // 获取NFT类型 (1=A, 2=B, 3=C)
-        const cardType = await dqCardContract.cardType(tokenId);
-        const typeNum = Number(cardType);
-        
-        // 获取该类型的价格
-        const price = await dqCardContract.getCardPrice(typeNum);
-        
-        // 这里需要从质押合约读取分红累计值
-        // 由于合约可能没有直接提供查询接口，我们返回一个说明
-        console.log(`[Web3] NFT #${i}: Type=${typeNum}, Price=${ethers.formatEther(price)}`);
-        
-        // 注意：完整的计算需要访问合约的 nA[idx] 和 nD{idx}[user] 状态
-        // 如果合约没有提供查询函数，可能需要等待合约升级或使用事件日志
-        
-      } catch (err) {
-        console.error(`[Web3] 获取NFT #${i} 信息失败:`, err);
-      }
-    }
-    
-    // 由于无法直接读取 nA 和 nD 状态变量，返回提示
-    console.warn('[Web3] NFT分红需要合约提供查询函数，当前仅能通过claimNft交易来获取');
-    return '0'; // 暂时返回0，实际需要合约提供getNFTReward函数
+
+    const [accReward, claimedReward] = await Promise.all([
+      stakeContract.nA(0),
+      stakeContract.userNftF(address, 0),
+    ]);
+
+    const reward = BigInt(accReward) > BigInt(claimedReward)
+      ? BigInt(accReward) - BigInt(claimedReward)
+      : 0n;
+
+    return ethers.formatEther(reward);
     
   } catch (error) {
     console.error('[Web3] 查询NFT分红失败:', error);
@@ -1137,8 +1288,20 @@ export const getNFTReward = async (address: string): Promise<string> => {
  */
 export const getDLevelReward = async (address: string): Promise<string> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
-    const reward = await contract.getDLevelReward(address);
+    const contract = getStakeCoreContract();
+    const dLevel = Number(await contract.userDLevel(address));
+    if (dLevel <= 0) return '0';
+
+    const [rewardAcc, count, debt] = await Promise.all([
+      contract.dLevelAccReward(dLevel - 1),
+      contract.dLevelCount(dLevel - 1),
+      contract.dLevelRewardDebt(address),
+    ]);
+
+    if (BigInt(count) <= 0n) return '0';
+
+    const rewardPerUser = BigInt(rewardAcc) / BigInt(count);
+    const reward = rewardPerUser > BigInt(debt) ? rewardPerUser - BigInt(debt) : 0n;
     const formatted = ethers.formatEther(reward);
     console.log('[Web3] D等级分红查询:', formatted);
     return formatted;
@@ -1165,7 +1328,7 @@ export const getPartnerReward = async (): Promise<{ dqReward: string; solReward:
 // ============ LP 添加/取消 LP ============
 
 /**
- * 获取 SOL 代币授权额度（授权给主合约）
+ * 获取 SOL 代币授权额度（旧版兼容字段，仍查询主合约）
  */
 export const getSOLAllowance = async (userAddress: string): Promise<string> => {
   try {
@@ -1180,6 +1343,7 @@ export const getSOLAllowance = async (userAddress: string): Promise<string> => {
 
 /**
  * 授权 SOL 代币给主合约
+ * 新版原生入金不依赖该授权，保留仅作旧界面兼容
  */
 export const approveSOL = async (
   signer: ethers.Signer,
@@ -1197,8 +1361,8 @@ export const approveSOL = async (
 };
 
 /**
- * 添加 LP（入金）- 调用合约的 addLiquidityForUser
- * 流程：SOL -> 一半换 DQ，一半配对加池 -> 获得 LP
+ * 添加 LP（入金）
+ * 当前 ABI 下通过 DQMCore.deposit(amount) 完成入金逻辑
  */
 export const addLiquidityOnChain = async (
   signer: ethers.Signer,
@@ -1208,25 +1372,33 @@ export const addLiquidityOnChain = async (
   const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
   const amountInWei = ethers.parseUnits(solAmount, 18);
 
-  console.log('[Web3] 添加 LP（按当前 ABI 实际走 depositSOL 入金）:', solAmount, 'SOL', 'minLp 参数未在当前合约使用:', minLpAmount);
+  console.log('[Web3] 添加 LP（当前 ABI 通过 DQMCore.deposit(amount)）:', solAmount, 'SOL', 'minLp 参数未在当前合约使用:', minLpAmount);
 
-  const tx = await contract.depositSOL(amountInWei);
+  const tx = await callProjectDeposit(contract, amountInWei);
   console.log('[Web3] LP 添加交易已发送:', tx.hash);
 
   return tx;
 };
 
 /**
- * 取消 LP - 调用合约的 withdrawLP
+ * 取消 LP
+ * 新版兼容实现为提取当前地址全部 LP 份额
  */
 export const withdrawLPOnChain = async (
   signer: ethers.Signer
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+  const userAddress = await signer.getAddress();
+  const stakeReadContract = getStakeCoreContract();
+  const contract = await getSignedStakeCoreContract(signer);
+  const lpAmount = await stakeReadContract.getLP(userAddress).catch(() => 0n);
 
-  console.log('[Web3] 取消 LP');
+  if (BigInt(lpAmount) <= 0n) {
+    throw new Error('当前没有可提取的 LP 份额');
+  }
 
-  const tx = await contract.removeMyLP();
+  console.log('[Web3] 从 StakeCore 提取全部 LP');
+
+  const tx = await contract.withdrawLP(lpAmount);
   console.log('[Web3] 取消 LP 交易已发送:', tx.hash);
 
   return tx;
@@ -1237,7 +1409,7 @@ export const withdrawLPOnChain = async (
  */
 export const getUserLPShares = async (userAddress: string): Promise<string> => {
   try {
-    const contract = getContract(CONTRACT_ADDRESSES.DQSTAKE.address, DQSTAKE_ABI);
+    const contract = getStakeCoreContract();
     const shares = await contract.getLP(userAddress);
     return ethers.formatEther(shares);
   } catch (error) {

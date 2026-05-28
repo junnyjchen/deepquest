@@ -1,51 +1,166 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.17;
-import "@openzeppelin/contracts@4.9.6/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts@4.9.6/token/ERC721/extensions/ERC721Enumerable.sol";
-import "@openzeppelin/contracts@4.9.6/access/Ownable.sol";
-import "@openzeppelin/contracts@4.9.6/utils/structs/EnumerableSet.sol";
+
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
+// 质押核心合约接口（用于自动设置L等级）
+interface IDQMiningStakeCore {
+    function setUserLevel(address user, uint8 level) external;
+}
+
+// DQMCore合约接口（用于同步等级到DQMCore）
+interface IDQMCoreForCard {
+    function setUserLevel(address user, uint8 level) external;
+}
+
+/**
+ * @title DQ Card V2
+ * @notice DQC NFT节点卡合约
+ * 
+ * 卡片类型:
+ * - A卡: 500 USDT, 限1000张
+ * - B卡: 1500 USDT, 限500张
+ * - C卡: 5000 USDT, 限100张
+ * 
+ * 功能:
+ * 1. 用户使用USDT购买
+ * 2. 管理员铸造
+ * 3. 节点业绩追踪
+ * 4. NFT转移时更新业绩
+ */
 contract DQCard is ERC721Enumerable, Ownable {
-    using EnumerableSet for EnumerableSet.UintSet;
+    using SafeERC20 for IERC20;
+    
+    // ============ USDT合约地址 ============
+    address public constant USDT = 0x55d398326f99059fF775485246999027B3197955;
+    
+    // ============ 卡片类型 ============
     uint256 public constant CARD_A = 1;
     uint256 public constant CARD_B = 2;
     uint256 public constant CARD_C = 3;
-    uint256 public constant PRICE_A = 500 ether;
-    uint256 public constant PRICE_B = 1500 ether;
-    uint256 public constant PRICE_C = 5000 ether;
-    uint256 public totalA;
-    uint256 public totalB;
-    uint256 public totalC;
+    
+    // ============ 卡片价格（USDT） ============
+    uint256 public constant PRICE_A = 500 * 10**18;   // 500 USDT
+    uint256 public constant PRICE_B = 1500 * 10**18;  // 1500 USDT
+    uint256 public constant PRICE_C = 5000 * 10**18;  // 5000 USDT
+    
+    // ============ 发行限制 ============
     uint256 public MAX_A = 1000;
     uint256 public MAX_B = 500;
     uint256 public MAX_C = 100;
-    mapping(address => uint256) public userNodePerformance;      
+    
+    // ============ 统计 ============
+    uint256 public totalA;
+    uint256 public totalB;
+    uint256 public totalC;
+    
+    // ============ 收款地址 ============
+    address public treasury;
+    
+    // ============ 授权地址 ============
     address public miningContract;
-    mapping(uint256 => uint256) public cardType;
-    mapping(address => EnumerableSet.UintSet) private _holderTokens;
+    address public adminContract;
+    address public stakeContract;  // 质押核心合约（用于自动设置L等级）
+    address public coreContract;   // DQMCore合约（用于同步等级）
+    
+    // ============ 数据映射 ============
+    mapping(uint256 => uint256) public cardType;           // tokenId -> 卡片类型
+    mapping(address => uint256) public userNodePerformance; // 用户节点业绩
+    
+    // ============ 事件 ============
+    event CardMinted(address indexed to, uint256 indexed tokenId, uint256 cardType);
+    event CardPurchased(address indexed buyer, uint256 indexed tokenId, uint256 cardType, uint256 price);
+    event NodePerformanceUpdated(address indexed user, uint256 performance);
+    event AdminContractUpdated(address indexed adminContract);
+    event MaxSupplyUpdated(uint8 cardType, uint256 newMax);
+    event TreasuryUpdated(address indexed treasury);
+    
+    // ============ 修饰器 ============
     modifier onlyM() {
-        require(msg.sender == miningContract, "!auth");
+        require(msg.sender == stakeContract || msg.sender == owner(), "!m");
         _;
     }
-    event NodePerformanceUpdated(address indexed user, uint256 performance);
-    constructor() ERC721("DQ Card", "DQC") {}
-    function setMaxA(uint256 _max) external onlyOwner { MAX_A = _max; }
-    function setMaxB(uint256 _max) external onlyOwner { MAX_B = _max; }
-    function setMaxC(uint256 _max) external onlyOwner { MAX_C = _max; }
-    function setMiningContract(address _m) external onlyOwner {
+    
+    modifier onlyOwnerOrAdmin() {
+        require(msg.sender == owner() || msg.sender == adminContract, "!auth");
+        _;
+    }
+    
+    // ============ 构造函数 ============
+    constructor() ERC721("DQ Card", "DQC") Ownable(0x274aCc6397349F21179ed6258A54B2a11B28faF5) {}
+    
+    // ============ 设置函数 ============
+    
+    function setTreasury(address _treasury) external onlyOwnerOrAdmin {
+        treasury = _treasury;
+        emit TreasuryUpdated(_treasury);
+    }
+    
+    function setAdminContract(address _addr) external onlyOwnerOrAdmin {
+        adminContract = _addr;
+        emit AdminContractUpdated(_addr);
+    }
+    
+    function setMiningContract(address _m) external onlyOwnerOrAdmin {
         miningContract = _m;
     }
-    function mintByOwner(address to, uint256 _type) external {
-        require(msg.sender == owner() || msg.sender == miningContract, "!auth");
-        _mintCard(to, _type);
+    
+    function setStakeContract(address _s) external onlyOwnerOrAdmin {
+        stakeContract = _s;
     }
-    function mintBatchByOwner(address[] calldata to, uint256[] calldata _types) external onlyOwner {
-        require(to.length == _types.length, "length mismatch");
-        for (uint i = 0; i < to.length; i++) {
-            _mintCard(to[i], _types[i]);
+    
+    function setCoreContract(address _c) external onlyOwnerOrAdmin {
+        coreContract = _c;
+    }
+    
+    function setMaxA(uint256 _max) external onlyOwnerOrAdmin {
+        MAX_A = _max;
+        emit MaxSupplyUpdated(1, _max);
+    }
+    
+    function setMaxB(uint256 _max) external onlyOwnerOrAdmin {
+        MAX_B = _max;
+        emit MaxSupplyUpdated(2, _max);
+    }
+    
+    function setMaxC(uint256 _max) external onlyOwnerOrAdmin {
+        MAX_C = _max;
+        emit MaxSupplyUpdated(3, _max);
+    }
+    
+    // ============ 铸造函数 ============
+    
+    /**
+     * @notice 铸造卡片
+     * @param _to 接收地址
+     * @param _type 卡片类型 (1=A, 2=B, 3=C)
+     */
+    function mintByOwner(address _to, uint256 _type) external onlyM {
+        _mintCard(_to, _type);
+    }
+    
+    /**
+     * @notice 批量铸造卡片
+     */
+    function mintBatchByOwner(address[] calldata _to, uint256[] calldata _types) external onlyOwnerOrAdmin {
+        require(_to.length == _types.length, "length mismatch");
+        for (uint256 i = 0; i < _to.length; i++) {
+            _mintCard(_to[i], _types[i]);
         }
     }
-    function _mintCard(address to, uint256 _type) internal {
+    
+    /**
+     * @notice 用户使用USDT购买节点卡
+     * @param _type 卡片类型 (1=A, 2=B, 3=C)
+     */
+    function buyCard(uint256 _type) external {
         require(_type >= CARD_A && _type <= CARD_C, "invalid type");
+        require(treasury != address(0), "!treasury");
+        
         uint256 price;
         if (_type == CARD_A) {
             require(totalA < MAX_A, "A card sold out");
@@ -60,46 +175,169 @@ contract DQCard is ERC721Enumerable, Ownable {
             totalC++;
             price = PRICE_C;
         }
+        
+        // 收取USDT
+        IERC20(USDT).safeTransferFrom(msg.sender, treasury, price);
+        
+        // 铸造NFT
         uint256 tokenId = totalSupply() + 1;
-        _safeMint(to, tokenId);
+        _safeMint(msg.sender, tokenId);
         cardType[tokenId] = _type;
-        _holderTokens[to].add(tokenId);
-        userNodePerformance[to] += price;
-        emit NodePerformanceUpdated(to, userNodePerformance[to]);
-    }
-    function _beforeTokenTransfer(
-        address from,
-        address to,
-        uint256 firstTokenId,
-        uint256 batchSize
-    ) internal override {
-        super._beforeTokenTransfer(from, to, firstTokenId, batchSize);
-        if (batchSize > 1) {
-            revert("ERC721Enumerable: consecutive transfers not supported");
+        
+        // 更新节点业绩
+        userNodePerformance[msg.sender] += price;
+        emit NodePerformanceUpdated(msg.sender, userNodePerformance[msg.sender]);
+        
+        // 自动设置L等级：A卡→S1, B卡→S2, C卡→S3
+        if (stakeContract != address(0)) {
+            uint8 targetLevel = 0;
+            if (_type == CARD_A) targetLevel = 1;  // S1
+            else if (_type == CARD_B) targetLevel = 2;  // S2
+            else if (_type == CARD_C) targetLevel = 3;  // S3
+            
+            if (targetLevel > 0) {
+                IDQMiningStakeCore(stakeContract).setUserLevel(msg.sender, targetLevel);
+                // 同步等级到DQMCore（前端查询展示）
+                if (coreContract != address(0)) {
+                    IDQMCoreForCard(coreContract).setUserLevel(msg.sender, targetLevel);
+                }
+            }
         }
+        
+        emit CardPurchased(msg.sender, tokenId, _type, price);
+    }
+    
+    /**
+     * @notice 内部铸造逻辑
+     */
+    function _mintCard(address _to, uint256 _type) internal {
+        require(_type >= CARD_A && _type <= CARD_C, "invalid type");
+        
+        uint256 price;
+        if (_type == CARD_A) {
+            require(totalA < MAX_A, "A card sold out");
+            totalA++;
+            price = PRICE_A;
+        } else if (_type == CARD_B) {
+            require(totalB < MAX_B, "B card sold out");
+            totalB++;
+            price = PRICE_B;
+        } else {
+            require(totalC < MAX_C, "C card sold out");
+            totalC++;
+            price = PRICE_C;
+        }
+        
+        uint256 tokenId = totalSupply() + 1;
+        _safeMint(_to, tokenId);
+        cardType[tokenId] = _type;
+        
+        // 更新节点业绩
+        userNodePerformance[_to] += price;
+        emit NodePerformanceUpdated(_to, userNodePerformance[_to]);
+        
+        // 自动设置L等级：A卡→S1, B卡→S2, C卡→S3
+        if (stakeContract != address(0)) {
+            uint8 targetLevel = 0;
+            if (_type == CARD_A) targetLevel = 1;  // S1
+            else if (_type == CARD_B) targetLevel = 2;  // S2
+            else if (_type == CARD_C) targetLevel = 3;  // S3
+            
+            if (targetLevel > 0) {
+                IDQMiningStakeCore(stakeContract).setUserLevel(_to, targetLevel);
+                // 同步等级到DQMCore（前端查询展示）
+                if (coreContract != address(0)) {
+                    IDQMCoreForCard(coreContract).setUserLevel(_to, targetLevel);
+                }
+            }
+        }
+        
+        emit CardMinted(_to, tokenId, _type);
+    }
+    
+    // ============ 转移钩子 ============
+    
+    /**
+     * @notice 转移钩子(OZ 5.x) - 更新节点业绩
+     */
+    function _update(address to, uint256 tokenId, address auth) internal override returns (address) {
+        address from = _ownerOf(tokenId);
+        
+        // 从原持有者减去业绩
         if (from != address(0)) {
-            _holderTokens[from].remove(firstTokenId);
-            uint256 price = getCardPrice(cardType[firstTokenId]);
+            uint256 _cardType = cardType[tokenId];
+            uint256 price = getCardPrice(_cardType);
             userNodePerformance[from] -= price;
             emit NodePerformanceUpdated(from, userNodePerformance[from]);
         }
+        
+        // 执行转移
+        address previousOwner = super._update(to, tokenId, auth);
+        
+        // 给新持有者增加业绩
         if (to != address(0)) {
-            _holderTokens[to].add(firstTokenId);
-            uint256 price = getCardPrice(cardType[firstTokenId]);
+            uint256 _cardType = cardType[tokenId];
+            uint256 price = getCardPrice(_cardType);
             userNodePerformance[to] += price;
             emit NodePerformanceUpdated(to, userNodePerformance[to]);
         }
+        
+        return previousOwner;
     }
+    
+    // ============ 查询函数 ============
+    
+    /**
+     * @notice 获取卡片价格
+     */
     function getCardPrice(uint256 _type) public pure returns (uint256) {
         if (_type == CARD_A) return PRICE_A;
         if (_type == CARD_B) return PRICE_B;
-        return PRICE_C;
+        if (_type == CARD_C) return PRICE_C;
+        return 0;
     }
-    function getUserNodePerformance(address _user) external view returns (uint256) {
+    
+    /**
+     * @notice 获取用户持有的卡片数量
+     */
+    function getUserCardCount(address _user, uint256 _type) external view returns (uint256) {
+        uint256 count;
+        uint256 balance = balanceOf(_user);
+        for (uint256 i = 0; i < balance; i++) {
+            uint256 tokenId = tokenOfOwnerByIndex(_user, i);
+            if (cardType[tokenId] == _type) {
+                count++;
+            }
+        }
+        return count;
+    }
+    
+    /**
+     * @notice 获取用户节点业绩
+     */
+    function getNodePerformance(address _user) external view returns (uint256) {
         return userNodePerformance[_user];
     }
-    function updateNodePerformance(address _user, uint256 _performance) external onlyOwner {
-        userNodePerformance[_user] = _performance;
-        emit NodePerformanceUpdated(_user, _performance);
+    
+    /**
+     * @notice 获取剩余可铸造数量
+     */
+    function getRemainingSupply() external view returns (uint256 a, uint256 b, uint256 c) {
+        a = MAX_A - totalA;
+        b = MAX_B - totalB;
+        c = MAX_C - totalC;
+    }
+    
+    /**
+     * @notice 提取合约资产（管理员）
+     */
+    function withdrawToken(address _token, address _to, uint256 _amount) external onlyOwnerOrAdmin {
+        require(_to != address(0), "!zero");
+        if (_token == address(0)) {
+            (bool success, ) = payable(_to).call{value: _amount}("");
+            require(success, "transfer failed");
+        } else {
+            IERC20(_token).safeTransfer(_to, _amount);
+        }
     }
 }

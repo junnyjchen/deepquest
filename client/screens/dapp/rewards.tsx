@@ -7,26 +7,30 @@ import {
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useWallet } from '@/hooks/useWallet';
 import { Screen } from '@/components/Screen';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { LogoHeader } from '@/components/LogoHeader';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useFocusEffect, router } from 'expo-router';
 import { getSigner, waitForTransaction } from '@/utils/web3';
 import {
   getPendingReward,
   getPendingFee,
-  getPendingSOL,
-  getPendingStakeReward,
   getPendingBlockReward,
+  getPendingStakeReward,
+  getLPReward,
+  getNFTReward,
+  getDLevelReward,
   claimSOLOnChain,
   claimLPOnChain,
   claimNFTOnChain,
   claimDTeamOnChain,
   claimBlockDQOnChain,
   claimFeeOnChain,
+  claimStakeRewardOnChain,
   withdrawDQRewardOnChain,
 } from '@/utils/web3';
 
@@ -46,10 +50,22 @@ const COLORS = {
   cardBg: 'rgba(26, 26, 48, 0.6)',
 };
 
+const noop = (): void => {};
+
+type ConfirmDialogState = {
+  visible: boolean;
+  title: string;
+  message: string;
+  confirmText: string;
+  cancelText: string;
+  onConfirm: () => void;
+};
+
 export default function RewardsScreen() {
   const router = useSafeRouter();
   const { wallet, isConnected } = useWallet();
   const { t } = useLanguage();
+  const showSolRewards = false;
 
   const [activeTab, setActiveTab] = useState<'rewards' | 'withdrawals'>('rewards');
   const [recordType, setRecordType] = useState<'claim' | 'withdraw'>('claim');
@@ -73,14 +89,25 @@ export default function RewardsScreen() {
   const [claimRecords, setClaimRecords] = useState<any[]>([]);
   const [withdrawalRecords, setWithdrawalRecords] = useState<any[]>([]);
 
-  const [confirmDialog, setConfirmDialog] = useState({
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
     visible: false,
     title: '',
     message: '',
     confirmText: '',
     cancelText: '',
-    onConfirm: () => {},
+    onConfirm: noop,
   });
+
+  const [alertDialog, setAlertDialog] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info' as 'info' | 'warning' | 'danger',
+  });
+
+  const showAlert = useCallback((title: string, message: string, type: 'info' | 'warning' | 'danger' = 'info') => {
+    setAlertDialog({ visible: true, title, message, type });
+  }, []);
 
   const walletAddress = wallet?.address || '';
 
@@ -89,7 +116,7 @@ export default function RewardsScreen() {
     if (!walletAddress) return;
 
     try {
-      // 加载所有 SOL 奖励
+      // SOL 奖励：直推奖励 + 节点手续费
       const [pendingReward, pendingFee] = await Promise.all([
         getPendingReward(walletAddress),
         getPendingFee(walletAddress),
@@ -99,16 +126,29 @@ export default function RewardsScreen() {
         fee: pendingFee || '0',
       });
 
-      // 加载所有 DQ 奖励
-      const [pendingBlock] = await Promise.all([
+      // DQ 奖励：LP / NFT / D等级 / 爆块已积累
+      const [lpRewardData, nftReward, dTeamReward, blockReward] = await Promise.all([
+        getLPReward(walletAddress),
+        getNFTReward(walletAddress),
+        getDLevelReward(walletAddress),
         getPendingBlockReward(walletAddress),
       ]);
+
+      // 质押奖励：遍历 4 个周期，只展示有余额的
+      const stakeItems: { index: number; amount: string }[] = [];
+      for (let i = 0; i < 4; i++) {
+        const amount = await getPendingStakeReward(walletAddress, i);
+        if (parseFloat(amount) > 0) {
+          stakeItems.push({ index: i, amount });
+        }
+      }
+
       setDqRewards({
-        lp: '0',
-        nft: '0',
-        dTeam: '0',
-        block: pendingBlock || '0',
-        stake: [],
+        lp: lpRewardData.pendingReward || '0',
+        nft: nftReward || '0',
+        dTeam: dTeamReward || '0',
+        block: blockReward || '0',
+        stake: stakeItems,
       });
     } catch (error) {
       console.error('[Rewards] 加载数据失败:', error);
@@ -121,6 +161,16 @@ export default function RewardsScreen() {
     await loadData();
     setRefreshing(false);
   }, [loadData]);
+
+  // 进入页面后自动拉取一次数据
+  useFocusEffect(
+    useCallback(() => {
+      if (isConnected) {
+        loadData();
+      }
+      return noop;
+    }, [loadData, isConnected])
+  );
 
   // 领取奖励
   const handleClaim = (type: 'sol' | 'fee' | 'lp' | 'nft' | 'dTeam' | 'block') => {
@@ -145,7 +195,7 @@ export default function RewardsScreen() {
         try {
           const signer = await getSigner();
           if (!signer) {
-            Alert.alert(t('common.error'), t('lp.alert.connectFailed'));
+            showAlert(t('common.error'), t('lp.alert.connectFailed'), 'danger');
             return;
           }
 
@@ -153,30 +203,37 @@ export default function RewardsScreen() {
           switch (type) {
             case 'sol':
               tx = await claimSOLOnChain(signer);
+              await waitForTransaction(tx);
               break;
             case 'fee':
               tx = await claimFeeOnChain(signer);
+              await waitForTransaction(tx);
               break;
-            case 'lp':
+            case 'lp': {
               tx = await claimLPOnChain(signer);
+              await waitForTransaction(tx);
               break;
-            case 'nft':
+            }
+            case 'nft': {
               tx = await claimNFTOnChain(signer);
+              await waitForTransaction(tx);
               break;
-            case 'dTeam':
+            }
+            case 'dTeam': {
               tx = await claimDTeamOnChain(signer);
+              await waitForTransaction(tx);
               break;
+            }
             case 'block':
               tx = await claimBlockDQOnChain(signer);
+              await waitForTransaction(tx);
               break;
           }
-
-          await waitForTransaction(tx);
-          Alert.alert(t('common.success'), t('rewards.claim.success'));
+          showAlert(t('common.success'), t('rewards.claim.success'));
           await loadData();
         } catch (error: any) {
           console.error('[Rewards] 领取失败:', error);
-          Alert.alert(t('common.error'), error.message || t('rewards.claim.failed'));
+          showAlert(t('common.error'), error.message || t('rewards.claim.failed'), 'danger');
         } finally {
           setLoading(null);
         }
@@ -189,7 +246,7 @@ export default function RewardsScreen() {
     setConfirmDialog({
       visible: true,
       title: t('rewards.claim.stake'),
-      message: t('rewards.confirm.claim.stake'),
+      message: t('rewards.confirm.default'),
       confirmText: t('common.confirm'),
       cancelText: t('common.cancel'),
       onConfirm: async () => {
@@ -198,16 +255,16 @@ export default function RewardsScreen() {
         try {
           const signer = await getSigner();
           if (!signer) {
-            Alert.alert(t('common.error'), t('lp.alert.connectFailed'));
+            showAlert(t('common.error'), t('lp.alert.connectFailed'), 'danger');
             return;
           }
-          const tx = await withdrawDQRewardOnChain(signer, periodIndex);
+          const tx = await claimStakeRewardOnChain(signer, periodIndex);
           await waitForTransaction(tx);
-          Alert.alert(t('common.success'), t('rewards.claim.success'));
+          showAlert(t('common.success'), t('rewards.claim.success'));
           await loadData();
         } catch (error: any) {
           console.error('[Rewards] 领取失败:', error);
-          Alert.alert(t('common.error'), error.message || t('rewards.claim.failed'));
+          showAlert(t('common.error'), error.message || t('rewards.claim.failed'), 'danger');
         } finally {
           setLoading(null);
         }
@@ -231,6 +288,7 @@ export default function RewardsScreen() {
 
   return (
     <Screen>
+    <LogoHeader />
       <ScrollView
         style={styles.container}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />}
@@ -258,7 +316,6 @@ export default function RewardsScreen() {
         {/* 奖励 Tab */}
         {activeTab === 'rewards' && (
           <>
-            {/* SOL 奖励 */}
             <Text style={styles.sectionTitle}>{t('rewards.solRewards')}</Text>
             <View style={styles.rewardRow}>
               <TouchableOpacity
@@ -270,6 +327,7 @@ export default function RewardsScreen() {
                 <Text style={[styles.rewardAmount, { color: COLORS.solAccent }]}>
                   {parseFloat(solRewards.directReferral || '0').toFixed(4)} SOL
                 </Text>
+                { showSolRewards && (
                 <TouchableOpacity
                   style={[styles.claimButton, { backgroundColor: COLORS.solBorder }]}
                   onPress={() => handleClaim('sol')}
@@ -281,6 +339,7 @@ export default function RewardsScreen() {
                     <Text style={styles.claimButtonText}>{t('rewards.claim.btn')}</Text>
                   )}
                 </TouchableOpacity>
+                )}
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -292,19 +351,23 @@ export default function RewardsScreen() {
                 <Text style={[styles.rewardAmount, { color: COLORS.solAccent }]}>
                   {parseFloat(solRewards.fee || '0').toFixed(4)} SOL
                 </Text>
-                <TouchableOpacity
-                  style={[styles.claimButton, { backgroundColor: COLORS.solBorder }]}
-                  onPress={() => handleClaim('fee')}
-                  disabled={loading === 'fee'}
-                >
-                  {loading === 'fee' ? (
-                    <ActivityIndicator size="small" color="#000" />
-                  ) : (
-                    <Text style={styles.claimButtonText}>{t('rewards.claim.btn')}</Text>
-                  )}
-                </TouchableOpacity>
+                { showSolRewards && (
+                  <TouchableOpacity
+                    style={[styles.claimButton, { backgroundColor: COLORS.solBorder }]}
+                    onPress={() => handleClaim('fee')}
+                    disabled={loading === 'fee'}
+                  >
+                    {loading === 'fee' ? (
+                      <ActivityIndicator size="small" color="#000" />
+                    ) : (
+                      <Text style={styles.claimButtonText}>{t('rewards.claim.btn')}</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
               </TouchableOpacity>
             </View>
+          
+
 
             {/* DQ 奖励 */}
             <Text style={styles.sectionTitle}>{t('rewards.dqRewards')}</Text>
@@ -525,6 +588,20 @@ export default function RewardsScreen() {
           cancelText={confirmDialog.cancelText}
           onConfirm={confirmDialog.onConfirm}
           onCancel={() => setConfirmDialog({ ...confirmDialog, visible: false })}
+        />
+      )}
+
+      {/* 提示对话框 */}
+      {alertDialog.visible && (
+        <ConfirmDialog
+          visible={alertDialog.visible}
+          title={alertDialog.title}
+          message={alertDialog.message}
+          type={alertDialog.type}
+          confirmText="OK"
+          cancelText=""
+          onConfirm={() => setAlertDialog(prev => ({ ...prev, visible: false }))}
+          onCancel={() => setAlertDialog(prev => ({ ...prev, visible: false }))}
         />
       )}
     </Screen>

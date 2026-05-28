@@ -81,7 +81,7 @@ export default function InviteBinding() {
 
   const validateReferrer = useCallback(async () => {
     if (!referrerAddress) {
-      setErrorMessage('无效的邀请链接');
+      setErrorMessage(t('invite.invalidInviteLink'));
       return;
     }
 
@@ -285,24 +285,24 @@ export default function InviteBinding() {
           {/* 状态标题 */}
           {alreadyBound ? (
             <View style={styles.statusContainer}>
-              <Text style={styles.statusTitle}>已绑定推荐人</Text>
-              <Text style={styles.statusSubtitle}>您已经绑定了推荐关系</Text>
+              <Text style={styles.statusTitle}>{t('invite.alreadyBoundTitle')}</Text>
+              <Text style={styles.statusSubtitle}>{t('invite.alreadyBoundSubtitle')}</Text>
             </View>
           ) : validating ? (
             <View style={styles.statusContainer}>
-              <Text style={styles.statusTitle}>验证中...</Text>
-              <Text style={styles.statusSubtitle}>正在验证推荐人信息</Text>
+              <Text style={styles.statusTitle}>{t('invite.validatingTitle')}</Text>
+              <Text style={styles.statusSubtitle}>{t('invite.validatingSubtitle')}</Text>
               <ActivityIndicator size="small" color={CYAN} style={{ marginTop: 16 }} />
             </View>
           ) : referrerValid ? (
             <View style={styles.statusContainer}>
-              <Text style={styles.statusTitle}>确认绑定推荐人</Text>
-              <Text style={styles.statusSubtitle}>您正在绑定以下用户为推荐人</Text>
+              <Text style={styles.statusTitle}>{t('invite.confirmBindTitle')}</Text>
+              <Text style={styles.statusSubtitle}>{t('invite.confirmBindSubtitle')}</Text>
             </View>
           ) : (
             <View style={styles.statusContainer}>
-              <Text style={[styles.statusTitle, { color: RED }]}>邀请无效</Text>
-              <Text style={styles.statusSubtitle}>{errorMessage || '该邀请链接无效'}</Text>
+              <Text style={[styles.statusTitle, { color: RED }]}>{t('invite.invalidTitle')}</Text>
+              <Text style={styles.statusSubtitle}>{errorMessage || t('invite.invalidSubtitle')}</Text>
             </View>
           )}
 
@@ -313,7 +313,7 @@ export default function InviteBinding() {
                 <View style={[styles.levelBadge, { backgroundColor: `${YELLOW}20` }]}>
                   <Text style={[styles.levelText, { color: YELLOW }]}>Lv.{referrerInfo.level}</Text>
                 </View>
-                <Text style={styles.cardLabel}>推荐人</Text>
+                <Text style={styles.cardLabel}>{t('team.referrer')}</Text>
               </View>
               
               <Text style={styles.addressText} numberOfLines={1} ellipsizeMode="middle">
@@ -321,8 +321,8 @@ export default function InviteBinding() {
               </Text>
               
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>绑定时间：</Text>
-                <Text style={styles.infoValue}>即刻</Text>
+                <Text style={styles.infoLabel}>{t('invite.bindTimeLabel')}</Text>
+                <Text style={styles.infoValue}>{t('invite.bindTimeNow')}</Text>
               </View>
             </View>
           )}
@@ -332,7 +332,7 @@ export default function InviteBinding() {
             <View style={styles.warningContainer}>
               <Ionicons name="information-circle" size={20} color={CYAN} />
               <Text style={styles.warningText}>
-                绑定推荐人后无法更改，请确认信息无误后点击下方按钮授权绑定。
+                {t('invite.bindWarning')}
               </Text>
             </View>
           )}
@@ -343,14 +343,14 @@ export default function InviteBinding() {
               style={[styles.actionButton, { backgroundColor: BG_CARD }]}
               onPress={handleGoHome}
             >
-              <Text style={styles.actionButtonText}>返回首页</Text>
+              <Text style={styles.actionButtonText}>{t('invite.backHome')}</Text>
             </TouchableOpacity>
           ) : !referrerValid ? (
             <TouchableOpacity 
               style={[styles.actionButton, { backgroundColor: BORDER_GRAY }]}
               onPress={handleGoHome}
             >
-              <Text style={[styles.actionButtonText, { color: TEXT_MUTED }]}>返回首页</Text>
+              <Text style={[styles.actionButtonText, { color: TEXT_MUTED }]}>{t('invite.backHome')}</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity 
@@ -364,7 +364,7 @@ export default function InviteBinding() {
                 <>
                   <Ionicons name="checkmark-circle" size={20} color={BG_DARK} />
                   <Text style={[styles.actionButtonText, { color: BG_DARK }]}>
-                    确认授权绑定
+                    {t('invite.confirmAuthorizeBind')}
                   </Text>
                 </>
               )}
@@ -374,7 +374,7 @@ export default function InviteBinding() {
           {/* 钱包信息 */}
           {walletAddress && (
             <View style={styles.walletInfo}>
-              <Text style={styles.walletLabel}>当前钱包：</Text>
+              <Text style={styles.walletLabel}>{t('invite.currentWalletLabel')}</Text>
               <Text style={styles.walletAddress} numberOfLines={1} ellipsizeMode="middle">
                 {walletAddress}
               </Text>

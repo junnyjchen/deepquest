@@ -100,7 +100,7 @@ export default function DappStakes() {
   const handleCopyAddress = async (text: string) => {
     if (text) {
       await Clipboard.setStringAsync(text);
-      showToast.success(t('common.success'), '已复制到剪贴板');
+      showToast.success(t('common.success'), t('stakes.copiedToClipboard'));
     }
   };
 
@@ -111,9 +111,9 @@ export default function DappStakes() {
   };
 
   const getStatusText = (item: StakeRecord) => {
-    if (!item.active) return '已解押';
-    if (item.canUnstake) return '可解押';
-    return '锁定中';
+    if (!item.active) return t('stakes.unstaked');
+    if (item.canUnstake) return t('stakes.canUnstake');
+    return t('stakes.locked');
   };
 
   const formatDate = (timestamp: number) => {
@@ -125,7 +125,7 @@ export default function DappStakes() {
 
   const openUnstakeDialog = (item: StakeRecord) => {
     if (!item.canUnstake || !item.active) {
-      showToast.info(t('common.tips'), '该质押记录尚未到期，暂不可解押');
+      showToast.info(t('common.tips'), t('stakes.notMatureYet'));
       return;
     }
     setConfirmRecord(item);
@@ -147,11 +147,11 @@ export default function DappStakes() {
       const tx = await unstakeDQOnChain(walletInfo.signer, confirmRecord.id);
       await tx.wait();
 
-      showToast.success(t('common.success'), '解押成功');
+      showToast.success(t('common.success'), t('stakes.unstakeSuccess'));
       await fetchStakes(walletAddress);
     } catch (error: any) {
       console.error('解押失败:', error);
-      showToast.error(t('common.error'), error.message || '解押失败，请重试');
+      showToast.error(t('common.error'), error.message || t('stakes.unstakeFailed'));
     } finally {
       setUnstakingId(null);
     }
@@ -174,7 +174,7 @@ export default function DappStakes() {
         </View>
         <View className="items-end">
           <Text className="text-base font-bold" style={{ color: YELLOW }}>{item.amount} DQ</Text>
-          <Text className="text-xs mt-1" style={{ color: CYAN }}>{formatDurationDays(item.duration)} 天</Text>
+          <Text className="text-xs mt-1" style={{ color: CYAN }}>{formatDurationDays(item.duration)} {t('common.daysUnit')}</Text>
           <View className="px-2 py-0.5 rounded-full mt-1" style={{ backgroundColor: `${getStatusColor(item)}20` }}>
             <Text className="text-xs" style={{ color: getStatusColor(item) }}>{getStatusText(item)}</Text>
           </View>
@@ -183,14 +183,14 @@ export default function DappStakes() {
 
       <View className="rounded-lg p-3 mb-3" style={{ backgroundColor: 'rgba(0,240,255,0.05)' }}>
         <View className="flex-row items-center justify-between mb-2">
-          <Text className="text-xs" style={{ color: TEXT_MUTED }}>待领取 DQ</Text>
+          <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('stakes.pendingDq')}</Text>
           <Text className="text-sm font-semibold" style={{ color: CYAN }}>{item.pendingReward} DQ</Text>
         </View>
         <TouchableOpacity
           className="flex-row items-center justify-between"
           onPress={() => handleCopyAddress(String(item.id))}
         >
-          <Text className="text-xs" style={{ color: TEXT_MUTED }}>记录索引</Text>
+          <Text className="text-xs" style={{ color: TEXT_MUTED }}>{t('stakes.recordIndex')}</Text>
           <View className="flex-row items-center gap-2">
             <Text className="text-xs font-mono" style={{ color: CYAN }}>{item.id}</Text>
             <Ionicons name="copy" size={14} color={CYAN} />
@@ -212,7 +212,7 @@ export default function DappStakes() {
             <ActivityIndicator size="small" color={item.canUnstake ? BG_DARK : TEXT_MUTED} />
           ) : (
             <Text className="text-sm font-semibold" style={{ color: item.canUnstake ? BG_DARK : TEXT_MUTED }}>
-              {item.canUnstake ? '解押' : '未到期'}
+              {item.canUnstake ? t('stakes.unstakeAction') : t('stakes.notMature')}
             </Text>
           )}
         </TouchableOpacity>
@@ -235,8 +235,8 @@ export default function DappStakes() {
     <Screen>
       <ConfirmDialog
         visible={Boolean(confirmRecord)}
-        title="确认解押"
-        message={confirmRecord ? `确定解押这笔 ${confirmRecord.amount} DQ 的质押记录吗？` : ''}
+        title={t('stakes.confirmUnstakeTitle')}
+        message={confirmRecord ? t('stakes.confirmUnstakeMessage').replace('{amount}', confirmRecord.amount) : ''}
         confirmText={t('common.confirm')}
         cancelText={t('common.cancel')}
         type="warning"

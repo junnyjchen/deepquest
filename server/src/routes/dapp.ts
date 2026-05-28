@@ -3,8 +3,9 @@ import fs from 'fs';
 import path from 'path';
 import { ethers } from 'ethers';
 import { getSupabaseClient } from '../storage/database/supabase-client';
-import { getUserRegisterTxHash, isUserRegisteredOnChain, getUserInfoFromChain, getReferralLineage } from '../utils/bsc-web3';
-import { AVE_PAIR_ABI, AVE_PAIR_ADDRESS, DQTOKEN_CONTRACT_ADDRESS } from '../config/contracts';
+import { getUserRegisterTxHash, isUserRegisteredOnChain, getUserInfoFromChain } from '../utils/bsc-web3';
+import { AVE_PAIR_ABI, AVE_PAIR_ADDRESS, DQTOKEN_CONTRACT_ADDRESS } from '../config/contracts.ts';
+import { getCardConfigFromChain, getCardStatsFromChain, getUserCardsFromChain, syncAllCardsFromChainToDatabase } from '../utils/sync-chain-service';
 
 const supabase = getSupabaseClient();
 const router = Router();
@@ -588,28 +589,9 @@ router.get('/check-binding/:wallet_address', async (req, res) => {
 // 获取NFT卡牌配置
 router.get('/card-config', async (req, res) => {
   try {
-    // 从配置表获取卡牌配置
-    const { data: config, error } = await supabase
-      .from('configs')
-      .select('config_key, config_value')
-      .eq('config_key', 'card_config')
-      .single();
-
-    if (error || !config) {
-      // 返回默认配置
-      return res.json({
-        code: 0,
-        data: {
-          A: { price: '500', total: 1000, remaining: 1000, reward_rate: 4, name: 'S1节点卡', level: 'S1', fee_rate: 10 },
-          B: { price: '1500', total: 500, remaining: 500, reward_rate: 5, name: 'S2节点卡', level: 'S2', fee_rate: 15 },
-          C: { price: '5000', total: 100, remaining: 100, reward_rate: 6, name: 'S3节点卡', level: 'S3', fee_rate: 15 },
-        }
-      });
-    }
-
     res.json({
       code: 0,
-      data: config.config_value
+      data: await getCardConfigFromChain()
     });
   } catch (error) {
     console.error('获取卡牌配置失败:', error);
@@ -743,22 +725,9 @@ router.get('/my-cards/:wallet_address', async (req, res) => {
   try {
     const { wallet_address } = req.params;
 
-    const { data: cards, error } = await supabase
-      .from('cards')
-      .select('*')
-      .eq('owner_address', wallet_address.toLowerCase())
-      .order('minted_at', { ascending: false });
-
-    if (error) {
-      return res.status(500).json({
-        code: 500,
-        message: '查询失败'
-      });
-    }
-
     res.json({
       code: 0,
-      data: cards || []
+      data: await getUserCardsFromChain(wallet_address)
     });
   } catch (error) {
     console.error('获取NFT卡牌失败:', error);
@@ -813,49 +782,34 @@ router.get('/card-stats/:wallet_address', async (req, res) => {
   try {
     const { wallet_address } = req.params;
 
-    // 获取用户卡牌
-    const { data: cards } = await supabase
-      .from('cards')
-      .select('card_type, mint_price')
-      .eq('owner_address', wallet_address.toLowerCase())
-      .eq('status', 'active');
-
-    // 计算总投入
-    const totalInvest = cards?.reduce((sum: number, card: any) => sum + parseFloat(card.mint_price || '0'), 0) || 0;
-
-    // 获取累计收益
-    const { data: rewards } = await supabase
-      .from('card_rewards')
-      .select('amount')
-      .eq('user_address', wallet_address.toLowerCase())
-      .eq('status', 'claimed');
-
-    const totalReward = rewards?.reduce((sum: number, r: any) => sum + parseFloat(r.amount || '0'), 0) || 0;
-
-    // 获取待领取收益
-    const { data: pendingRewards } = await supabase
-      .from('card_rewards')
-      .select('amount')
-      .eq('user_address', wallet_address.toLowerCase())
-      .eq('status', 'pending');
-
-    const pendingReward = pendingRewards?.reduce((sum: number, r: any) => sum + parseFloat(r.amount || '0'), 0) || 0;
-
     res.json({
       code: 0,
-      data: {
-        cards: cards || [],
-        cardCount: cards?.length || 0,
-        totalInvest: totalInvest.toFixed(2),
-        totalReward: totalReward.toFixed(2),
-        pendingReward: pendingReward.toFixed(2)
-      }
+      data: await getCardStatsFromChain(wallet_address)
     });
   } catch (error) {
     console.error('获取卡牌统计失败:', error);
     res.status(500).json({
       code: 500,
       message: '服务器错误'
+    });
+  }
+});
+
+// 全量同步链上卡牌到本地 cards 表
+router.post('/card-sync/full', async (req, res) => {
+  try {
+    const result = await syncAllCardsFromChainToDatabase();
+
+    res.json({
+      code: 0,
+      message: '链上卡牌已同步到本地接口',
+      data: result,
+    });
+  } catch (error: any) {
+    console.error('全量同步链上卡牌失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: error.message || '全量同步链上卡牌失败',
     });
   }
 });
@@ -2259,13 +2213,47 @@ router.delete('/sync/index', async (req, res) => {
 });
 
 /**
+ * 从数据库获取用户的推荐链路（祖先列表），不访问链上
+ */
+async function getReferralLineageFromDB(
+  userAddress: string,
+  maxDepth: number = 15
+): Promise<Array<{ address: string; depth: number }>> {
+  const lineage: Array<{ address: string; depth: number }> = [];
+  let currentAddress = userAddress.toLowerCase();
+  const visited = new Set<string>();
+
+  for (let depth = 1; depth <= maxDepth; depth++) {
+    if (visited.has(currentAddress)) {
+      console.warn(`[DApp] 检测到循环引用，停止追溯: ${currentAddress}`);
+      break;
+    }
+    visited.add(currentAddress);
+
+    const { data: row, error } = await supabase
+      .from('users')
+      .select('referrer_address')
+      .eq('wallet_address', currentAddress)
+      .single();
+
+    if (error || !row || !row.referrer_address) break;
+
+    const referrer = row.referrer_address.toLowerCase();
+    lineage.push({ address: referrer, depth });
+    currentAddress = referrer;
+  }
+
+  return lineage;
+}
+
+/**
  * 添加团队闭包关系
  * 为用户及其所有祖先（15代以内）建立闭包表关系
  */
 async function addTeamClosureRelations(walletAddress: string, maxDepth: number = 15): Promise<void> {
   try {
-    // 获取用户的推荐链路（所有祖先）
-    const lineage = await getReferralLineage(walletAddress, maxDepth);
+    // 直接从数据库获取推荐链路，不访问链上
+    const lineage = await getReferralLineageFromDB(walletAddress, maxDepth);
     
     if (lineage.length === 0) {
       console.log(`[DApp] 用户 ${walletAddress} 无推荐链路，跳过闭包关系创建`);
@@ -2340,8 +2328,8 @@ export async function syncTeamClosureRelations(walletAddresses: string[], maxDep
 
   for (const walletAddress of walletAddresses) {
     try {
-      // 获取用户的推荐链路
-      const lineage = await getReferralLineage(walletAddress, maxDepth);
+      // 直接从数据库获取推荐链路，不访问链上
+      const lineage = await getReferralLineageFromDB(walletAddress, maxDepth);
       
       if (lineage.length === 0) continue;
 

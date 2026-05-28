@@ -6,8 +6,10 @@
  */
 
 import { getSupabaseClient } from '../storage/database/supabase-client';
-import { DQ_CONTRACT_ADDRESS, DQ_ABI } from '../config/contracts';
+import { DQ_CONTRACT_ADDRESS, DQ_ABI, DQCARD_ABI, DQCARD_CONTRACT_ADDRESS } from '../config/contracts.ts';
 import { ethers } from 'ethers';
+import fs from 'fs';
+import path from 'path';
 import {
   loadSyncState,
   saveSyncState,
@@ -31,6 +33,7 @@ const BSC_RPC_URL = process.env.BSC_RPC_URL || 'https://bsc-dataseed.binance.org
 const provider = new ethers.JsonRpcProvider(BSC_RPC_URL, undefined, {
   batchMaxCount: 1,
 });
+const CARD_CONFIG_CACHE_FILE = process.env.CARD_CONFIG_CACHE_FILE || path.join(process.cwd(), 'cache', 'card-config.json');
 
 // 单次同步最大用户数（防止 Gas 限制）
 const BATCH_SIZE = 50;
@@ -62,6 +65,38 @@ type AllUsersQueryResult =
   | { success: true; address: string; index: number }
   | { success: false; index: number; code?: string; reason: string };
 
+export type CardKey = 'A' | 'B' | 'C';
+
+export type ChainCardConfigItem = {
+  price: string;
+  total: number;
+  remaining: number;
+  reward_rate: number;
+  name: string;
+  level: string;
+  fee_rate: number;
+  minted: number;
+};
+
+export type ChainCardRecord = {
+  token_id: number;
+  owner_address: string;
+  card_type: number;
+  card_key: CardKey;
+  card_name: string;
+  card_level: string;
+  mint_price: string;
+  dq_reward: string;
+  fee_reward: string;
+  status: string;
+};
+
+const CARD_METADATA: Record<number, { key: CardKey; name: string; level: string; rewardRate: number; feeRate: number }> = {
+  1: { key: 'A', name: 'S1节点卡', level: 'S1', rewardRate: 4, feeRate: 10 },
+  2: { key: 'B', name: 'S2节点卡', level: 'S2', rewardRate: 5, feeRate: 15 },
+  3: { key: 'C', name: 'S3节点卡', level: 'S3', rewardRate: 6, feeRate: 15 },
+};
+
 /**
  * 标准化链上读取错误，便于日志排查
  */
@@ -79,6 +114,293 @@ function normalizeChainReadError(error: unknown): { code?: string; reason: strin
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function formatFixed2(value: string): string {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(2) : '0.00';
+}
+
+function readCardConfigCache(): Record<CardKey, ChainCardConfigItem> | null {
+  try {
+    if (!fs.existsSync(CARD_CONFIG_CACHE_FILE)) {
+      return null;
+    }
+
+    const raw = fs.readFileSync(CARD_CONFIG_CACHE_FILE, 'utf-8');
+    const parsed = JSON.parse(raw) as Partial<Record<CardKey, ChainCardConfigItem>>;
+
+    if (!parsed.A || !parsed.B || !parsed.C) {
+      return null;
+    }
+
+    return parsed as Record<CardKey, ChainCardConfigItem>;
+  } catch (error) {
+    console.warn('[ChainSync] 读取卡牌配置缓存失败，改为链上查询:', error);
+    return null;
+  }
+}
+
+function writeCardConfigCache(data: Record<CardKey, ChainCardConfigItem>): void {
+  try {
+    fs.mkdirSync(path.dirname(CARD_CONFIG_CACHE_FILE), { recursive: true });
+    fs.writeFileSync(CARD_CONFIG_CACHE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (error) {
+    console.warn('[ChainSync] 写入卡牌配置缓存失败:', error);
+  }
+}
+
+function getCardContract() {
+  return new ethers.Contract(DQCARD_CONTRACT_ADDRESS, DQCARD_ABI, provider);
+}
+
+function formatEtherFixed2(value: bigint | number | string): string {
+  const bigintValue = typeof value === 'bigint' ? value : BigInt(String(value));
+  return formatFixed2(ethers.formatEther(bigintValue));
+}
+
+function getCardMetadata(cardType: number) {
+  return CARD_METADATA[cardType] || CARD_METADATA[1];
+}
+
+async function mapInChunks<T, R>(items: T[], chunkSize: number, mapper: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results: R[] = [];
+  for (let start = 0; start < items.length; start += chunkSize) {
+    const chunk = items.slice(start, start + chunkSize);
+    const chunkResults = await Promise.all(chunk.map((item, offset) => mapper(item, start + offset)));
+    results.push(...chunkResults);
+  }
+  return results;
+}
+
+export async function getCardConfigFromChain(forceRefresh: boolean = false): Promise<Record<CardKey, ChainCardConfigItem>> {
+  if (!forceRefresh) {
+    const cached = readCardConfigCache();
+    if (cached) {
+      return cached;
+    }
+  }
+
+  const contract = getCardContract();
+  const [priceA, priceB, priceC, maxA, maxB, maxC, totalA, totalB, totalC] = await Promise.all([
+    withRpcRetry(() => contract.PRICE_A(), 'DQCard.PRICE_A()'),
+    withRpcRetry(() => contract.PRICE_B(), 'DQCard.PRICE_B()'),
+    withRpcRetry(() => contract.PRICE_C(), 'DQCard.PRICE_C()'),
+    withRpcRetry(() => contract.MAX_A(), 'DQCard.MAX_A()'),
+    withRpcRetry(() => contract.MAX_B(), 'DQCard.MAX_B()'),
+    withRpcRetry(() => contract.MAX_C(), 'DQCard.MAX_C()'),
+    withRpcRetry(() => contract.totalA(), 'DQCard.totalA()'),
+    withRpcRetry(() => contract.totalB(), 'DQCard.totalB()'),
+    withRpcRetry(() => contract.totalC(), 'DQCard.totalC()'),
+  ]);
+
+  const config = {
+    A: {
+      price: formatEtherFixed2(priceA),
+      total: Number(maxA),
+      remaining: Math.max(Number(maxA) - Number(totalA), 0),
+      reward_rate: CARD_METADATA[1].rewardRate,
+      name: CARD_METADATA[1].name,
+      level: CARD_METADATA[1].level,
+      fee_rate: CARD_METADATA[1].feeRate,
+      minted: Number(totalA),
+    },
+    B: {
+      price: formatEtherFixed2(priceB),
+      total: Number(maxB),
+      remaining: Math.max(Number(maxB) - Number(totalB), 0),
+      reward_rate: CARD_METADATA[2].rewardRate,
+      name: CARD_METADATA[2].name,
+      level: CARD_METADATA[2].level,
+      fee_rate: CARD_METADATA[2].feeRate,
+      minted: Number(totalB),
+    },
+    C: {
+      price: formatEtherFixed2(priceC),
+      total: Number(maxC),
+      remaining: Math.max(Number(maxC) - Number(totalC), 0),
+      reward_rate: CARD_METADATA[3].rewardRate,
+      name: CARD_METADATA[3].name,
+      level: CARD_METADATA[3].level,
+      fee_rate: CARD_METADATA[3].feeRate,
+      minted: Number(totalC),
+    },
+  };
+
+  writeCardConfigCache(config);
+
+  return config;
+}
+
+export async function getUserCardsFromChain(walletAddress: string): Promise<ChainCardRecord[]> {
+  const normalizedAddress = walletAddress.toLowerCase();
+  const contract = getCardContract();
+  const balance = Number(await withRpcRetry(() => contract.balanceOf(normalizedAddress), `DQCard.balanceOf(${normalizedAddress})`));
+
+  if (balance === 0) {
+    return [];
+  }
+
+  const indices = Array.from({ length: balance }, (_, index) => index);
+  const cards = await mapInChunks(indices, 20, async (index) => {
+    const tokenId = Number(await withRpcRetry(() => contract.tokenOfOwnerByIndex(normalizedAddress, index), `DQCard.tokenOfOwnerByIndex(${normalizedAddress},${index})`));
+    const cardType = Number(await withRpcRetry(() => contract.cardType(tokenId), `DQCard.cardType(${tokenId})`));
+    const meta = getCardMetadata(cardType);
+    const mintPrice = await withRpcRetry(() => contract.getCardPrice(cardType), `DQCard.getCardPrice(${cardType})`);
+
+    return {
+      token_id: tokenId,
+      owner_address: normalizedAddress,
+      card_type: cardType,
+      card_key: meta.key,
+      card_name: meta.name,
+      card_level: meta.level,
+      mint_price: formatEtherFixed2(mintPrice),
+      dq_reward: '0.00',
+      fee_reward: '0.00',
+      status: 'active',
+    } satisfies ChainCardRecord;
+  });
+
+  return cards.sort((left, right) => right.token_id - left.token_id);
+}
+
+export async function getAllCardsFromChain(): Promise<ChainCardRecord[]> {
+  const contract = getCardContract();
+  const totalSupply = Number(await withRpcRetry(() => contract.totalSupply(), 'DQCard.totalSupply()'));
+
+  if (totalSupply === 0) {
+    return [];
+  }
+
+  const priceCache = new Map<number, string>();
+  const indices = Array.from({ length: totalSupply }, (_, index) => index);
+
+  const cards = await mapInChunks(indices, 25, async (index) => {
+    const tokenId = Number(await withRpcRetry(() => contract.tokenByIndex(index), `DQCard.tokenByIndex(${index})`));
+    const [ownerRaw, cardTypeRaw] = await Promise.all([
+      withRpcRetry(() => contract.ownerOf(tokenId), `DQCard.ownerOf(${tokenId})`),
+      withRpcRetry(() => contract.cardType(tokenId), `DQCard.cardType(${tokenId})`),
+    ]);
+    const ownerAddress = String(ownerRaw).toLowerCase();
+    const cardType = Number(cardTypeRaw);
+    const meta = getCardMetadata(cardType);
+
+    let mintPrice = priceCache.get(cardType);
+    if (!mintPrice) {
+      const priceRaw = await withRpcRetry(() => contract.getCardPrice(cardType), `DQCard.getCardPrice(${cardType})`);
+      mintPrice = formatEtherFixed2(priceRaw);
+      priceCache.set(cardType, mintPrice);
+    }
+
+    return {
+      token_id: tokenId,
+      owner_address: ownerAddress,
+      card_type: cardType,
+      card_key: meta.key,
+      card_name: meta.name,
+      card_level: meta.level,
+      mint_price: mintPrice,
+      dq_reward: '0.00',
+      fee_reward: '0.00',
+      status: 'active',
+    } satisfies ChainCardRecord;
+  });
+
+  return cards.sort((left, right) => left.token_id - right.token_id);
+}
+
+export async function getCardStatsFromChain(walletAddress: string): Promise<{
+  cards: ChainCardRecord[];
+  cardCount: number;
+  totalInvest: string;
+  totalReward: string;
+  pendingReward: string;
+}> {
+  const cards = await getUserCardsFromChain(walletAddress);
+  const totalInvest = cards.reduce((sum, card) => sum + parseFloat(card.mint_price || '0'), 0);
+
+  const [claimedResult, pendingResult] = await Promise.all([
+    supabase
+      .from('card_rewards')
+      .select('amount')
+      .eq('user_address', walletAddress.toLowerCase())
+      .eq('status', 'claimed'),
+    supabase
+      .from('card_rewards')
+      .select('amount')
+      .eq('user_address', walletAddress.toLowerCase())
+      .eq('status', 'pending'),
+  ]);
+
+  const totalReward = claimedResult.data?.reduce((sum: number, row: { amount?: string }) => sum + parseFloat(row.amount || '0'), 0) || 0;
+  const pendingReward = pendingResult.data?.reduce((sum: number, row: { amount?: string }) => sum + parseFloat(row.amount || '0'), 0) || 0;
+
+  return {
+    cards,
+    cardCount: cards.length,
+    totalInvest: totalInvest.toFixed(2),
+    totalReward: totalReward.toFixed(2),
+    pendingReward: pendingReward.toFixed(2),
+  };
+}
+
+export async function syncAllCardsFromChainToDatabase(): Promise<{ totalCards: number; syncedCards: number; inactiveCards: number }> {
+  const chainCards = await getAllCardsFromChain();
+
+  if (chainCards.length > 0) {
+    const payload = chainCards.map((card) => ({
+      token_id: card.token_id,
+      owner_address: card.owner_address,
+      card_type: card.card_type,
+      mint_price: card.mint_price,
+      dq_reward: card.dq_reward,
+      fee_reward: card.fee_reward,
+      status: card.status,
+    }));
+
+    const { error: upsertError } = await supabase
+      .from('cards')
+      .upsert(payload, { onConflict: 'token_id' });
+
+    if (upsertError) {
+      throw new Error(`同步链上卡牌失败: ${upsertError.message}`);
+    }
+
+    const tokenIds = chainCards.map((card) => card.token_id).join(',');
+    const { error: deactivateError } = await supabase
+      .from('cards')
+      .update({ status: 'inactive' })
+      .not('token_id', 'in', `(${tokenIds})`);
+
+    if (deactivateError) {
+      throw new Error(`更新本地下线卡牌失败: ${deactivateError.message}`);
+    }
+  } else {
+    const { error: deactivateError } = await supabase
+      .from('cards')
+      .update({ status: 'inactive' })
+      .neq('id', 0);
+
+    if (deactivateError) {
+      throw new Error(`清空本地卡牌状态失败: ${deactivateError.message}`);
+    }
+  }
+
+  const { count: inactiveCards, error: countError } = await supabase
+    .from('cards')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'inactive');
+
+  if (countError) {
+    throw new Error(`统计失效卡牌失败: ${countError.message}`);
+  }
+
+  return {
+    totalCards: chainCards.length,
+    syncedCards: chainCards.length,
+    inactiveCards: inactiveCards || 0,
+  };
 }
 
 function isRetryableError(error: unknown): boolean {
@@ -241,9 +563,6 @@ export async function getChainUserInfo(userAddress: string): Promise<{
   directCount: number;
   level: number;
   totalInvest: string;
-  teamInvest: string;
-  energy: string;
-  pendingSOL: string;
 } | null> {
   try {
     const contract = getContract();
@@ -252,20 +571,12 @@ export async function getChainUserInfo(userAddress: string): Promise<{
       () => contract.getUser(userAddress),
       `getUser(${userAddress})`
     ) as any[];
-    // getUserStake 返回: [teamInvest, energy, pendingSOL]
-    const stakeInfo = await withRpcRetry(
-      () => contract.getUserStake(userAddress),
-      `getUserStake(${userAddress})`
-    ) as any[];
 
     return {
       referrer: userInfo[0],
       directCount: Number(userInfo[1]),
       level: Number(userInfo[2]),
       totalInvest: userInfo[3].toString(),
-      teamInvest: stakeInfo[0].toString(),
-      energy: stakeInfo[1].toString(),
-      pendingSOL: stakeInfo[2].toString(),
     };
   } catch (error) {
     console.error(`[ChainSync] 获取用户 ${userAddress} 信息失败:`, error);
@@ -286,9 +597,6 @@ async function syncUserToDatabase(
     directCount: number;
     level: number;
     totalInvest: string;
-    teamInvest: string;
-    energy: string;
-    pendingSOL: string;
   },
   fields?: string[]
 ): Promise<boolean> {
@@ -307,14 +615,11 @@ async function syncUserToDatabase(
       ? await getUserRegisterTxHash(userAddress)
       : existingUser?.activation_tx_hash ?? null;
 
-    // 定义可同步的字段映射（注意：合约无 lpShares 字段）
-    const fieldMap: Record<string, { chainKey: string; dbKey: string }> = {
+    // 定义可同步的字段映射（与 getChainUserInfo 返回字段对应）
+    const fieldMap: Record<string, { chainKey: keyof typeof userInfo; dbKey: string }> = {
       direct_count: { chainKey: 'directCount', dbKey: 'direct_count' },
       level: { chainKey: 'level', dbKey: 'level' },
       total_invest: { chainKey: 'totalInvest', dbKey: 'total_invest' },
-      team_invest: { chainKey: 'teamInvest', dbKey: 'team_invest' },
-      energy: { chainKey: 'energy', dbKey: 'energy' },
-      pending_sol: { chainKey: 'pendingSOL', dbKey: 'pending_sol' },
       referrer_address: { chainKey: 'referrer', dbKey: 'referrer_address' },
     };
 
@@ -334,7 +639,7 @@ async function syncUserToDatabase(
 
       for (const field of fieldsToSync) {
         if (fieldMap[field]) {
-          updateData[fieldMap[field].dbKey] = userInfo[fieldMap[field].chainKey as keyof typeof userInfo];
+          updateData[fieldMap[field].dbKey] = userInfo[fieldMap[field].chainKey];
         }
       }
 
@@ -378,7 +683,7 @@ async function syncUserToDatabase(
 
       for (const field of fieldsToSync) {
         if (fieldMap[field]) {
-          insertData[fieldMap[field].dbKey] = userInfo[fieldMap[field].chainKey as keyof typeof userInfo];
+          insertData[fieldMap[field].dbKey] = userInfo[fieldMap[field].chainKey];
         }
       }
 

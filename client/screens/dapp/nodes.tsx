@@ -215,7 +215,7 @@ export default function DappNodes() {
                         await executeBuyNode(signer, selectedCard, card);
                       } catch (error: any) {
                         console.error('授权或购买失败:', error);
-                        let errorMsg = error.message || '授权或购买失败';
+                        let errorMsg = error.message || t('nodes.approveOrPurchaseFailed');
                         if (error.message && error.message.includes('insufficient funds')) {
                           errorMsg = t('nodes.insufficientBnbForGas');
                         }
@@ -322,7 +322,7 @@ export default function DappNodes() {
         <View style={[styles.container, { backgroundColor: BG_DARK }]}>
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={YELLOW} />
-            <Text style={styles.loadingText}>加载中...</Text>
+            <Text style={styles.loadingText}>{t('common.loading')}</Text>
           </View>
         </View>
       </Screen>
@@ -339,8 +339,8 @@ export default function DappNodes() {
         >
           {/* 页面标题 */}
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>节点权益</Text>
-            <Text style={styles.headerSubtitle}>购买NFT卡牌，享受节点分红</Text>
+            <Text style={styles.headerTitle}>{t('nodes.rightsTitle')}</Text>
+            <Text style={styles.headerSubtitle}>{t('nodes.rightsSubtitle')}</Text>
           </View>
 
           {/* Tab切换 */}
@@ -350,7 +350,7 @@ export default function DappNodes() {
               onPress={() => setActiveTab('buy')}
             >
               <Text style={[styles.tabText, activeTab === 'buy' && styles.tabTextActive]}>
-                购买卡牌
+                {t('nodes.buyCardsTab')}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -358,7 +358,7 @@ export default function DappNodes() {
               onPress={() => setActiveTab('mine')}
             >
               <Text style={[styles.tabText, activeTab === 'mine' && styles.tabTextActive]}>
-                我的卡牌 ({myCards.length})
+                {t('nodes.myCardsTab').replace('{count}', String(myCards.length))}
               </Text>
             </TouchableOpacity>
           </View>
@@ -368,25 +368,25 @@ export default function DappNodes() {
             <>
               {/* 资金分配说明 */}
               <View style={styles.allocationCard}>
-                <Text style={styles.allocationTitle}>资金分配</Text>
+                <Text style={styles.allocationTitle}>{t('nodes.allocationTitle')}</Text>
                 <View style={styles.allocationRow}>
                   <View style={styles.allocationItem}>
                     <View style={[styles.allocationBadge, { backgroundColor: GREEN + '30' }]}>
                       <Text style={[styles.allocationValue, { color: GREEN }]}>60%</Text>
                     </View>
-                    <Text style={styles.allocationLabel}>LP质押</Text>
+                    <Text style={styles.allocationLabel}>{t('nodes.allocationLpStake')}</Text>
                   </View>
                   <View style={styles.allocationItem}>
                     <View style={[styles.allocationBadge, { backgroundColor: YELLOW + '30' }]}>
                       <Text style={[styles.allocationValue, { color: YELLOW }]}>15%</Text>
                     </View>
-                    <Text style={styles.allocationLabel}>节点(NFT)</Text>
+                    <Text style={styles.allocationLabel}>{t('nodes.allocationNodeNft')}</Text>
                   </View>
                   <View style={styles.allocationItem}>
                     <View style={[styles.allocationBadge, { backgroundColor: CYAN + '30' }]}>
                       <Text style={[styles.allocationValue, { color: CYAN }]}>25%</Text>
                     </View>
-                    <Text style={styles.allocationLabel}>运营/研发</Text>
+                    <Text style={styles.allocationLabel}>{t('nodes.allocationOpsDev')}</Text>
                   </View>
                 </View>
               </View>
@@ -428,7 +428,7 @@ export default function DappNodes() {
                       {/* 卡牌内容 */}
                       <View style={styles.cardBody}>
                         <View style={styles.cardPriceRow}>
-                          <Text style={styles.cardPriceLabel}>价格</Text>
+                          <Text style={styles.cardPriceLabel}>{t('nodes.priceLabel')}</Text>
                           <Text style={[styles.cardPrice, { color }]}>
                             {card.price} USDT
                           </Text>
@@ -438,19 +438,19 @@ export default function DappNodes() {
                           <View style={styles.benefitItem}>
                             <Ionicons name="pie-chart" size={14} color={GREEN} />
                             <Text style={styles.benefitText}>
-                              每日分币 {card.reward_rate}%
+                              {t('nodes.dailyRewardRate').replace('{rate}', String(card.reward_rate))}
                             </Text>
                           </View>
                           <View style={styles.benefitItem}>
                             <Ionicons name="ribbon" size={14} color={PURPLE} />
                             <Text style={styles.benefitText}>
-                              赠送{card.level}级别
+                              {t('nodes.giftLevel').replace('{level}', String(card.level))}
                             </Text>
                           </View>
                           <View style={styles.benefitItem}>
                             <Ionicons name="wallet" size={14} color={CYAN} />
                             <Text style={styles.benefitText}>
-                              手续费 {card.fee_rate}% SOL
+                              {t('nodes.feeRateWithSol').replace('{rate}', String(card.fee_rate))}
                             </Text>
                           </View>
                         </View>
@@ -458,17 +458,19 @@ export default function DappNodes() {
                         <View style={styles.cardFooter}>
                           <View style={styles.remainingBadge}>
                             <Text style={styles.remainingText}>
-                              剩余 {card.remaining}/{card.total}
+                              {t('nodes.remainingCount')
+                                .replace('{remaining}', String(card.remaining))
+                                .replace('{total}', String(card.total))}
                             </Text>
                           </View>
                           {owned && (
                             <View style={[styles.ownedBadge, { backgroundColor: GREEN + '20' }]}>
-                              <Text style={[styles.ownedText, { color: GREEN }]}>已购买</Text>
+                              <Text style={[styles.ownedText, { color: GREEN }]}>{t('nodes.owned')}</Text>
                             </View>
                           )}
                           {soldOut && !owned && (
                             <View style={[styles.ownedBadge, { backgroundColor: RED + '20' }]}>
-                              <Text style={[styles.ownedText, { color: RED }]}>已售罄</Text>
+                              <Text style={[styles.ownedText, { color: RED }]}>{t('nodes.soldOut')}</Text>
                             </View>
                           )}
                         </View>
@@ -498,7 +500,7 @@ export default function DappNodes() {
                     <>
                       <Ionicons name="cart" size={20} color={BG_DARK} />
                       <Text style={styles.buyButtonText}>
-                        立即购买 {cardConfig[selectedCard]?.name}
+                        {t('nodes.buyNowWithName').replace('{name}', cardConfig[selectedCard]?.name || '')}
                       </Text>
                     </>
                   )}
@@ -514,19 +516,19 @@ export default function DappNodes() {
               <View style={styles.statsContainer}>
                 <View style={styles.statItem}>
                   <Text style={styles.statValue}>{cardStats.totalInvest}</Text>
-                  <Text style={styles.statLabel}>累计投入(USDT)</Text>
+                  <Text style={styles.statLabel}>{t('nodes.totalInvestUsdt')}</Text>
                 </View>
                 <View style={[styles.statItem, styles.statItemBorder]}>
                   <Text style={[styles.statValue, { color: YELLOW }]}>
                     {cardStats.pendingReward}
                   </Text>
-                  <Text style={styles.statLabel}>待领取收益</Text>
+                  <Text style={styles.statLabel}>{t('nodes.pendingRewards')}</Text>
                 </View>
                 <View style={styles.statItem}>
                   <Text style={[styles.statValue, { color: GREEN }]}>
                     {cardStats.totalReward}
                   </Text>
-                  <Text style={styles.statLabel}>累计收益</Text>
+                  <Text style={styles.statLabel}>{t('nodes.totalRewards')}</Text>
                 </View>
               </View>
 
@@ -549,37 +551,37 @@ export default function DappNodes() {
                             color={BG_DARK}
                           />
                           <Text style={styles.myCardTitle}>
-                            {config?.name || card.card_type} 卡牌
+                            {t('nodes.cardWithName').replace('{name}', config?.name || card.card_type)}
                           </Text>
                         </View>
 
                         <View style={styles.myCardBody}>
                           <View style={styles.myCardRow}>
-                            <Text style={styles.myCardLabel}>卡牌等级</Text>
+                            <Text style={styles.myCardLabel}>{t('nodes.cardLevelLabel')}</Text>
                             <Text style={[styles.myCardValue, { color }]}>
                               {card.card_level}
                             </Text>
                           </View>
                           <View style={styles.myCardRow}>
-                            <Text style={styles.myCardLabel}>购买价格</Text>
+                            <Text style={styles.myCardLabel}>{t('nodes.purchasePriceLabel')}</Text>
                             <Text style={styles.myCardValue}>
                               {card.price} USDT
                             </Text>
                           </View>
                           <View style={styles.myCardRow}>
-                            <Text style={styles.myCardLabel}>每日分币</Text>
+                            <Text style={styles.myCardLabel}>{t('nodes.dailyRewardCoinsLabel')}</Text>
                             <Text style={[styles.myCardValue, { color: GREEN }]}>
                               {card.reward_rate}%
                             </Text>
                           </View>
                           <View style={styles.myCardRow}>
-                            <Text style={styles.myCardLabel}>手续费率</Text>
+                            <Text style={styles.myCardLabel}>{t('nodes.feeRateLabel')}</Text>
                             <Text style={styles.myCardValue}>
                               {card.fee_rate}% SOL
                             </Text>
                           </View>
                           <View style={styles.myCardRow}>
-                            <Text style={styles.myCardLabel}>购买时间</Text>
+                            <Text style={styles.myCardLabel}>{t('nodes.purchaseTimeLabel')}</Text>
                             <Text style={styles.myCardValue}>
                               {new Date(card.purchased_at).toLocaleDateString('zh-CN')}
                             </Text>
@@ -600,12 +602,12 @@ export default function DappNodes() {
               ) : (
                 <View style={styles.emptyContainer}>
                   <Ionicons name="card-outline" size={64} color={BORDER_GRAY} />
-                  <Text style={styles.emptyText}>您还没有购买任何卡牌</Text>
+                  <Text style={styles.emptyText}>{t('nodes.noCardsYet')}</Text>
                   <TouchableOpacity
                     style={styles.emptyButton}
                     onPress={() => setActiveTab('buy')}
                   >
-                    <Text style={styles.emptyButtonText}>立即购买</Text>
+                    <Text style={styles.emptyButtonText}>{t('nodes.buyNow')}</Text>
                   </TouchableOpacity>
                 </View>
               )}

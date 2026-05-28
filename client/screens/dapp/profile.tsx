@@ -578,21 +578,21 @@ export default function DappProfile() {
                 <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>{t('common.peopleUnit')}</Text>
               </View>
               <View>
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>直推人数</Text>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('team.directMembersLabel')}</Text>
                 <Text className="text-xl font-bold" style={{ color: TEXT_WHITE }}>
                   {userLoading ? '...' : userData.directCount}
                 </Text>
-                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>人</Text>
+                <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>{t('common.peopleUnit')}</Text>
               </View>
               <View>
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>个人投资</Text>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('profile.personalInvest')}</Text>
                 <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>
                   {userLoading ? '...' : userData.totalInvest}
                 </Text>
                 <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>SOL</Text>
               </View>
               <View>
-                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>团队业绩</Text>
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('team.teamPerformance')}</Text>
                 <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>
                   {userLoading ? '...' : userData.teamInvest}
                 </Text>
@@ -617,8 +617,8 @@ export default function DappProfile() {
                   <Ionicons name="people" size={20} color={CYAN} />
                 </View>
                 <View>
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>我的团队</Text>
-                  <Text className="text-xs mt-0.5" style={{ color: TEXT_MUTED }}>{userData.teamSize} 人</Text>
+                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.myTeam')}</Text>
+                  <Text className="text-xs mt-0.5" style={{ color: TEXT_MUTED }}>{userData.teamSize} {t('common.peopleUnit')}</Text>
                 </View>
               </View>
               <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
@@ -633,8 +633,8 @@ export default function DappProfile() {
                   <Ionicons name="share-social" size={20} color="#00FF88" />
                 </View>
                 <View>
-                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>邀请好友</Text>
-                  <Text className="text-xs mt-0.5" style={{ color: TEXT_MUTED }}>分享邀请链接获得奖励</Text>
+                  <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.inviteFriendsTitle')}</Text>
+                  <Text className="text-xs mt-0.5" style={{ color: TEXT_MUTED }}>{t('profile.inviteFriendsSubtitle')}</Text>
                 </View>
               </View>
               <View className="flex-row items-center gap-2">
@@ -656,7 +656,7 @@ export default function DappProfile() {
                 <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(208,32,255,0.1)' }}>
                   <Ionicons name="time" size={20} color="#D020FF" />
                 </View>
-                <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>质押记录</Text>
+                <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.stakes')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
             </TouchableOpacity>
@@ -669,7 +669,7 @@ export default function DappProfile() {
                 <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(255,215,0,0.1)' }}>
                   <Ionicons name="receipt" size={20} color={YELLOW} />
                 </View>
-                <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>收益记录</Text>
+                <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.rewards')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
             </TouchableOpacity>
@@ -682,7 +682,7 @@ export default function DappProfile() {
                 <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(0,240,255,0.1)' }}>
                   <Ionicons name="wallet-outline" size={20} color={CYAN} />
                 </View>
-                <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>提现记录</Text>
+                <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.withdrawals')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
             </TouchableOpacity>
@@ -695,7 +695,7 @@ export default function DappProfile() {
                 <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: 'rgba(208,32,255,0.1)' }}>
                   <Ionicons name="ribbon" size={20} color={PURPLE} />
                 </View>
-                <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>节点申请</Text>
+                <Text className="text-sm font-medium" style={{ color: TEXT_WHITE }}>{t('profile.nodes')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color={TEXT_MUTED} />
             </TouchableOpacity>
