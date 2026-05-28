@@ -406,27 +406,26 @@ const diagnoseDepositOverflow = async (
   }
 };
 
-/**
- * 质押 SOL（链上）
- */
 export const depositSOLOnChain = async (
   signer: ethers.Signer,
   amount: string
 ): Promise<ethers.TransactionResponse> => {
   const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+  const solContract = getContract(CONTRACT_ADDRESSES.SOL.address, DQTOKEN_ABI);
   const amountInWei = ethers.parseEther(amount);
   const userAddress = (await signer.getAddress()).toLowerCase();
-  const provider = signer.provider;
 
-  console.log('[Web3] 链上入金:', amount, 'BNB');
+  console.log('[Web3] 链上入金:', amount, 'SOL');
 
-  // ── 预检查：把常见入金失败原因提前暴露出来 ──
+  // ── 预检查：当前合约 deposit(amount) 会从用户地址 transferFrom SOL ERC20 ──
   try {
-    const [stakeAddr, minInvest, isBlacklisted, isWhitelisted] = await Promise.all([
+    const [stakeAddr, minInvest, isBlacklisted, isWhitelisted, solBalance, solAllowance] = await Promise.all([
       contract.stakeContract().catch(() => ethers.ZeroAddress),
       contract.INVEST_MIN().catch(() => 0n),
       contract.isBlacklisted(userAddress).catch(() => false),
       contract.depositWhiteList(userAddress).catch(() => false),
+      solContract.balanceOf(userAddress).catch(() => 0n),
+      solContract.allowance(userAddress, CONTRACT_ADDRESSES.DQPROJECT.address).catch(() => 0n),
     ]);
 
     if (isBlacklisted) {
@@ -438,6 +437,12 @@ export const depositSOLOnChain = async (
     if (stakeAddr === ethers.ZeroAddress) {
       // DQMiningV3.depositSOL 会在 swapAndAddLP 时 require(!stake)
       throw new Error('入金失败：stakeContract 未设置（!stake），需管理员先 setStakeContract');
+    }
+    if (typeof solBalance === 'bigint' && solBalance < amountInWei) {
+      throw new Error(`入金失败：SOL 代币余额不足（bal=${ethers.formatEther(solBalance)}）`);
+    }
+    if (typeof solAllowance === 'bigint' && solAllowance < amountInWei) {
+      throw new Error(`入金失败：SOL 授权额度不足，请先授权主合约（allow=${ethers.formatEther(solAllowance)}）`);
     }
 
     if (!isWhitelisted) {
@@ -451,10 +456,6 @@ export const depositSOLOnChain = async (
         );
       }
     }
-
-    if (!provider) {
-      throw new Error('入金失败：钱包 provider 不可用');
-    }
   } catch (preflightError) {
     console.error('[Web3] 入金预检查失败:', preflightError);
     throw preflightError;
@@ -464,6 +465,12 @@ export const depositSOLOnChain = async (
     await callProjectDepositStatic(contract, amountInWei);
   } catch (error) {
     console.error('[Web3] deposit staticCall 失败:', error);
+
+    const panicCode = getPanicCode(error);
+    if (panicCode === 17) {
+      throw new Error(await diagnoseDepositOverflow(contract, userAddress, amountInWei));
+    }
+
     throw error;
   }
 
@@ -1365,7 +1372,7 @@ export const addLiquidityOnChain = async (
   const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
   const amountInWei = ethers.parseUnits(solAmount, 18);
 
-  console.log('[Web3] 添加 LP（当前 ABI 通过 DQMCore.deposit(amount)）:', solAmount, 'BNB', 'minLp 参数未在当前合约使用:', minLpAmount);
+  console.log('[Web3] 添加 LP（当前 ABI 通过 DQMCore.deposit(amount)）:', solAmount, 'SOL', 'minLp 参数未在当前合约使用:', minLpAmount);
 
   const tx = await callProjectDeposit(contract, amountInWei);
   console.log('[Web3] LP 添加交易已发送:', tx.hash);

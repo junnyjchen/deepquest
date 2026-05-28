@@ -602,41 +602,41 @@ contract DQMiningStakeCore is ReentrancyGuard {
         lpS[msg.sender] -= _lpAmount;
         tLP -= _lpAmount;
         
-        // 从Pair移除流动性（获得WBNB和DQ，因为LP pair是DQ/WBNB）
+        // 从Pair移除流动性（获得SOL和DQ，因为LP pair是DQ/SOL）
         IERC20(lpPair).safeTransferFrom(msg.sender, address(this), _lpAmount);
         IERC20(lpPair).forceApprove(lpRouter, _lpAmount);
         
-        (uint256 amountWBNB, uint256 amountDQ) = IPancakeRouter01(lpRouter).removeLiquidity(
-            dqToken,  // tokenA = DQ
-            WBNB,     // tokenB = WBNB（LP pair是DQ/WBNB）
+        (uint256 amountSOL, uint256 amountDQ) = IPancakeRouter01(lpRouter).removeLiquidity(
+            SOL,      // tokenA = SOL
+            dqToken,  // tokenB = DQ（LP pair是DQ/SOL）
             _lpAmount,
+            1,  // minSOL
             1,  // minDQ
-            1,  // minWBNB
             address(this),
             block.timestamp + 3600
         );
         
-        // 计算手续费（WBNB和DQ各50%）
-        uint256 wbnbFee = amountWBNB * feeRate / 10000;
+        // 计算手续费（SOL和DQ各50%）
+        uint256 solFee = amountSOL * feeRate / 10000;
         uint256 dqFee = amountDQ * feeRate / 10000;
         
         // 用户获得（扣除手续费后）
-        uint256 userWBNB = amountWBNB - wbnbFee;
+        uint256 userSOL = amountSOL - solFee;
         uint256 userDQ = amountDQ - dqFee;
         
-        // 转给用户（WBNB + DQ ERC20）
-        IERC20(WBNB).safeTransfer(msg.sender, userWBNB);
+        // 转给用户（SOL + DQ ERC20）
+        IERC20(SOL).safeTransfer(msg.sender, userSOL);
         IERC20(dqToken).safeTransfer(msg.sender, userDQ);
         
         // 手续费给手续费地址
-        if (wbnbFee > 0) {
-            IERC20(WBNB).safeTransfer(feeReceiver, wbnbFee);
+        if (solFee > 0) {
+            IERC20(SOL).safeTransfer(feeReceiver, solFee);
         }
         if (dqFee > 0) {
             IERC20(dqToken).safeTransfer(feeReceiver, dqFee);
         }
         
-        emit LPWithdrawn(msg.sender, _lpAmount, wbnbFee + dqFee, stakeTime);
+        emit LPWithdrawn(msg.sender, _lpAmount, solFee + dqFee, stakeTime);
     }
     
     /**

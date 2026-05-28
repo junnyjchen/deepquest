@@ -318,54 +318,31 @@ contract DQMCore is ReentrancyGuard {
      * @param _solAmount SOL数量（50%的入金）
      * @return lpAmount 获得的LP代币数量
      * 
-     * 流程：SOL → WBNB → 一半买DQ + 一半与DQ组LP
+     * 流程：25% SOL买DQ + 25% SOL与DQ组LP（SOL/DQ池）
      */
     function _addLiquidity(address _user, uint256 _solAmount) internal returns (uint256 lpAmount) {
-        // 1. 将所有SOL换成WBNB
-        IERC20(SOL).forceApprove(ROUTER, _solAmount);
+        // 一半SOL买DQ，一半SOL用来添加流动性
+        uint256 solForBuy = _solAmount / 2;
+        uint256 solForLP = _solAmount - solForBuy;
         
-        address[] memory solToWbnbPath = new address[](2);
-        solToWbnbPath[0] = SOL;
-        solToWbnbPath[1] = WBNB;
+        uint256 dqAmount = _buyDQ(solForBuy);
         
-        // 计算最小输出（滑点保护）
-        uint256[] memory wbnbAmountsOut = IRouter(ROUTER).getAmountsOut(_solAmount, solToWbnbPath);
-        uint256 minWbnbOut = wbnbAmountsOut[1] * (1000 - swapSlippage) / 1000;
-        
-        IRouter(ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(
-            _solAmount,
-            minWbnbOut,
-            solToWbnbPath,
-            address(this),
-            block.timestamp
-        );
-        
-        // 获取实际收到的WBNB
-        uint256 wbnbBalance = IERC20(WBNB).balanceOf(address(this));
-        if (wbnbBalance == 0) return 0;
-        
-        // 2. 一半WBNB买DQ
-        uint256 wbnbForBuy = wbnbBalance / 2;
-        uint256 wbnbForLP = wbnbBalance - wbnbForBuy;
-        
-        uint256 dqAmount = _buyDQWithWBNB(wbnbForBuy);
-        
-        if (dqAmount > 0 && wbnbForLP > 0) {
+        if (dqAmount > 0 && solForLP > 0) {
             // 授权
             IERC20(dqToken).forceApprove(ROUTER, dqAmount);
-            IERC20(WBNB).forceApprove(ROUTER, wbnbForLP);
+            IERC20(SOL).forceApprove(ROUTER, solForLP);
             
             // 计算最小输出（滑点保护）
             uint256 minToken = dqAmount * (1000 - lpSlippage) / 1000;
-            uint256 minWbnb = wbnbForLP * (1000 - lpSlippage) / 1000;
+            uint256 minSol = solForLP * (1000 - lpSlippage) / 1000;
             
-            // 添加流动性（WBNB + DQ）
+            // 添加流动性（SOL + DQ）
             (,, lpAmount) = IRouter(ROUTER).addLiquidity(
-                WBNB,
+                SOL,
                 dqToken,
-                wbnbForLP,
+                solForLP,
                 dqAmount,
-                minWbnb,
+                minSol,
                 minToken,
                 address(this),  // LP代币给合约
                 block.timestamp
@@ -381,16 +358,16 @@ contract DQMCore is ReentrancyGuard {
             }
             
             totalLPAdded += lpAmount;
-            emit LPAdded(_user, wbnbForLP, dqAmount, lpAmount);
+            emit LPAdded(_user, solForLP, dqAmount, lpAmount);
         }
     }
     
     /**
-     * @dev 用WBNB从底池买DQ（合约是白名单，不扣手续费）
-     * @param _wbnbAmount WBNB数量
+     * @dev 用SOL从底池买DQ（合约是白名单，不扣手续费）
+     * @param _solAmount SOL数量
      * @return dqAmount 买到的DQ数量
      */
-    function _buyDQWithWBNB(uint256 _wbnbAmount) internal returns (uint256 dqAmount) {
+    function _buyDQ(uint256 _solAmount) internal returns (uint256 dqAmount) {
         require(pool != address(0), "!pool");
         
         // 记录买入前的DQ余额
@@ -398,18 +375,18 @@ contract DQMCore is ReentrancyGuard {
         
         // 执行买入（合约是白名单，不扣手续费）
         address[] memory path = new address[](2);
-        path[0] = WBNB;
+        path[0] = SOL;
         path[1] = dqToken;
         
-        // 授权WBNB给Router
-        IERC20(WBNB).forceApprove(ROUTER, _wbnbAmount);
+        // 授权SOL给Router
+        IERC20(SOL).forceApprove(ROUTER, _solAmount);
         
         // 计算最小输出（滑点保护）
-        uint256[] memory amountsOut = IRouter(ROUTER).getAmountsOut(_wbnbAmount, path);
+        uint256[] memory amountsOut = IRouter(ROUTER).getAmountsOut(_solAmount, path);
         uint256 minOut = amountsOut[1] * (1000 - swapSlippage) / 1000;
         
         IRouter(ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(
-            _wbnbAmount,
+            _solAmount,
             minOut,
             path,
             address(this),
@@ -460,7 +437,7 @@ contract DQMCore is ReentrancyGuard {
      * @dev 用户需先approve本合约足够的DQ额度
      *      卖出时DQT合约自动扣6%卖出税(3%→质押用户 + 3%→手续费地址)
      *      剩余94%通过PancakeSwap兑换为SOL转给用户
-     *      路径: DQ → WBNB → SOL
+     *      路径: DQ → SOL（直接在SOL/DQ池中兑换）
      */
     function sellDQ(uint256 _dqAmount) external nonReentrant {
         require(_dqAmount > 0, "!amount");
@@ -470,14 +447,13 @@ contract DQMCore is ReentrancyGuard {
         // 1. 转入用户的DQ
         IERC20(dqToken).safeTransferFrom(msg.sender, address(this), _dqAmount);
         
-        // 2. 计算最小输出（滑点保护）路径: DQ → WBNB → SOL
-        address[] memory path = new address[](3);
+        // 2. 计算最小输出（滑点保护）路径: DQ → SOL
+        address[] memory path = new address[](2);
         path[0] = dqToken;
-        path[1] = WBNB;
-        path[2] = SOL;
+        path[1] = SOL;
         
         uint256[] memory amountsOut = IRouter(ROUTER).getAmountsOut(_dqAmount, path);
-        uint256 minOut = amountsOut[2] * (1000 - swapSlippage) / 1000;
+        uint256 minOut = amountsOut[1] * (1000 - swapSlippage) / 1000;
         
         // 3. approve Router
         IERC20(dqToken).forceApprove(address(ROUTER), _dqAmount);

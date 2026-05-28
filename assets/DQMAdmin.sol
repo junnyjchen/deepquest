@@ -140,41 +140,23 @@ contract DQMAdmin is ReentrancyGuard {
     }
     
     /**
-     * @notice 批量增加用户能量(StakeCore)
+     * @notice 批量增加用户能量（同时更新 StakeCore 和 DQMCore）
      */
     function batchAddEnergy(address[] calldata _users, uint256[] calldata _amounts) external onlyOwner {
         require(_users.length == _amounts.length, "length mismatch");
         for (uint256 i = 0; i < _users.length; i++) {
             IDQMiningStakeAdmin(stakeContract).addEnergy(_users[i], _amounts[i]);
-        }
-    }
-    
-    /**
-     * @notice 批量设置用户能量(StakeCore)
-     */
-    function batchSetEnergy(address[] calldata _users, uint256[] calldata _amounts) external onlyOwner {
-        require(_users.length == _amounts.length, "length mismatch");
-        for (uint256 i = 0; i < _users.length; i++) {
-            IDQMiningStakeAdmin(stakeContract).setEnergy(_users[i], _amounts[i]);
-        }
-    }
-    
-    /**
-     * @notice 批量增加用户能量(DQMCore)
-     */
-    function batchAdminAddEnergy(address[] calldata _users, uint256[] calldata _amounts) external onlyOwner {
-        require(_users.length == _amounts.length, "length mismatch");
-        for (uint256 i = 0; i < _users.length; i++) {
             IDQMCoreAdmin(coreContract).adminAddEnergy(_users[i], _amounts[i]);
         }
     }
     
     /**
-     * @notice 批量设置用户能量(DQMCore)
+     * @notice 批量设置用户能量（同时更新 StakeCore 和 DQMCore）
      */
-    function batchAdminSetEnergy(address[] calldata _users, uint256[] calldata _amounts) external onlyOwner {
+    function batchSetEnergy(address[] calldata _users, uint256[] calldata _amounts) external onlyOwner {
         require(_users.length == _amounts.length, "length mismatch");
         for (uint256 i = 0; i < _users.length; i++) {
+            IDQMiningStakeAdmin(stakeContract).setEnergy(_users[i], _amounts[i]);
             IDQMCoreAdmin(coreContract).adminSetEnergy(_users[i], _amounts[i]);
         }
     }
@@ -197,7 +179,10 @@ contract DQMAdmin is ReentrancyGuard {
             // 同步等级到 DQMCore（前端查询展示）
             IDQMCoreAdmin(coreContract).setUserLevel(_user, _nodeLevel);
         }
-        if (_energy > 0) IDQMiningStakeAdmin(stakeContract).setEnergy(_user, _energy);
+        if (_energy > 0) {
+            IDQMiningStakeAdmin(stakeContract).setEnergy(_user, _energy);
+            IDQMCoreAdmin(coreContract).adminSetEnergy(_user, _energy);
+        }
     }
     
     // ============ DQ转入底池 ============
