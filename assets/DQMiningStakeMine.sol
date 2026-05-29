@@ -106,6 +106,13 @@ contract DQMiningStakeMine is Ownable, ReentrancyGuard {
     }
     
     /**
+     * @dev 设置上次爆块时间（管理员可重置，用于首次爆块或特殊情况）
+     */
+    function setLastMineTime(uint256 _time) external onlyOwner {
+        lastMineTime = _time;
+    }
+    
+    /**
      * @dev 设置合伙人地址 (创始人6%接收地址)
      */
     function setPartnerAddress(address _partner) external onlyOwner {
@@ -157,8 +164,10 @@ contract DQMiningStakeMine is Ownable, ReentrancyGuard {
         // 检查时间 (至少间隔1天)
         require(block.timestamp >= lastMineTime + 1 days, "Too early");
         
-        // 计算剩余未爆块量
-        uint256 remaining = initialTotalSupply - totalMined;
+        // 计算剩余未爆块量（取理论剩余和底池实际余额的最小值）
+        uint256 theoreticalRemaining = initialTotalSupply - totalMined;
+        uint256 poolBal = getPoolBalance();
+        uint256 remaining = theoreticalRemaining < poolBal ? theoreticalRemaining : poolBal;
         if (remaining == 0) {
             lastMineTime = block.timestamp;
             return;
@@ -206,8 +215,9 @@ contract DQMiningStakeMine is Ownable, ReentrancyGuard {
         recipients[3] = foundation;    // 基金会
         amounts[3] = distributeAmount * foundationRatio / 10000;
         
-        recipients[4] = founder;       // 创始人
-        amounts[4] = distributeAmount * founderRatio / 10000;
+        // 创始人获得剩余所有金额（避免整数除法精度损失）
+        recipients[4] = founder;
+        amounts[4] = distributeAmount - amounts[0] - amounts[1] - amounts[2] - amounts[3];
         
         // 调用DQT的批量分配函数
         // 注意：DQT需要有burnFromPool和distributeFromPool函数

@@ -140,7 +140,8 @@ contract DQMiningStakeCore is ReentrancyGuard {
     // LP数据
     mapping(address => uint256) public lpS;  // 用户LP数量
     mapping(address => uint256) public lpD;  // 用户LP已领取
-    mapping(address => uint256) public lpStakeTime;  // 用户LP质押时间
+    mapping(address => uint256) public lpStakeTime;  // 用户LP质押时间（入金时首次记录）
+    mapping(address => uint256) public userLP;      // 入金时记录的用户LP数量（authorizeLPEquity时核对用）
     uint256 public tLP;  // 总LP质押量
     uint256 public lA;   // LP累计奖励
     
@@ -221,6 +222,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
     event LPEquityAuthorized(address indexed user, uint256 amount);
     event LPEquityCancelled(address indexed user, uint256 amount);
     event LPEquityRewardClaimed(address indexed user, uint256 amount);
+    event LPRecorded(address indexed user, uint256 amount);
     
     // ============ 修饰器 ============
     modifier onlyOwner() {
@@ -550,164 +552,96 @@ contract DQMiningStakeCore is ReentrancyGuard {
             _checkAndAutoUpgrade(_users[i]);
         }
     }
+
+    // ============ LP权益管理（入金LP直接转用户钱包，入金时记录数据，用户授权DAPP管理） ============
     
     /**
-     * @notice 接收LP质押（由DQMCore调用）
-     * @dev 用户入金50%用于添加流动性，获得的LP代币自动质押
+     * @notice 记录用户入金LP数据（由DQMCore入金时调用）
+     * @dev 入金成功时DQMCore调用此函数，记录用户LP数量和首次入金时间
+     *      LP代币已直接转给用户钱包，此函数只更新账本数据
      * @param _user 用户地址
-     * @param _lpAmount LP代币数量
+     * @param _lpAmount 入金获得的LP数量
      */
-    function onLPStake(address _user, uint256 _lpAmount) external onlyCore {
-        require(_lpAmount > 0, "!amount");
-        require(lpPair != address(0), "!lpPair");
-        
-        // 从调用者转入LP代币
-        IERC20(lpPair).safeTransferFrom(msg.sender, address(this), _lpAmount);
-        
-        // 更新用户LP质押
-        if (lpS[_user] == 0) {
-            lpStakeTime[_user] = block.timestamp;  // 首次质押记录时间
-        }
-        lpS[_user] += _lpAmount;
-        tLP += _lpAmount;
-        
-        emit LPStaked(_user, _lpAmount);
-    }
-    
-    /**
-     * @notice 用户移除LP质押
-     * @dev 根据质押时间计算手续费：<60天20%，60-180天10%，>180天0%
-     * @param _lpAmount 要移除的LP数量
-     */
-    function withdrawLP(uint256 _lpAmount) external nonReentrant {
-        require(!IDQMCore(coreContract).isBlacklisted(msg.sender), "blacklisted");
-        require(_lpAmount > 0, "!amount");
-        require(lpS[msg.sender] >= _lpAmount, "!balance");
-        require(lpPair != address(0), "!lpPair");
-        require(lpRouter != address(0), "!router");
-        
-        // 计算手续费（边界：180天之后0%，不包括180天）
-        uint256 stakeTime = block.timestamp - lpStakeTime[msg.sender];
-        uint256 feeRate;
-        
-        if (stakeTime < 60 days) {
-            feeRate = 2000;  // 20%手续费
-        } else if (stakeTime <= 180 days) {
-            feeRate = 1000;  // 10%手续费
-        } else {
-            feeRate = 0;     // 无手续费（180天之后）
-        }
-        
-        // 更新用户LP质押
-        lpS[msg.sender] -= _lpAmount;
-        tLP -= _lpAmount;
-        
-        // 从Pair移除流动性（获得SOL和DQ，因为LP pair是DQ/SOL）
-        IERC20(lpPair).safeTransferFrom(msg.sender, address(this), _lpAmount);
-        IERC20(lpPair).forceApprove(lpRouter, _lpAmount);
-        
-        (uint256 amountSOL, uint256 amountDQ) = IPancakeRouter01(lpRouter).removeLiquidity(
-            SOL,      // tokenA = SOL
-            dqToken,  // tokenB = DQ（LP pair是DQ/SOL）
-            _lpAmount,
-            1,  // minSOL
-            1,  // minDQ
-            address(this),
-            block.timestamp + 3600
-        );
-        
-        // 计算手续费（SOL和DQ各50%）
-        uint256 solFee = amountSOL * feeRate / 10000;
-        uint256 dqFee = amountDQ * feeRate / 10000;
-        
-        // 用户获得（扣除手续费后）
-        uint256 userSOL = amountSOL - solFee;
-        uint256 userDQ = amountDQ - dqFee;
-        
-        // 转给用户（SOL + DQ ERC20）
-        IERC20(SOL).safeTransfer(msg.sender, userSOL);
-        IERC20(dqToken).safeTransfer(msg.sender, userDQ);
-        
-        // 手续费给手续费地址
-        if (solFee > 0) {
-            IERC20(SOL).safeTransfer(feeReceiver, solFee);
-        }
-        if (dqFee > 0) {
-            IERC20(dqToken).safeTransfer(feeReceiver, dqFee);
-        }
-        
-        emit LPWithdrawn(msg.sender, _lpAmount, solFee + dqFee, stakeTime);
-    }
-    
-    /**
-     * @notice 迁移LP质押（由迁移合约调用）
-     * @dev 用于从旧合约迁移LP数据到新合约
-     * @param _user 用户地址
-     * @param _lpAmount LP代币数量
-     * @param _energy 迁移时导入的能量值
-     */
-    function migrateLP(
-        address _user, 
-        uint256 _lpAmount, 
-        uint256 _energy
-    ) external nonReentrant {
-        require(msg.sender == migratorContract || msg.sender == adminContract, "!migrator");
-        require(_user != address(0), "!user");
+    function recordLP(address _user, uint256 _lpAmount) external onlyCore {
         require(_lpAmount > 0, "!amount");
         
-        // LP代币已经在迁移合约中转到本合约，这里只记录数据
+        // 首次入金记录时间（用于手续费计算：<60天20%，60-180天10%，>180天0%）
+        if (userLP[_user] == 0) {
+            lpStakeTime[_user] = block.timestamp;
+        }
+        userLP[_user] += _lpAmount;
         
-        // 更新用户LP质押
-        lpS[_user] += _lpAmount;
-        tLP += _lpAmount;
+        // 入金即获得LP权益身份，自动参与LP爆块分红
+        lpEquity[_user] += _lpAmount;
+        totalLPEquity += _lpAmount;
         
-        // 记录用户能量（从旧合约导入）
-        userEnergy[_user] = _energy;
-        emit EnergyChanged(_user, _energy);
-        
-        emit LPMigrated(_user, _lpAmount, _energy);
-    }
-    
-    // ============ LP权益管理（用户授权，无需转移LP代币） ============
-    
-    /**
-     * @notice 用户授权钱包里的LP权益
-     * @dev 用于授权用户钱包里持有的LP（不包括已质押的LP），LP代币仍由用户持有
-     *      入金时已自动质押的LP记录在lpS[user]，本函数只处理钱包里的额外LP
-     * @param _amount 授权的LP权益数量
-     */
-    function authorizeLPEquity(uint256 _amount) external nonReentrant {
-        require(_amount > 0, "!amount");
-        require(lpPair != address(0), "!lpPair");
-        
-        // 验证用户钱包持有足够的LP（不包括已质押的）
-        uint256 userLPBalance = IERC20(lpPair).balanceOf(msg.sender);
-        require(userLPBalance >= _amount, "!balance");
-        
-        // 更新用户LP权益
-        if (lpEquity[msg.sender] == 0 && _amount > 0) {
-            // 首次授权，设置初始debt防止领取之前累积的奖励
-            if (totalLPEquity > 0) {
-                lpEquityDebt[msg.sender] = lpEquity[msg.sender] * lA / totalLPEquity;
-            }
+        // 设置debt防止领取之前累积的奖励（入金前的奖励不应获得）
+        if (totalLPEquity > 0 && lA > 0) {
+            lpEquityDebt[_user] = lpEquity[_user] * lA / totalLPEquity;
         }
         
-        lpEquity[msg.sender] += _amount;
-        totalLPEquity += _amount;
-        
-        emit LPEquityAuthorized(msg.sender, _amount);
+        emit LPRecorded(_user, _lpAmount);
+        emit LPEquityAuthorized(_user, _lpAmount);
     }
     
     /**
-     * @notice 用户取消LP权益授权
-     * @dev 用户取消LP权益授权，不再获得爆块奖励，LP代币仍由用户持有
+     * @notice 更新/核对LP权益数据
+     * @dev 入金时LP权益已自动设置（recordLP），此函数用于核对和修正权益
+     *      取用户钱包LP余额和合约记录LP的最小值作为权益上限
+     *      如果钱包LP < 已记录权益，则减少差额（用户可能已卖掉部分LP）
+     *      如果钱包LP > 已记录权益且合约记录LP > 已记录权益，则增加差额
+     *      LP代币仍由用户持有，合约只记录权益用于奖励计算
+     */
+    function authorizeLPEquity() external nonReentrant {
+        require(lpPair != address(0), "!lpPair");
+        
+        // 核对：取用户钱包LP余额和合约记录LP的最小值
+        uint256 walletLP = IERC20(lpPair).balanceOf(msg.sender);
+        uint256 recordedLP = userLP[msg.sender];
+        uint256 maxEquity = walletLP < recordedLP ? walletLP : recordedLP;
+        
+        uint256 currentEquity = lpEquity[msg.sender];
+        
+        if (maxEquity > currentEquity) {
+            // 权益增加（如用户从其他渠道获得LP，或重新买入LP）
+            uint256 addAmount = maxEquity - currentEquity;
+            lpEquity[msg.sender] = maxEquity;
+            totalLPEquity += addAmount;
+        } else if (maxEquity < currentEquity) {
+            // 权益减少（用户已卖掉部分LP）
+            uint256 subAmount = currentEquity - maxEquity;
+            lpEquity[msg.sender] = maxEquity;
+            totalLPEquity -= subAmount;
+        }
+        // 如果 maxEquity == currentEquity，无需变化
+        
+        // 重新设置debt
+        if (totalLPEquity > 0 && lA > 0) {
+            lpEquityDebt[msg.sender] = lpEquity[msg.sender] * lA / totalLPEquity;
+        }
+        
+        emit LPEquityAuthorized(msg.sender, maxEquity);
+    }
+    
+    /**
+     * @notice 用户取消LP权益授权（破LP+扣手续费）
+     * @dev 用户取消授权时，从用户钱包拉取LP，破除流动性获得SOL+DQ，扣除手续费后转给用户
+     *      手续费率：<60天20%，60-180天10%，>180天0%
      * @param _amount 取消授权的LP权益数量
      */
     function cancelLPEquity(uint256 _amount) external nonReentrant {
         require(_amount > 0, "!amount");
         require(lpEquity[msg.sender] >= _amount, "!equity");
+        // 实际可取消数量 = min(权益, 钱包LP, 合约记录LP)
+        uint256 walletLP = IERC20(lpPair).balanceOf(msg.sender);
+        uint256 actualAmount = _amount;
+        if (actualAmount > walletLP) actualAmount = walletLP;
+        if (actualAmount > userLP[msg.sender]) actualAmount = userLP[msg.sender];
+        require(actualAmount > 0, "!walletLP");
+        require(lpPair != address(0), "!lpPair");
+        require(lpRouter != address(0), "!router");
         
-        // 计算并发放待领取的奖励
+        // 1. 计算并发放待领取的LP权益奖励
         if (totalLPEquity > 0 && lA > 0) {
             uint256 pending = lpEquity[msg.sender] * lA / totalLPEquity;
             uint256 reward = pending - lpEquityDebt[msg.sender];
@@ -718,9 +652,10 @@ contract DQMiningStakeCore is ReentrancyGuard {
             }
         }
         
-        // 更新用户LP权益
-        lpEquity[msg.sender] -= _amount;
-        totalLPEquity -= _amount;
+        // 2. 更新用户LP权益记录（使用actualAmount）
+        lpEquity[msg.sender] -= actualAmount;
+        totalLPEquity -= actualAmount;
+        userLP[msg.sender] -= actualAmount;
         
         // 更新debt
         if (totalLPEquity > 0) {
@@ -729,17 +664,66 @@ contract DQMiningStakeCore is ReentrancyGuard {
             lpEquityDebt[msg.sender] = 0;
         }
         
-        emit LPEquityCancelled(msg.sender, _amount);
+        // 3. 从用户钱包拉取LP代币（用户需先approve LP给StakeCore）
+        IERC20(lpPair).safeTransferFrom(msg.sender, address(this), actualAmount);
+        
+        // 4. 破除流动性（removeLiquidity）
+        IERC20(lpPair).forceApprove(lpRouter, _amount);
+        (uint256 amountSOL, uint256 amountDQ) = IPancakeRouter01(lpRouter).removeLiquidity(
+            SOL,
+            dqToken,
+            actualAmount,
+            1,  // minSOL
+            1,  // minDQ
+            address(this),
+            block.timestamp + 3600
+        );
+        
+        // 5. 计算手续费（与withdrawLP一致：<60天20%，60-180天10%，>180天0%）
+        uint256 stakeTime = block.timestamp - lpStakeTime[msg.sender];
+        uint256 feeRate;
+        if (stakeTime < 60 days) {
+            feeRate = 2000;  // 20%
+        } else if (stakeTime <= 180 days) {
+            feeRate = 1000;  // 10%
+        } else {
+            feeRate = 0;     // 0%
+        }
+        
+        uint256 solFee = amountSOL * feeRate / 10000;
+        uint256 dqFee = amountDQ * feeRate / 10000;
+        uint256 userSOL = amountSOL - solFee;
+        uint256 userDQ = amountDQ - dqFee;
+        
+        // 6. 转给用户（扣除手续费后）
+        if (userSOL > 0) IERC20(SOL).safeTransfer(msg.sender, userSOL);
+        if (userDQ > 0) IERC20(dqToken).safeTransfer(msg.sender, userDQ);
+        
+        // 7. 手续费转给手续费地址
+        if (solFee > 0) IERC20(SOL).safeTransfer(feeReceiver, solFee);
+        if (dqFee > 0) IERC20(dqToken).safeTransfer(feeReceiver, dqFee);
+        
+        emit LPEquityCancelled(msg.sender, actualAmount);
+        emit LPWithdrawn(msg.sender, actualAmount, solFee + dqFee, stakeTime);
     }
     
     /**
-     * @notice 用户一键取消全部LP权益
+     * @notice 用户一键取消全部LP权益（破LP+扣手续费）
      */
     function cancelAllLPEquity() external nonReentrant {
         uint256 equity = lpEquity[msg.sender];
         require(equity > 0, "!equity");
         
-        // 计算并发放待领取的奖励
+        // 实际可取消数量 = min(权益, 钱包LP, 合约记录LP)
+        uint256 walletLP = IERC20(lpPair).balanceOf(msg.sender);
+        uint256 actualAmount = equity;
+        if (actualAmount > walletLP) actualAmount = walletLP;
+        if (actualAmount > userLP[msg.sender]) actualAmount = userLP[msg.sender];
+        require(actualAmount > 0, "!walletLP");
+        require(lpPair != address(0), "!lpPair");
+        require(lpRouter != address(0), "!router");
+        
+        // 1. 计算并发放待领取的LP权益奖励
         if (totalLPEquity > 0 && lA > 0) {
             uint256 pending = lpEquity[msg.sender] * lA / totalLPEquity;
             uint256 reward = pending - lpEquityDebt[msg.sender];
@@ -750,12 +734,59 @@ contract DQMiningStakeCore is ReentrancyGuard {
             }
         }
         
-        // 清空用户LP权益
-        totalLPEquity -= equity;
-        lpEquity[msg.sender] = 0;
-        lpEquityDebt[msg.sender] = 0;
+        // 2. 更新用户LP权益记录（使用actualAmount）
+        totalLPEquity -= actualAmount;
+        lpEquity[msg.sender] -= actualAmount;
+        userLP[msg.sender] -= actualAmount;
         
-        emit LPEquityCancelled(msg.sender, equity);
+        // 更新debt
+        if (totalLPEquity > 0) {
+            lpEquityDebt[msg.sender] = lpEquity[msg.sender] * lA / totalLPEquity;
+        } else {
+            lpEquityDebt[msg.sender] = 0;
+        }
+        
+        // 3. 从用户钱包拉取LP代币（用户需先approve LP给StakeCore）
+        IERC20(lpPair).safeTransferFrom(msg.sender, address(this), actualAmount);
+        
+        // 4. 破除流动性
+        IERC20(lpPair).forceApprove(lpRouter, actualAmount);
+        (uint256 amountSOL, uint256 amountDQ) = IPancakeRouter01(lpRouter).removeLiquidity(
+            SOL,
+            dqToken,
+            actualAmount,
+            1,
+            1,
+            address(this),
+            block.timestamp + 3600
+        );
+        
+        // 5. 计算手续费
+        uint256 stakeTime = block.timestamp - lpStakeTime[msg.sender];
+        uint256 feeRate;
+        if (stakeTime < 60 days) {
+            feeRate = 2000;  // 20%
+        } else if (stakeTime <= 180 days) {
+            feeRate = 1000;  // 10%
+        } else {
+            feeRate = 0;
+        }
+        
+        uint256 solFee = amountSOL * feeRate / 10000;
+        uint256 dqFee = amountDQ * feeRate / 10000;
+        uint256 userSOL = amountSOL - solFee;
+        uint256 userDQ = amountDQ - dqFee;
+        
+        // 6. 转给用户
+        if (userSOL > 0) IERC20(SOL).safeTransfer(msg.sender, userSOL);
+        if (userDQ > 0) IERC20(dqToken).safeTransfer(msg.sender, userDQ);
+        
+        // 7. 手续费转给手续费地址
+        if (solFee > 0) IERC20(SOL).safeTransfer(feeReceiver, solFee);
+        if (dqFee > 0) IERC20(dqToken).safeTransfer(feeReceiver, dqFee);
+        
+        emit LPEquityCancelled(msg.sender, actualAmount);
+        emit LPWithdrawn(msg.sender, actualAmount, solFee + dqFee, stakeTime);
     }
     
     /**
@@ -839,6 +870,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
      * @param _level 等级 (1-6 对应 S1-S6)
      */
     function setUserLevel(address _user, uint8 _level) external {
+        require(msg.sender == dqCard || msg.sender == adminContract || msg.sender == OWNER, "!auth");
         require(_user != address(0), "!user");
         require(_level >= 1 && _level <= 6, "!level");
         
@@ -885,26 +917,9 @@ contract DQMiningStakeCore is ReentrancyGuard {
         // 3. 管理奖30%级差制
         _distMgr(_user, _amount * MGR_RATE / 100);
         
-        // 4. DAO 10% - 直接转账
-        if (daoAddr != address(0)) {
-            uint256 daoReward = _amount * DAO_RATE / 100;
-            IERC20(SOL).safeTransfer(daoAddr, daoReward);
-            emit RewardDistributed(daoAddr, 4, daoReward);
-        }
-        
-        // 5. 运营 8% - 直接转账
-        if (operAddr != address(0)) {
-            uint256 operReward = _amount * OPER_RATE / 100;
-            IERC20(SOL).safeTransfer(operAddr, operReward);
-            emit RewardDistributed(operAddr, 5, operReward);
-        }
-        
-        // 6. 保险 7% - 直接转账
-        if (insureAddr != address(0)) {
-            uint256 insureReward = _amount * INSURE_RATE / 100;
-            IERC20(SOL).safeTransfer(insureAddr, insureReward);
-            emit RewardDistributed(insureAddr, 6, insureReward);
-        }
+        // 注意：DAO/运营/保险已由DQMCore直接分发，此处不再处理
+        // 原因：_distributeRewards在用户无推荐人时直接return，
+        //        如果DAO/OP/INS在此分发，无推荐人时全部跳过 → 奖励无法发放
     }
     
     /**
@@ -1033,6 +1048,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
      * @notice 卖出税分红代理 - 转发给Vault合约处理
      */
     function distributeSellFee() external {
+        require(msg.sender == adminContract || msg.sender == OWNER, "!auth");
         require(totalSellFee > 0, "!fee");
         IDQMiningStakeVault(vaultContract).distributeSellFeeFromCore(totalSellFee);
         totalSellFee = 0;

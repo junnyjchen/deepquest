@@ -698,11 +698,11 @@ export const getStakeMineLPEquityPending = async (userAddress: string): Promise<
 export const claimLPOnChain = async (
   signer: ethers.Signer
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedStakeVaultContract(signer);
+  const contract = await getSignedStakeCoreContract(signer);
 
-  console.log('[Web3] 通过 StakeVault 领取 LP 奖励');
+  console.log('[Web3] 通过 StakeCore 领取 LP 权益奖励');
 
-  const tx = await contract.claimLPReward();
+  const tx = await contract.claimLPEquityReward();
   console.log('[Web3] 交易已发送:', tx.hash);
 
   return tx;
@@ -1221,27 +1221,21 @@ export const formatAddress = (address: string, start: number = 6, end: number = 
 // ============ LP 分红和 NFT 分红查询 ============
 
 /**
- * 查询用户 LP 分红
+ * 查询用户 LP 权益分红
  * @param address 用户地址
- * @returns { lpShare: string, pendingReward: string } LP份额和待领取分红(DQ)
+ * @returns { lpShare: string, pendingReward: string } LP权益份额和待领取分红(DQ)
  */
 export const getLPReward = async (address: string): Promise<{ lpShare: string; pendingReward: string }> => {
   try {
     const contract = getStakeCoreContract();
-    const [lpShareValue, lpDebtValue, lpAccRewardValue] = await Promise.all([
-      contract.lpS(address),
-      contract.lpD(address),
-      contract.lA(),
+    const [equityInfo, pendingRewardValue] = await Promise.all([
+      contract.getLPEquityInfo(address),
+      contract.getLPEquityPending(address),
     ]);
 
-    const lpShareRaw = BigInt(lpShareValue.toString());
-    const lpDebtRaw = BigInt(lpDebtValue.toString());
-    const lpAccRewardRaw = BigInt(lpAccRewardValue.toString());
-    const pendingRewardRaw = (lpAccRewardRaw * lpShareRaw) / (10n ** 12n) - lpDebtRaw;
-    const lpShare = ethers.formatEther(lpShareRaw); // LP份额
-    const pendingReward = ethers.formatEther(
-      pendingRewardRaw > 0n ? pendingRewardRaw : 0n
-    ); // 可领取的DQ分红
+    const equityLP = BigInt(equityInfo?.[1]?.toString?.() ?? equityInfo?.[1] ?? 0);
+    const lpShare = ethers.formatEther(equityLP);
+    const pendingReward = ethers.formatEther(BigInt(pendingRewardValue ?? 0));
     
     console.log('[Web3] LP分红查询:', { lpShare, pendingReward });
     return { lpShare, pendingReward };
@@ -1387,18 +1381,29 @@ export const addLiquidityOnChain = async (
 export const withdrawLPOnChain = async (
   signer: ethers.Signer
 ): Promise<ethers.TransactionResponse> => {
-  const userAddress = await signer.getAddress();
-  const stakeReadContract = getStakeCoreContract();
   const contract = await getSignedStakeCoreContract(signer);
-  const lpAmount = await stakeReadContract.getLP(userAddress).catch(() => 0n);
+  const userAddress = await signer.getAddress();
+  const [, equityLP, , walletLP] = await contract.getLPEquityInfo(userAddress).catch(() => [0n, 0n, 0n, 0n]);
+  const removableLP = BigInt(equityLP ?? 0n);
+  const walletLPBalance = BigInt(walletLP ?? 0n);
 
-  if (BigInt(lpAmount) <= 0n) {
-    throw new Error('当前没有可提取的 LP 份额');
+  if (removableLP <= 0n) {
+    throw new Error('当前没有可取消的 LP 权益');
+  }
+  if (walletLPBalance <= 0n) {
+    throw new Error('当前钱包中没有可用于取消权益的 LP 代币');
   }
 
-  console.log('[Web3] 从 StakeCore 提取全部 LP');
+  try {
+    await contract.cancelAllLPEquity.staticCall();
+  } catch (error) {
+    console.error('[Web3] cancelAllLPEquity staticCall 失败:', error);
+    throw error;
+  }
 
-  const tx = await contract.withdrawLP(lpAmount);
+  console.log('[Web3] 从 StakeCore 取消全部 LP 权益');
+
+  const tx = await contract.cancelAllLPEquity();
   console.log('[Web3] 取消 LP 交易已发送:', tx.hash);
 
   return tx;
@@ -1410,8 +1415,8 @@ export const withdrawLPOnChain = async (
 export const getUserLPShares = async (userAddress: string): Promise<string> => {
   try {
     const contract = getStakeCoreContract();
-    const shares = await contract.getLP(userAddress);
-    return ethers.formatEther(shares);
+    const [, equityLP] = await contract.getLPEquityInfo(userAddress);
+    return ethers.formatEther(equityLP ?? 0n);
   } catch (error) {
     console.error('[Web3] 获取 LP 份额失败:', error);
     return '0';

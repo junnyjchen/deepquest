@@ -207,7 +207,7 @@ contract DQT is ERC20, Ownable, ERC20Burnable {
         address[] calldata recipients, 
         uint256[] calldata amounts,
         uint256 burnAmount
-    ) external {
+    ) external onlyMinter {
         require(pool != address(0), "Pool not set");
         require(recipients.length == amounts.length, "Length mismatch");
         
