@@ -40,10 +40,10 @@ interface IDQT {
 
 // DQMCore接口
 interface IDQMCore {
-    function subEnergy(address user, uint256 amount) external;
     function getUserEnergy(address user) external view returns (uint256);
     function getUserTotalInvest(address user) external view returns (uint256);
     function isBlacklisted(address user) external view returns (bool);
+    function setReferrer(address _user, address _referrer) external;
 }
 
 // PancakeSwap Router接口（用于移除流动性）
@@ -66,10 +66,6 @@ interface IPancakeRouter01 {
         address to,
         uint256 deadline
     ) external returns (uint256 amountA, uint256 amountB);
-}
-
-interface IDQMiningStakeVault {
-    function distributeSellFeeFromCore(uint256 amount) external;
 }
 
 contract DQMiningStakeCore is ReentrancyGuard {
@@ -135,6 +131,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
     mapping(address => uint8) public userNodeLevel;      // 节点等级
     mapping(address => uint8) public userLevel;          // 用户等级 (S1-S6)
     mapping(address => address) public userReferrer;
+    mapping(address => uint256) public directCount;    // 直推人数统计
     mapping(address => EnumerableSet.AddressSet) internal userChildren;
     
     // LP数据
@@ -181,7 +178,6 @@ contract DQMiningStakeCore is ReentrancyGuard {
     // 团队业绩 (用于L等级自动升级)
     mapping(address => uint256) public teamSales;  // 用户团队总业绩
     mapping(address => mapping(address => uint256)) public directBranchSales;  // 直推分支业绩: user => directChild => branchSales
-    uint256 public totalSellFee;  // 累计卖出税
     
     // L等级升级阈值 (团队业绩)
     uint256[6] public levelThresholds = [
@@ -192,9 +188,6 @@ contract DQMiningStakeCore is ReentrancyGuard {
         6000 ether,   // S5: 6000 SOL
         20000 ether   // S6: 20000 SOL
     ];
-    
-    // 迁移合约
-    address public migratorContract;
     
     // 能量倍率
     uint256 public energyMul = 3;  // 默认3倍能量
@@ -217,6 +210,7 @@ contract DQMiningStakeCore is ReentrancyGuard {
     event DRankRewardClaimed(address indexed user, uint8 dLevel, uint256 amount);
     event LPMigrated(address indexed user, uint256 lpAmount, uint256 energy);
     event LevelChanged(address indexed user, uint8 level);
+    event ReferrerSet(address indexed user, address indexed referrer);
     event TeamSalesUpdated(address indexed user, uint256 amount, uint256 totalTeamSales);
     event AutoUpgraded(address indexed user, uint8 oldLevel, uint8 newLevel);
     event LPEquityAuthorized(address indexed user, uint256 amount);
@@ -422,11 +416,6 @@ contract DQMiningStakeCore is ReentrancyGuard {
     
     function addEnergy(address _u, uint256 _a) external onlyMining {
         userEnergy[_u] += _a;
-        emit EnergyChanged(_u, userEnergy[_u]);
-    }
-    
-    function subEnergy(address _u, uint256 _a) external onlyMining {
-        userEnergy[_u] = _a > userEnergy[_u] ? 0 : userEnergy[_u] - _a;
         emit EnergyChanged(_u, userEnergy[_u]);
     }
     
@@ -667,8 +656,8 @@ contract DQMiningStakeCore is ReentrancyGuard {
         // 3. 从用户钱包拉取LP代币（用户需先approve LP给StakeCore）
         IERC20(lpPair).safeTransferFrom(msg.sender, address(this), actualAmount);
         
-        // 4. 破除流动性（removeLiquidity）
-        IERC20(lpPair).forceApprove(lpRouter, _amount);
+        // 4. 批准Router支配LP（removeLiquidity需要）
+        IERC20(lpPair).approve(lpRouter, actualAmount);
         (uint256 amountSOL, uint256 amountDQ) = IPancakeRouter01(lpRouter).removeLiquidity(
             SOL,
             dqToken,
@@ -749,8 +738,8 @@ contract DQMiningStakeCore is ReentrancyGuard {
         // 3. 从用户钱包拉取LP代币（用户需先approve LP给StakeCore）
         IERC20(lpPair).safeTransferFrom(msg.sender, address(this), actualAmount);
         
-        // 4. 破除流动性
-        IERC20(lpPair).forceApprove(lpRouter, actualAmount);
+        // 4. 批准Router支配LP
+        IERC20(lpPair).approve(lpRouter, actualAmount);
         (uint256 amountSOL, uint256 amountDQ) = IPancakeRouter01(lpRouter).removeLiquidity(
             SOL,
             dqToken,
@@ -816,10 +805,6 @@ contract DQMiningStakeCore is ReentrancyGuard {
         require(lpEquity[msg.sender] > 0, "!equity");
         require(totalLPEquity > 0, "!total");
         
-        // 检查能量
-        uint256 userE = IDQMCore(coreContract).getUserEnergy(msg.sender);
-        require(userE > 0, "!energy");
-        
         // 计算用户应得奖励
         uint256 pending = lpEquity[msg.sender] * lA / totalLPEquity;
         uint256 reward = pending - lpEquityDebt[msg.sender];
@@ -827,9 +812,6 @@ contract DQMiningStakeCore is ReentrancyGuard {
         require(reward > 0, "!reward");
         
         lpEquityDebt[msg.sender] = pending;
-        
-        // 扣减能量
-        IDQMCore(coreContract).subEnergy(msg.sender, reward);
         
         IERC20(dqToken).safeTransfer(msg.sender, reward);
         emit LPEquityRewardClaimed(msg.sender, reward);
@@ -863,9 +845,60 @@ contract DQMiningStakeCore is ReentrancyGuard {
         userLevel[_user] = _level;
         emit LevelChanged(_user, _level);
     }
-    
+
     /**
-     * @notice 设置用户L等级（供节点卡合约调用，购买A/B/C卡自动设S1/S2/S3）
+     * @notice 批量导入用户推荐关系（供管理合约调用）
+     * @param _users 用户地址数组
+     * @param _referrers 推荐人地址数组
+     * @dev 必须在用户首次入金前调用，否则推荐关系不会更新
+     */
+    function batchImportReferrers(address[] calldata _users, address[] calldata _referrers) external onlyOwner {
+        require(_users.length == _referrers.length, "!len");
+        require(_users.length > 0, "!empty");
+        
+        for (uint256 i = 0; i < _users.length; i++) {
+            address user = _users[i];
+            address ref = _referrers[i];
+            if (user == address(0) || ref == address(0)) continue;
+            if (user == ref) continue;
+            if (userReferrer[user] != address(0)) continue; // 已存在不覆盖
+            
+            userReferrer[user] = ref;
+            directCount[ref] += 1;
+            IDQMCore(coreContract).setReferrer(user, ref);
+            emit ReferrerSet(user, ref);
+        }
+    }
+
+    /**
+     * @notice 设置用户推荐人（由DQMCore注册时调用）
+     */
+    function setReferrer(address _user, address _referrer) external onlyCore {
+        require(_user != address(0) && _referrer != address(0), "!addr");
+        require(_user != _referrer, "!self");
+        if (userReferrer[_user] == address(0)) {
+            userReferrer[_user] = _referrer;
+            directCount[_referrer] += 1;
+            emit ReferrerSet(_user, _referrer);
+        }
+    }
+
+    /**
+     * @notice 设置用户推荐人（单个）
+     */
+    function importUserReferrer(address _user, address _referrer) external onlyOwner {
+        require(_user != address(0) && _referrer != address(0), "!addr");
+        require(_user != _referrer, "!self");
+        require(userReferrer[_user] == address(0), "!exists");
+        
+        userReferrer[_user] = _referrer;
+        directCount[_referrer] += 1;
+        IDQMCore(coreContract).setReferrer(_user, _referrer);
+        emit ReferrerSet(_user, _referrer);
+    }
+
+    /**
+     * @notice 设置用户L等级
      * @param _user 用户地址
      * @param _level 等级 (1-6 对应 S1-S6)
      */
@@ -884,10 +917,6 @@ contract DQMiningStakeCore is ReentrancyGuard {
     /**
      * @notice 设置迁移合约地址
      */
-    function setMigratorContract(address _migrator) external onlyOwner {
-        migratorContract = _migrator;
-    }
-    
     // ============ 三奖分配 ============
     
     /**
@@ -1035,23 +1064,11 @@ contract DQMiningStakeCore is ReentrancyGuard {
     }
     
     /**
-     * @notice 直接提取SOL到用户（管理员操作）
+     * @notice 查询用户待领取SOL推荐奖励
+     * @dev 实际领取请使用 DQMCore.withdrawSOL(amount)，会扣10%手续费
      */
-    function withdrawSOLDirect(address _user, uint256 _amount) external onlyOwner {
-        require(_amount <= userPendingSOL[_user], "!balance");
-        userPendingSOL[_user] -= _amount;
-        IERC20(SOL).safeTransfer(_user, _amount);
-        emit WithdrawSOL(_user, _amount);
-    }
-
-    /**
-     * @notice 卖出税分红代理 - 转发给Vault合约处理
-     */
-    function distributeSellFee() external {
-        require(msg.sender == adminContract || msg.sender == OWNER, "!auth");
-        require(totalSellFee > 0, "!fee");
-        IDQMiningStakeVault(vaultContract).distributeSellFeeFromCore(totalSellFee);
-        totalSellFee = 0;
+    function claimPendingSOL() external view returns (uint256) {
+        return userPendingSOL[msg.sender];
     }
 
     // ============ 爆块奖励分配（由爆块合约调用） ============
@@ -1154,13 +1171,6 @@ contract DQMiningStakeCore is ReentrancyGuard {
     
     // ============ 单币质押 & LP奖励 已拆分到 DQMiningStakeVault.sol ============
     
-    address public vaultContract;
-    
-    function setVaultContract(address _vault) external onlyOwner {
-        vaultContract = _vault;
-    }
-
-    
     // ============ DQ提取 ============
     
     function withdrawBlockDQ(address _user) external onlyMining {
@@ -1184,47 +1194,10 @@ contract DQMiningStakeCore is ReentrancyGuard {
     
     // ============ 查询函数 ============
     
-    function getPendingSOL(address _user) external view returns (uint256) {
-        return userPendingSOL[_user];
-    }
-    
-    function getEnergy(address _user) external view returns (uint256) {
-        return userEnergy[_user];
-    }
-    
-    function getDirectSales(address _user) external view returns (uint256) {
-        return userDirectSales[_user];
-    }
-    
-    function getUserNodeLevel(address _u) external view returns (uint8) {
-        return userNodeLevel[_u];
-    }
-    
     function getChildCount(address _u) external view returns (uint256) {
         return userChildren[_u].length();
     }
-    
-    function getLP(address _u) external view returns (uint256) {
-        return lpS[_u];
-    }
-    
-    /**
-     * @notice 查询用户团队业绩
-     */
-    function getTeamSales(address _user) external view returns (uint256) {
-        return teamSales[_user];
-    }
-    
-    /**
-     * @notice 查询用户L等级
-     */
-    function getUserLevel(address _user) external view returns (uint8) {
-        return userLevel[_user];
-    }
-    
-    /**
-     * @notice 根据团队业绩计算用户应该的等级
-     */
+
     function calculateLevel(address _user) external view returns (uint8) {
         uint256 sales = teamSales[_user];
         if (sales >= levelThresholds[5]) return 6;

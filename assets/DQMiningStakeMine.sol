@@ -22,6 +22,7 @@ contract DQMiningStakeMine is Ownable, ReentrancyGuard {
     address public foundation;     // 基金会
     address public founder;        // 创始人/合伙人地址 (0x803B79B608455808C2f752c588804c3F5bF676a3)
     address public dLevelPool;     // D等级池
+    address public adminContract;  // 管理员合约
     
     // 爆块参数
     uint256 public constant DAILY_RELEASE_RATE = 13; // 1.3% (基点)
@@ -108,7 +109,15 @@ contract DQMiningStakeMine is Ownable, ReentrancyGuard {
     /**
      * @dev 设置上次爆块时间（管理员可重置，用于首次爆块或特殊情况）
      */
-    function setLastMineTime(uint256 _time) external onlyOwner {
+    function setAdminContract(address _admin) external onlyOwner {
+        adminContract = _admin;
+    }
+
+    /**
+     * @notice 设置爆块时间（紧急重置）
+     */
+    function setLastMineTime(uint256 _time) external {
+        require(msg.sender == owner() || msg.sender == adminContract, "!owner");
         lastMineTime = _time;
     }
     
@@ -164,10 +173,8 @@ contract DQMiningStakeMine is Ownable, ReentrancyGuard {
         // 检查时间 (至少间隔1天)
         require(block.timestamp >= lastMineTime + 1 days, "Too early");
         
-        // 计算剩余未爆块量（取理论剩余和底池实际余额的最小值）
-        uint256 theoreticalRemaining = initialTotalSupply - totalMined;
-        uint256 poolBal = getPoolBalance();
-        uint256 remaining = theoreticalRemaining < poolBal ? theoreticalRemaining : poolBal;
+        // 计算剩余未爆块量 = 总供应量 - 已爆块总量
+        uint256 remaining = initialTotalSupply - totalMined;
         if (remaining == 0) {
             lastMineTime = block.timestamp;
             return;
@@ -324,13 +331,9 @@ contract DQMiningStakeMine is Ownable, ReentrancyGuard {
         nextMineTime = lastMineTime + 1 days;
         currentBurnRate = _getCurrentBurnRate();
         
-        // 查询底池余额
-        (bool success, bytes memory data) = address(dqToken).staticcall(
-            abi.encodeWithSignature("poolBalance()")
-        );
-        uint256 poolBalance = success ? abi.decode(data, (uint256)) : 0;
-        
-        estimatedRelease = poolBalance * DAILY_RELEASE_RATE / 10000;
+        // 计算剩余未爆块量 = 总供应量 - 已爆块总量
+        uint256 remaining = initialTotalSupply - totalMined;
+        estimatedRelease = remaining * DAILY_RELEASE_RATE / 10000;
         estimatedBurn = estimatedRelease * currentBurnRate / 10000;
         estimatedDistribute = estimatedRelease - estimatedBurn;
     }

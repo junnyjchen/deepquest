@@ -219,6 +219,11 @@ contract DQMCore is ReentrancyGuard {
         users[referrer].children.add(msg.sender);
         allUsers.push(msg.sender);
         
+        // 同步推荐关系到StakeCore
+        if (stakeContract != address(0)) {
+            IDQMiningStake(stakeContract).setReferrer(msg.sender, referrer);
+        }
+        
         emit Register(msg.sender, referrer);
     }
     
@@ -794,4 +799,5 @@ interface IDQMiningStake {
     function recordLP(address _user, uint256 _lpAmount) external;
     function withdrawSOL(address _user, uint256 _amount) external;
     function userLevel(address _user) external view returns (uint8);
+    function setReferrer(address _user, address _referrer) external;
 }

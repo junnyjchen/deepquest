@@ -24,7 +24,6 @@ interface IDQMiningStakeCore {
 
 interface IDQMCoreForVault {
     function getUserEnergy(address _user) external view returns (uint256);
-    function subEnergy(address _user, uint256 _amount) external;
     function isBlacklisted(address _user) external view returns (bool);
 }
 
@@ -114,10 +113,6 @@ contract DQMiningStakeVault is Ownable, ReentrancyGuard {
         uint256 _totalLPEquity = core.totalLPEquitySupply();
         require(_tLP > 0 || _totalLPEquity > 0, "!total");
         
-        // 检查能量 - 没有能量不能领取奖励
-        uint256 userE = IDQMCoreForVault(coreContract).getUserEnergy(msg.sender);
-        require(userE > 0, "!energy");
-        
         uint256 lA = core.lpAccumulator();
         uint256 totalReward = 0;
         
@@ -146,9 +141,6 @@ contract DQMiningStakeVault is Ownable, ReentrancyGuard {
         // 扣除10%手续费
         uint256 fee = totalReward * CLAIM_FEE / 10000;
         uint256 actualReward = totalReward - fee;
-        
-        // 扣减能量
-        IDQMCoreForVault(coreContract).subEnergy(msg.sender, actualReward);
         
         // 手续费三方分配：30%基金会、30%合伙人、40%固定节点
         if (fee > 0) {

@@ -373,7 +373,7 @@ const diagnoseDepositOverflow = async (
     const [userRes, dqCardAddr, userEnergyRaw] = await Promise.all([
       contract.getUser(userAddress),
       contract.dqCard().catch(() => CONTRACT_ADDRESSES.DQCARD.address),
-      diagStakeContract.getEnergy(userAddress).catch(() => 0n),
+      diagStakeContract.userEnergy(userAddress).catch(() => 0n),
     ]);
 
     const referrer = String(userRes?.[0] || ethers.ZeroAddress);
@@ -383,7 +383,7 @@ const diagnoseDepositOverflow = async (
 
     const cardContract = getContract(dqCardAddr, DQCARD_ABI);
     const [referrerEnergyRaw, referrerNftBalance] = await Promise.all([
-      diagStakeContract.getEnergy(referrer).catch(() => 0n),
+      diagStakeContract.userEnergy(referrer).catch(() => 0n),
       cardContract.balanceOf(referrer).catch(() => 0n),
     ]);
 
@@ -814,7 +814,7 @@ export const claimNFTOnChain = async (
   const contract = await getSignedStakeCoreContract(signer);
   const userAddress = await signer.getAddress();
 
-  const nodeLevel = Number(await contract.getUserNodeLevel(userAddress).catch(() => 0));
+  const nodeLevel = Number(await contract.userNodeLevel(userAddress).catch(() => 0));
   if (nodeLevel <= 0) {
     throw new Error('当前地址没有可领取节点奖励的节点等级');
   }
@@ -862,7 +862,7 @@ export const claimSOLOnChain = async (
   const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
   const userAddress = await signer.getAddress();
   const stakeContract = getStakeCoreContract();
-  const pending = await stakeContract.getPendingSOL(userAddress).catch(() => 0n);
+  const pending = await stakeContract.userPendingSOL(userAddress).catch(() => 0n);
 
   if (BigInt(pending) <= 0n) {
     throw new Error('当前没有可领取的 SOL 奖励');
@@ -929,12 +929,12 @@ export const claimStakeRewardOnChain = async (
 };
 
 /**
- * 获取待领取直推 SOL 奖励（从 DQSTAKE 合约读取 getPendingSOL）
+ * 获取待领取直推 SOL 奖励（从 DQSTAKE 合约读取 userPendingSOL）
  */
 export const getPendingReward = async (userAddress: string): Promise<string> => {
   try {
     const contract = getStakeCoreContract();
-    const pending = await contract.getPendingSOL(userAddress);
+    const pending = await contract.userPendingSOL(userAddress);
     return ethers.formatEther(pending);
   } catch (error) {
     console.error('[Web3] 获取待领取直推奖励失败:', error);
@@ -985,7 +985,7 @@ export const getPendingStakeReward = async (userAddress: string, periodIndex: nu
 export const getUserTeamInvest = async (userAddress: string): Promise<string> => {
   try {
     const contract = getStakeCoreContract();
-    const value = await contract.getTeamSales(userAddress);
+    const value = await contract.teamSales(userAddress);
     return ethers.formatEther(value);
   } catch (error) {
     console.error('[Web3] 获取团队业绩失败:', error);
@@ -1022,12 +1022,12 @@ export const getUserDLevel = async (userAddress: string): Promise<number | null>
 };
 
 /**
- * 获取待领取 SOL 金额（从 DQSTAKE 合约读取）
+ * 获取待领取 SOL 金额（从 DQSTAKE 合约读取 userPendingSOL）
  */
 export const getPendingSOL = async (userAddress: string): Promise<string> => {
   try {
     const contract = getStakeCoreContract();
-    const pending = await contract.getPendingSOL(userAddress);
+    const pending = await contract.userPendingSOL(userAddress);
     return ethers.formatEther(pending);
   } catch (error) {
     console.error('[Web3] 获取待领取 SOL 失败:', error);
@@ -1253,7 +1253,7 @@ export const getLPReward = async (address: string): Promise<{ lpShare: string; p
 export const getNFTReward = async (address: string): Promise<string> => {
   try {
     const stakeContract = getStakeCoreContract();
-    const nodeLevel = Number(await stakeContract.getUserNodeLevel(address));
+    const nodeLevel = Number(await stakeContract.userNodeLevel(address));
     if (nodeLevel <= 0) {
       return '0';
     }

@@ -12,27 +12,27 @@ export const DQCARD_ABI = ABI_SOURCE.DQCARD_ABI as InterfaceAbi;
 
 export const CONTRACT_ADDRESSES = {
   DQPROJECT: {
-    address: '0x3c07e260CB39FefF5DC2893AB3E9e85e5B115253',
+    address: '0x15f6Cc620078f3CfE3FC3cA1290f7471cF404867',
     name: 'DQMCore',
   },
   DQSTAKE: {
-    address: '0xaC4218d9b3c135027DdfF7ebe73dB4bF1DE527C8',
+    address: '0xb56549F28A33d3562D3D87465dB234FC05Bc8E0d',
     name: 'DQStakeCore',
   },
   DQSTAKEMINE: {
-    address: '0xcF6B223f3E1ecFCCeC76EBB49Bf695EEac959799',
+    address: '0x2C56251b0d0021F82C19aE8cbC48BC46fAaC28f9',
     name: 'DQStakeMine',
   },
   DQSTAKEVAULT: {
-    address: '0x6231aDc19a9870Ac4cdc45101Df61f7954c02792',
+    address: '0xf90605334e85d3C8d0d9022F93BC2dfBAe4B20Db',
     name: 'DQStakeVault',
   },
   DQTOKEN: {
-    address: '0x9CC5c62345BCf133754126007b8Dff1a546E130F',
+    address: '0x60c28616374579D7483BBb5f26fF319b0748576a',
     name: 'DQToken',
   },
   DQCARD: {
-    address: '0x1d6a57144F263B7c8BD4f4bbB9A9516aabd756A4',
+    address: '0xbe5a39720fDB02fDf744F592350bAB9cd882e785',
     name: 'DQCard',
   },
   SOL: {
@@ -52,7 +52,7 @@ export const SOL_CONTRACT_ADDRESS = CONTRACT_ADDRESSES.SOL.address;
 export const DQ_ABI = DQPROJECT_ABI;
 
 // Pair 地址在当前仓库里没有新的部署来源，先保留现网配置。
-export const AVE_PAIR_ADDRESS = '0xe7f2cf83b91d6738813d9d5bfce209ea03c06979';
+export const AVE_PAIR_ADDRESS = '0x79de8b515dc8e4d78b1fca79e89d8971182cb2c2';
 
 export const AVE_PAIR_ABI = [
   {
