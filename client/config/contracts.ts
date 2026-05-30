@@ -12,15 +12,15 @@ export const CONTRACT_ADDRESSES = {
     name: 'DQMCore'
   },
   DQSTAKE: {
-    address: '0x85048453494D566B3380597BBDB620908c6Cda2b',
+    address: '0x824C299Af554fefeAB73308AaA8798B1408cBd30',
     name: 'DQStakeCore'
   },
   DQSTAKEMINE: {
-    address: '0x56EB211640313d5321B703cd85D80Eb61C5e7cfb',
+    address: '0xA40d0d0C5140D6Dd8A34BDC18E5178B87d189700',
     name: 'DQStakeMine'
   },
   DQSTAKEVAULT: {
-    address: '0xFbD0B35C2B9e97c0a381677cCc2006C7Abe02aDE',
+    address: '0x0E60e72180f51abFE3cE488B0AeD8bAcDb0DA1Ac',
     name: 'DQStakeVault'
   },
   DQTOKEN: {
