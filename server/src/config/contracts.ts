@@ -5,7 +5,7 @@ import type { InterfaceAbi } from 'ethers';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const ABI_ASSETS_DIR = path.resolve(__dirname, '../../../assets');
+const ABI_ASSETS_DIR = path.resolve(__dirname, '../../assets');
 
 function extractJsonArray(raw: string, fileName: string): string {
   const start = raw.indexOf('[');
