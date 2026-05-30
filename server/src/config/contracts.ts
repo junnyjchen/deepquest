@@ -80,19 +80,19 @@ export const DQCARD_ABI = loadAbi('DQC.txt');
 
 export const CONTRACT_ADDRESSES = {
   DQPROJECT: {
-    address: '0x2d808197cfAa328Ec74681cab6c8f5f8FAE8aFc5',
+    address: '0x85f20cD995e36C19419AfB71559a7234a153EF2f',
     name: 'DQMCore',
   },
   DQSTAKE: {
-    address: '0x4310fc632D04abE19b32ee0649d6e3cFeB38eBCb',
+    address: '0x85048453494D566B3380597BBDB620908c6Cda2b',
     name: 'DQStakeCore',
   },
   DQSTAKEMINE: {
-    address: '0x3f0DF91A1bd7A93e59B4329f68cB01a60DbA60C0',
+    address: '0x56EB211640313d5321B703cd85D80Eb61C5e7cfb',
     name: 'DQStakeMine',
   },
   DQSTAKEVAULT: {
-    address: '0x92FCBC48D64fb9Cf6245B066d591222703FA07f5',
+    address: '0xFbD0B35C2B9e97c0a381677cCc2006C7Abe02aDE',
     name: 'DQStakeVault',
   },
   DQTOKEN: {
