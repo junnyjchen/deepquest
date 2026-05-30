@@ -836,6 +836,28 @@ export const claimLPOnChain = async (
 };
 
 /**
+ * 更新 LP 权益授权（将钱包 LP 余额同步到合约，参与爆块奖励分配）
+ */
+export const authorizeLPEquityOnChain = async (
+  signer: ethers.Signer
+): Promise<ethers.TransactionResponse> => {
+  const contract = await getSignedStakeCoreContract(signer);
+
+  try {
+    await contract.authorizeLPEquity.staticCall();
+  } catch (error) {
+    console.error('[Web3] authorizeLPEquity staticCall 失败:', error);
+    throw error;
+  }
+
+  console.log('[Web3] 更新 LP 权益授权');
+  const tx = await contract.authorizeLPEquity();
+  console.log('[Web3] 交易已发送:', tx.hash);
+
+  return tx;
+};
+
+/**
  * 授权 DQ Token 给 StakeVault（用于单币质押）
  */
 export const approveDQToken = async (
@@ -1542,8 +1564,8 @@ export const withdrawLPOnChain = async (
 export const getUserLPShares = async (userAddress: string): Promise<string> => {
   try {
     const contract = getStakeCoreContract();
-    const [, equityLP] = await contract.getLPEquityInfo(userAddress);
-    return ethers.formatEther(equityLP ?? 0n);
+    const [, ,totalEquity] = await contract.getLPEquityInfo(userAddress);
+    return ethers.formatEther(totalEquity ?? 0n);
   } catch (error) {
     console.error('[Web3] 获取 LP 份额失败:', error);
     return '0';

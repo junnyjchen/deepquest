@@ -538,6 +538,11 @@ export default {
     lpValue: 'LP 제거 시 SOL과 DQ 반환',
     removeLPTip: 'LP 제거 시 투자한 SOL과 DQ 토큰이 반환됩니다',
     confirmRemoveLP: 'LP 제거 확인',
+    activationModalDesc: '지갑이 아직 온체인 등록되지 않았습니다. 활성화 후 LP 입금 등의 작업이 가능합니다.',
+    activationStep1: '1. 유효한 노드 추천인 주소를 입력하세요',
+    activationStep2: '2. "지금 활성화"를 클릭하여 온체인 등록 시작',
+    activationStep3: '3. 지갑에서 트랜잭션을 확인하고 온체인 확인을 기다리세요',
+    updateLP: 'LP 업데이트',
     connectWalletFirst: '먼저 지갑을 연결하세요',
     // Alert messages
     alert: {
@@ -552,6 +557,11 @@ export default {
       noLPToRemove: '제거할 LP가 없습니다',
       removeLPSuccess: 'LP 제거 성공!',
       removeLPFailed: '제거 실패',
+      updateLPSuccessMsg: 'LP 지분 권한이 업데이트되었습니다',
+      updateLPFailedTitle: '업데이트 실패',
+      updateLPFailedMsg: 'LP 지분 권한 업데이트 실패',
+      cancelledSign: '서명이 취소되었습니다',
+      addLPCancelled: '지갑 서명을 취소했습니다. 입금이 처리되지 않았습니다.',
     },
   },
   help: {

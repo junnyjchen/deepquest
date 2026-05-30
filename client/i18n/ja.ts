@@ -538,6 +538,11 @@ export default {
     lpValue: 'LP解除でSOLとDQが返金されます',
     removeLPTip: 'LP解除で投資したSOLとDQトークンが返金されます',
     confirmRemoveLP: 'LP解除を確認',
+    activationModalDesc: 'ウォレットはまだチェーン上に登録されていません。有効化後、LP入金などの操作が可能になります。',
+    activationStep1: '1. 有効なノード紹介者アドレスを入力してください',
+    activationStep2: '2. 「今すぐ有効化」をクリックしてチェーン登録を開始',
+    activationStep3: '3. ウォレットでトランザクションを確認し、チェーン確認を待ちます',
+    updateLP: 'LP更新',
     connectWalletFirst: '先にウォレットを接続してください',
     // Alert messages
     alert: {
@@ -552,6 +557,11 @@ export default {
       noLPToRemove: '解除するLPがありません',
       removeLPSuccess: 'LP解除成功！',
       removeLPFailed: '解除失敗',
+      updateLPSuccessMsg: 'LP権益の承認を更新しました',
+      updateLPFailedTitle: '更新失敗',
+      updateLPFailedMsg: 'LP権益の承認更新に失敗しました',
+      cancelledSign: '署名がキャンセルされました',
+      addLPCancelled: 'ウォレット署名をキャンセルしました。入金は実行されませんでした。',
     },
   },
   help: {

@@ -538,6 +538,11 @@ export default {
     lpValue: 'Xóa LP sẽ trả lại SOL và DQ',
     removeLPTip: 'Xóa LP sẽ hoàn trả SOL và DQ token đã đầu tư',
     confirmRemoveLP: 'Xác nhận xóa LP',
+    activationModalDesc: 'Ví của bạn chưa đăng ký trên chuỗi. Vui lòng kích hoạt để tiến hành nạp tiền LP và các thao tác liên quan.',
+    activationStep1: '1. Điền địa chỉ người giới thiệu node hợp lệ',
+    activationStep2: '2. Nhấn "Kích hoạt ngay" để khởi tạo đăng ký trên chuỗi',
+    activationStep3: '3. Xác nhận giao dịch trong ví và chờ xác nhận trên chuỗi',
+    updateLP: 'Cập nhật LP',
     connectWalletFirst: 'Vui lòng kết nối ví trước',
     // Alert messages
     alert: {
@@ -552,6 +557,11 @@ export default {
       noLPToRemove: 'Không có LP để xóa',
       removeLPSuccess: 'Xóa LP thành công!',
       removeLPFailed: 'Xóa thất bại',
+      updateLPSuccessMsg: 'Cập nhật ủy quyền vốn chủ sở hữu LP thành công',
+      updateLPFailedTitle: 'Cập nhật thất bại',
+      updateLPFailedMsg: 'Cập nhật ủy quyền vốn chủ sở hữu LP thất bại',
+      cancelledSign: 'Đã hủy ký',
+      addLPCancelled: 'Bạn đã hủy ký ví. Nạp tiền chưa được thực hiện.',
     },
   },
   help: {

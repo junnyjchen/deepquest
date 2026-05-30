@@ -579,6 +579,11 @@ export default {
     lpValue: 'Removing LP will return SOL and DQ',
     removeLPTip: 'Removing LP will return your invested SOL and DQ tokens',
     confirmRemoveLP: 'Confirm Remove LP',
+    activationModalDesc: 'Your wallet is not yet registered on-chain. Please activate to proceed with LP deposit and related operations.',
+    activationStep1: '1. Fill in a valid node referrer address',
+    activationStep2: '2. Click "Activate Now" to initiate on-chain registration',
+    activationStep3: '3. Confirm the transaction in your wallet and wait for on-chain confirmation',
+    updateLP: 'Update LP',
     connectWalletFirst: 'Please connect wallet first',
     // Alert messages
     alert: {
@@ -593,6 +598,11 @@ export default {
       noLPToRemove: 'No LP to remove',
       removeLPSuccess: 'Remove LP successful!',
       removeLPFailed: 'Remove failed',
+      updateLPSuccessMsg: 'LP equity authorization updated successfully',
+      updateLPFailedTitle: 'Update Failed',
+      updateLPFailedMsg: 'Failed to update LP equity authorization',
+      cancelledSign: 'Signature cancelled',
+      addLPCancelled: 'You cancelled the wallet signature. Deposit was not processed.',
     },
   },
 };

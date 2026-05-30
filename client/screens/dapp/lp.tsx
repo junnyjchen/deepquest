@@ -32,6 +32,7 @@ import {
   getUserLPShares,
   registerUserOnChain,
   isUserRegisteredOnChain,
+  authorizeLPEquityOnChain,
 } from '@/utils/web3';
 
 // 颜色体系（与首页保持一致）
@@ -89,6 +90,7 @@ export default function DappLP() {
   const [solBalance, setSolBalance] = useState('0');
   const [lpShares, setLpShares] = useState('0');
   const [txPending, setTxPending] = useState(false);
+  const [lpEquityUpdating, setLpEquityUpdating] = useState(false);
   const [activeTab, setActiveTab] = useState<'add' | 'remove'>('add');
   const [isOnChainRegistered, setIsOnChainRegistered] = useState(false);
   const [activationModalVisible, setActivationModalVisible] = useState(false);
@@ -508,13 +510,52 @@ export default function DappLP() {
 
       openConfirmDialog({
         title: t('lp.alert.addLPFailed'),
-        message: isUserRejected ? '你已取消钱包签名，入金未执行。' : (error?.message || t('lp.alert.addLPFailed')),
+        message: isUserRejected ? t('lp.alert.addLPCancelled') : (error?.message || t('lp.alert.addLPFailed')),
         confirmText: t('common.confirm'),
         cancelText: '',
         type: 'danger',
       });
     } finally {
       setTxPending(false);
+    }
+  };
+
+  // 处理更新 LP 权益授权
+  const handleUpdateLPEquity = async () => {
+    if (!walletAddress) {
+      showToast.info(t('common.tips'), t('common.pleaseConnectWallet'));
+      return;
+    }
+
+    try {
+      const provider = getBrowserProvider();
+      if (!provider) {
+        openConfirmDialog({
+          title: t('lp.alert.needBrowserWallet'),
+          message: t('lp.alert.needBrowserWallet'),
+          confirmText: t('common.confirm'),
+          cancelText: '',
+          type: 'warning',
+        });
+        return;
+      }
+
+      const signer = await provider.getSigner();
+      setLpEquityUpdating(true);
+
+      const tx = await authorizeLPEquityOnChain(signer);
+      await tx.wait();
+
+      showToast.success(t('common.success'), t('lp.alert.updateLPSuccessMsg'));
+      await fetchData(walletAddress);
+    } catch (error: any) {
+      console.error('[LP] 更新 LP 权益授权失败:', error);
+      const isUserRejected =
+        error?.code === 4001 ||
+        /user rejected|user denied|cancelled|canceled/i.test(String(error?.message || ''));
+      showToast.error(t('lp.alert.updateLPFailedTitle'), isUserRejected ? t('lp.alert.cancelledSign') : (error?.message || t('lp.alert.updateLPFailedMsg')));
+    } finally {
+      setLpEquityUpdating(false);
     }
   };
 
@@ -658,7 +699,7 @@ export default function DappLP() {
                   onPress={handleActivateClick}
                 >
                   <Ionicons name="warning" size={14} color={YELLOW} />
-                  <Text className="text-sm" style={{ color: YELLOW }}>激活</Text>
+                  <Text className="text-sm" style={{ color: YELLOW }}>{t('dapp.activate')}</Text>
                 </TouchableOpacity>
               )}
 
@@ -812,13 +853,33 @@ export default function DappLP() {
                   {t('lp.removeLPTip')}
                 </Text>
               </View>
-              <View className="flex-row items-center">
-                <Text className="text-xs" style={{ color: TEXT_MUTED }}>
-                  {t('lp.myLPShares')}: 
-                </Text>
-                <Text className="text-sm font-bold ml-2" style={{ color: PURPLE }}>
-                  {parseFloat(lpShares).toFixed(4)} LP
-                </Text>
+              <View className="flex-row items-center justify-between">
+                <View className="flex-row items-center">
+                  <Text className="text-xs" style={{ color: TEXT_MUTED }}>
+                    {t('lp.myLPShares')}: 
+                  </Text>
+                  <Text className="text-sm font-bold ml-2" style={{ color: PURPLE }}>
+                    {parseFloat(lpShares).toFixed(4)} LP
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-lg"
+                  style={{
+                    backgroundColor: lpEquityUpdating ? 'rgba(0,240,255,0.1)' : 'rgba(0,240,255,0.15)',
+                    borderWidth: 1,
+                    borderColor: CYAN,
+                    opacity: lpEquityUpdating ? 0.6 : 1,
+                  }}
+                  onPress={handleUpdateLPEquity}
+                  disabled={lpEquityUpdating || !walletAddress}
+                >
+                  {lpEquityUpdating ? (
+                    <ActivityIndicator size="small" color={CYAN} />
+                  ) : (
+                    <Ionicons name="sync" size={12} color={CYAN} />
+                  )}
+                  <Text className="text-xs font-medium" style={{ color: CYAN }}>{t('lp.updateLP')}</Text>
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -863,22 +924,20 @@ export default function DappLP() {
           <View style={styles.activationModalContent}>
             <View style={styles.activationModalHeader}>
               <Ionicons name="warning" size={48} color={YELLOW} />
-              <Text style={styles.activationModalTitle}>激活账户</Text>
+              <Text style={styles.activationModalTitle}>{t('dapp.activationModalTitle')}</Text>
             </View>
 
-            <Text style={styles.activationModalDesc}>
-              当前钱包尚未完成链上注册，激活后才可进行 LP 入金与相关操作。
-            </Text>
+            <Text style={styles.activationModalDesc}>{t('lp.activationModalDesc')}</Text>
 
             <View style={styles.activationInfoBox}>
-              <Text style={styles.activationInfoLabel}>激活说明:</Text>
-              <Text style={styles.activationInfoText}>1. 需要填写有效的节点推荐人地址</Text>
-              <Text style={styles.activationInfoText}>2. 点击下方「立即激活」发起链上注册</Text>
-              <Text style={styles.activationInfoText}>3. 在钱包中确认交易并等待链上确认</Text>
+              <Text style={styles.activationInfoLabel}>{t('dapp.activationInfoLabel')}</Text>
+              <Text style={styles.activationInfoText}>{t('lp.activationStep1')}</Text>
+              <Text style={styles.activationInfoText}>{t('lp.activationStep2')}</Text>
+              <Text style={styles.activationInfoText}>{t('lp.activationStep3')}</Text>
             </View>
 
             <View style={styles.referrerInputBox}>
-              <Text style={styles.referrerInputLabel}>节点推荐人地址:</Text>
+              <Text style={styles.referrerInputLabel}>{t('dapp.referrerInputLabel')}</Text>
               <TextInput
                 style={styles.referrerInput}
                 value={activationReferrer}
@@ -895,7 +954,7 @@ export default function DappLP() {
                 style={[styles.activationModalBtn, styles.skipBtn]}
                 onPress={() => setActivationModalVisible(false)}
               >
-                <Text style={styles.skipBtnText}>稍后激活</Text>
+                <Text style={styles.skipBtnText}>{t('dapp.activateLater')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.activationModalBtn, styles.activateBtn]}
@@ -905,7 +964,7 @@ export default function DappLP() {
                 {activating ? (
                   <ActivityIndicator size="small" color={BG_DARK} />
                 ) : (
-                  <Text style={styles.activateBtnText}>立即激活</Text>
+                  <Text style={styles.activateBtnText}>{t('index.activateNow')}</Text>
                 )}
               </TouchableOpacity>
             </View>

@@ -556,6 +556,11 @@ export default {
     lpValue: '取消 LP 將返還 SOL 和 DQ',
     removeLPTip: '取消 LP 將返還您投入的 SOL 和 DQ 代幣',
     confirmRemoveLP: '確認取消 LP',
+    activationModalDesc: '當前錢包尚未完成鏈上註冊，激活後才可進行 LP 入金與相關操作。',
+    activationStep1: '1. 需要填寫有效的節點推薦人地址',
+    activationStep2: '2. 點擊下方「立即激活」發起鏈上註冊',
+    activationStep3: '3. 在錢包中確認交易並等待鏈上確認',
+    updateLP: '更新LP',
     connectWalletFirst: '請先連接錢包',
     alert: {
       connectWallet: '請先連接錢包',
@@ -569,6 +574,11 @@ export default {
       noLPToRemove: '沒有可取消的 LP',
       removeLPSuccess: '取消 LP 成功！',
       removeLPFailed: '取消失敗',
+      updateLPSuccessMsg: '更新 LP 權益授權成功',
+      updateLPFailedTitle: '更新失敗',
+      updateLPFailedMsg: '更新 LP 權益授權失敗',
+      cancelledSign: '已取消簽名',
+      addLPCancelled: '您已取消錢包簽名，入金未執行。',
     },
   },
 };
