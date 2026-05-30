@@ -248,6 +248,99 @@ const callProjectDeposit = async (
   return contract.deposit(amountInWei);
 };
 
+const DQPROJECT_REGISTER_ABI = [
+  'function register(address _referrer)',
+  'function getUser(address _user) view returns (address,uint256,uint8,uint256,uint256)',
+  'function OWNER() view returns (address)',
+  'function VERSION() view returns (uint256)',
+  'function stakeContract() view returns (address)',
+];
+
+const DQSTAKE_REGISTER_DIAG_ABI = [
+  'function coreContract() view returns (address)',
+  'function userReferrer(address) view returns (address)',
+];
+
+const getUserReferrerFromTuple = (userResult: unknown): string => {
+  if (!Array.isArray(userResult) || userResult.length === 0) {
+    return ethers.ZeroAddress;
+  }
+
+  const referrer = userResult[0];
+  return typeof referrer === 'string' ? referrer : String(referrer ?? ethers.ZeroAddress);
+};
+
+const diagnoseRegisterFailure = async (
+  signer: ethers.Signer,
+  referrer: string,
+  originalError?: unknown
+): Promise<string> => {
+  const userAddress = await signer.getAddress();
+  const provider = signer.provider ?? new ethers.JsonRpcProvider(BSC_RPC_URL);
+  const contract = new ethers.Contract(
+    CONTRACT_ADDRESSES.DQPROJECT.address,
+    DQPROJECT_REGISTER_ABI,
+    provider
+  );
+
+  const normalizedUser = ethers.getAddress(userAddress);
+  const normalizedReferrer = ethers.getAddress(referrer);
+
+  if (normalizedUser === normalizedReferrer) {
+    return '注册失败：推荐人地址不能填写当前钱包地址。';
+  }
+
+  try {
+    const [userInfo, referrerInfo, owner, version, stakeAddr] = await Promise.all([
+      contract.getUser(normalizedUser).catch(() => null),
+      contract.getUser(normalizedReferrer).catch(() => null),
+      contract.OWNER().catch(() => ethers.ZeroAddress),
+      contract.VERSION().catch(() => 0n),
+      contract.stakeContract().catch(() => ethers.ZeroAddress),
+    ]);
+
+    const userReferrer = getUserReferrerFromTuple(userInfo);
+    if (userReferrer !== ethers.ZeroAddress) {
+      return `注册失败：当前地址已注册，上级为 ${userReferrer}。`;
+    }
+
+    const referrerOnChain = getUserReferrerFromTuple(referrerInfo);
+    const normalizedOwner = typeof owner === 'string' ? ethers.getAddress(owner) : ethers.ZeroAddress;
+    if (referrerOnChain === ethers.ZeroAddress && normalizedReferrer !== normalizedOwner) {
+      return `注册失败：推荐人 ${normalizedReferrer} 当前未在主合约注册。按源码本应回退绑定到平台地址 ${normalizedOwner}，但链上实际发生了空 revert，说明部署合约与源码逻辑可能不一致。`;
+    }
+
+    if (typeof stakeAddr === 'string' && stakeAddr !== ethers.ZeroAddress) {
+      const stakeContract = new ethers.Contract(stakeAddr, DQSTAKE_REGISTER_DIAG_ABI, provider);
+      const [coreContract, stakeReferrer] = await Promise.all([
+        stakeContract.coreContract().catch(() => ethers.ZeroAddress),
+        stakeContract.userReferrer(normalizedReferrer).catch(() => ethers.ZeroAddress),
+      ]);
+
+      if (
+        typeof coreContract === 'string' &&
+        coreContract !== ethers.ZeroAddress &&
+        ethers.getAddress(coreContract) !== ethers.getAddress(CONTRACT_ADDRESSES.DQPROJECT.address)
+      ) {
+        return `注册失败：StakeCore 当前绑定的主合约是 ${coreContract}，不是前端配置的 ${CONTRACT_ADDRESSES.DQPROJECT.address}。管理员需要先修正 StakeCore.coreContract。`;
+      }
+
+      if (typeof stakeReferrer === 'string' && stakeReferrer === ethers.ZeroAddress && referrerOnChain !== ethers.ZeroAddress) {
+        return `注册失败：主合约识别到推荐人 ${normalizedReferrer} 已注册，但 StakeCore 里还没有这条推荐关系。register 会在同步 StakeCore 时回退，需管理员补齐 StakeCore 数据。`;
+      }
+    }
+
+    if (typeof version === 'bigint' && version >= 11n) {
+      return `注册失败：链上 DQMCore V${version.toString()} 在执行 register 时发生空 revert。当前账户未注册，推荐人已注册，主合约和 StakeCore 绑定也正常，因此更像是部署字节码与仓库源码不一致，或 StakeCore 内部状态异常。需要管理员直接排查 ${CONTRACT_ADDRESSES.DQPROJECT.address} 的 register 调用。`;
+    }
+  } catch (diagnoseError) {
+    console.error('[Web3] 注册失败诊断异常:', diagnoseError);
+  }
+
+  const candidate = originalError as { shortMessage?: string; reason?: string; message?: string } | undefined;
+  return candidate?.shortMessage || candidate?.reason || candidate?.message || '注册失败：链上调用被回退，且节点没有返回具体原因。';
+};
+
 
 // ============ DQProject 合约交互 ============
 
@@ -304,14 +397,48 @@ export const registerUserOnChain = async (
   signer: ethers.Signer,
   referrer: string
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+  if (!ethers.isAddress(referrer)) {
+    throw new Error('推荐人地址格式错误。');
+  }
 
-  console.log('[Web3] 链上注册用户:', await signer.getAddress(), '推荐人:', referrer);
+  const normalizedReferrer = ethers.getAddress(referrer);
+  const userAddress = ethers.getAddress(await signer.getAddress());
+  const contract = new ethers.Contract(
+    CONTRACT_ADDRESSES.DQPROJECT.address,
+    DQPROJECT_REGISTER_ABI,
+    signer
+  );
 
-  const tx = await contract.register(referrer);
-  console.log('[Web3] 交易已发送:', tx.hash);
+  console.log('[Web3] 链上注册用户:', userAddress, '推荐人:', normalizedReferrer);
 
-  return tx;
+  try {
+    const userInfo = await contract.getUser(userAddress).catch(() => null);
+    const currentReferrer = getUserReferrerFromTuple(userInfo);
+    if (currentReferrer !== ethers.ZeroAddress) {
+      throw new Error(`当前地址已注册，上级为 ${currentReferrer}`);
+    }
+
+    if (userAddress === normalizedReferrer) {
+      throw new Error('推荐人地址不能填写当前钱包地址。');
+    }
+
+    await contract.register.estimateGas(normalizedReferrer);
+  } catch (error) {
+    const diagnosis = await diagnoseRegisterFailure(signer, normalizedReferrer, error);
+    console.warn('[Web3] register 预检查失败:', diagnosis);
+    throw new Error(diagnosis);
+  }
+
+  try {
+    const tx = await contract.register(normalizedReferrer);
+    console.log('[Web3] 交易已发送:', tx.hash);
+
+    return tx;
+  } catch (error) {
+    const diagnosis = await diagnoseRegisterFailure(signer, normalizedReferrer, error);
+    console.warn('[Web3] register 发送交易失败:', diagnosis);
+    throw new Error(diagnosis);
+  }
 };
 
 /**

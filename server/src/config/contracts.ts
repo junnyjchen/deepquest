@@ -1,14 +1,82 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import type { InterfaceAbi } from 'ethers';
-import * as contractAbisModule from '../../../client/config/contractAbis.ts';
 
-const ABI_SOURCE = contractAbisModule as Record<string, unknown>;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const ABI_ASSETS_DIR = path.resolve(__dirname, '../../../assets');
 
-export const DQPROJECT_ABI = ABI_SOURCE.DQPROJECT_ABI as InterfaceAbi;
-export const DQSTAKE_ABI = ABI_SOURCE.DQSTAKE_ABI as InterfaceAbi;
-export const DQSTAKEMINE_ABI = ABI_SOURCE.DQSTAKEMINE_ABI as InterfaceAbi;
-export const DQSTAKEVAULT_ABI = ABI_SOURCE.DQSTAKEVAULT_ABI as InterfaceAbi;
-export const DQTOKEN_ABI = ABI_SOURCE.DQTOKEN_ABI as InterfaceAbi;
-export const DQCARD_ABI = ABI_SOURCE.DQCARD_ABI as InterfaceAbi;
+function extractJsonArray(raw: string, fileName: string): string {
+  const start = raw.indexOf('[');
+  if (start === -1) {
+    throw new Error(`ABI array not found: ${fileName}`);
+  }
+
+  let depth = 0;
+  let inString = false;
+  let isEscaped = false;
+
+  for (let index = start; index < raw.length; index++) {
+    const char = raw[index];
+
+    if (inString) {
+      if (isEscaped) {
+        isEscaped = false;
+        continue;
+      }
+
+      if (char === '\\') {
+        isEscaped = true;
+        continue;
+      }
+
+      if (char === '"') {
+        inString = false;
+      }
+
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === '[') {
+      depth++;
+      continue;
+    }
+
+    if (char === ']') {
+      depth--;
+      if (depth === 0) {
+        return raw.slice(start, index + 1);
+      }
+    }
+  }
+
+  throw new Error(`ABI array not terminated: ${fileName}`);
+}
+
+function loadAbi(fileName: string): InterfaceAbi {
+  const filePath = path.join(ABI_ASSETS_DIR, fileName);
+  const raw = fs.readFileSync(filePath, 'utf-8');
+  const parsed = JSON.parse(extractJsonArray(raw, fileName)) as unknown;
+
+  if (!Array.isArray(parsed)) {
+    throw new Error(`Invalid ABI payload: ${fileName}`);
+  }
+
+  return parsed as InterfaceAbi;
+}
+
+export const DQPROJECT_ABI = loadAbi('DQMCore.txt');
+export const DQSTAKE_ABI = loadAbi('DQMiningStakeCore.txt');
+export const DQSTAKEMINE_ABI = loadAbi('DQMiningStakeMine.txt');
+export const DQSTAKEVAULT_ABI = loadAbi('DQMiningStakeVault.txt');
+export const DQTOKEN_ABI = loadAbi('DQT.txt');
+export const DQCARD_ABI = loadAbi('DQC.txt');
 
 export const CONTRACT_ADDRESSES = {
   DQPROJECT: {
