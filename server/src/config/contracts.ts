@@ -1,11 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import type { InterfaceAbi } from 'ethers';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const ABI_ASSETS_DIR = path.resolve(__dirname, '../../assets');
+const ABI_ASSETS_DIR = path.resolve(process.cwd(), '../assets');
 
 function extractJsonArray(raw: string, fileName: string): string {
   const start = raw.indexOf('[');
@@ -84,15 +81,15 @@ export const CONTRACT_ADDRESSES = {
     name: 'DQMCore',
   },
   DQSTAKE: {
-    address: '0x824C299Af554fefeAB73308AaA8798B1408cBd30',
+    address: '0xF8045E6521d38670b139799c99bc5744FB6C7411',
     name: 'DQStakeCore',
   },
   DQSTAKEMINE: {
-    address: '0xA40d0d0C5140D6Dd8A34BDC18E5178B87d189700',
+    address: '0x97D94B53c6Fba40A339291AC7DC2b584e76b05e8',
     name: 'DQStakeMine',
   },
   DQSTAKEVAULT: {
-    address: '0x0E60e72180f51abFE3cE488B0AeD8bAcDb0DA1Ac',
+    address: '0x7049402A66851dbbaa14F147e1247A9a89344652',
     name: 'DQStakeVault',
   },
   DQTOKEN: {

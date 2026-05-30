@@ -241,14 +241,12 @@ export default function DappIndex() {
             }
             // 检查是否已绑定推荐人
             await checkInviteBinding(savedWallet);
-            //查链上数据看看是否已激活（如果本地未激活，才查链上）
-            if (!localActivated) {
-              const registered = await isUserRegisteredOnChain(savedWallet);
-              setIsOnChainRegistered(registered);
-              if (registered) {
-                // 如果链上已激活但本地未激活，说明可能是其他设备激活的，或者之前的激活状态未正确保存到本地。此时同步一次激活状态到本地。
-                await saveLocalActivation(savedWallet, true);
-              }
+  
+            const registered = await isUserRegisteredOnChain(savedWallet);
+            setIsOnChainRegistered(registered);
+            if (registered) {
+              // 如果链上已激活但本地未激活，说明可能是其他设备激活的，或者之前的激活状态未正确保存到本地。此时同步一次激活状态到本地。
+              await saveLocalActivation(savedWallet, true);
             }
           }
           
@@ -379,21 +377,6 @@ export default function DappIndex() {
           console.log('[DApp] 后端注册跳过:', err);
         }
       }
-
-      // 连接钱包之后 获取用户 DQ 和 SOL 余额，显示出来
-      try {
-        const [solBal, dqBal] = await Promise.all([
-          getSOLTokenBalance(address),
-          getDQTokenBalance(address)
-        ]);
-        setSolBalance(parseFloat(solBal).toFixed(4));
-        setDqtBalance(parseFloat(dqBal).toFixed(2));
-        console.log('[DApp] 余额更新:', { sol: solBal, dq: dqBal });
-      } catch (err) {
-        console.log('[DApp] 获取余额失败:', err);
-      }
-
-      
       // 3. 先检查本地激活状态（优先使用本地状态）
       // const localActivated = await loadLocalActivation(address);
       // if (localActivated) {
@@ -431,6 +414,19 @@ export default function DappIndex() {
           setIsOnChainRegistered(false);
         }
       // }
+              // 连接钱包之后 获取用户 DQ 和 SOL 余额，显示出来
+      try {
+        const [solBal, dqBal] = await Promise.all([
+          getSOLTokenBalance(address),
+          getDQTokenBalance(address)
+        ]);
+        setSolBalance(parseFloat(solBal).toFixed(4));
+        setDqtBalance(parseFloat(dqBal).toFixed(2));
+        console.log('[DApp] 余额更新:', { sol: solBal, dq: dqBal });
+      } catch (err) {
+        console.log('[DApp] 获取余额失败:', err);
+      }
+
     } catch (error: any) {
       console.error('连接钱包失败:', error);
       
