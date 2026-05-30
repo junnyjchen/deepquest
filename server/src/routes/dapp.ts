@@ -424,14 +424,38 @@ router.post('/bind-referrer', async (req, res) => {
       .single();
 
     if (existingUser) {
-      // 用户已存在，检查是否已有推荐人
-      if (existingUser.referrer_address) {
-        return res.status(400).json({
-          code: 400,
-          message: '您已经有推荐人了，无法重复绑定'
-        });
+      // 如果已有推荐人，并且和新的推荐人不同，则清除该用户的 team_closure 团队关系
+      if (existingUser.referrer_address && existingUser.referrer_address.toLowerCase() !== referrerLower) {
+        // 获取该用户的数字 ID
+        const { data: userIdData } = await supabase
+          .from('users')
+          .select('id')
+          .eq('wallet_address', walletLower)
+          .single();
+
+        if (userIdData) {
+          const userId: number = userIdData.id as number;
+
+          // 获取该用户子树内所有 descendant 的 ID（保留子树内部关系）
+          const { data: subtreeRows } = await supabase
+            .from('team_closure')
+            .select('descendant_id')
+            .eq('ancestor_id', userId);
+
+          const subtreeIds: number[] = [
+            userId,
+            ...(subtreeRows ?? []).map((r: { descendant_id: number }) => r.descendant_id),
+          ];
+
+          // 删除子树成员与旧祖先链路之间的所有闭包关系
+          await supabase
+            .from('team_closure')
+            .delete()
+            .in('descendant_id', subtreeIds)
+            .not('ancestor_id', 'in', `(${subtreeIds.join(',')})`);
+        }
       }
-      
+
       // 更新推荐关系
       const { error: updateError } = await supabase
         .from('users')

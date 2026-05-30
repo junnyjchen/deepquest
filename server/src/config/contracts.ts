@@ -85,15 +85,15 @@ export const CONTRACT_ADDRESSES = {
     name: 'DQStakeCore',
   },
   DQSTAKEMINE: {
-    address: '0x97D94B53c6Fba40A339291AC7DC2b584e76b05e8',
+    address: '0xCf8B03F7F89d53277D4Bc7A6B957fD35B9f15a4b',
     name: 'DQStakeMine',
   },
   DQSTAKEVAULT: {
-    address: '0x7049402A66851dbbaa14F147e1247A9a89344652',
+    address: '0x101d8D4c2f199787e7EA74ADE3d73ED4025ac8e5',
     name: 'DQStakeVault',
   },
   DQTOKEN: {
-    address: '0x60c28616374579D7483BBb5f26fF319b0748576a',
+    address: '0xc5ea8123C7595536b3F8C55A4B4AA717c9CfcbB7',
     name: 'DQToken',
   },
   DQCARD: {
@@ -117,7 +117,7 @@ export const SOL_CONTRACT_ADDRESS = CONTRACT_ADDRESSES.SOL.address;
 export const DQ_ABI = DQPROJECT_ABI;
 
 // Pair 地址在当前仓库里没有新的部署来源，先保留现网配置。
-export const AVE_PAIR_ADDRESS = '0x79de8b515dc8e4d78b1fca79e89d8971182cb2c2';
+export const AVE_PAIR_ADDRESS = '0x540a8eee2be3d8bca4d59af43f15b6f1fc0c979c';
 
 export const AVE_PAIR_ABI = [
   {
