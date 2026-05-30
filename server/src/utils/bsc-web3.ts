@@ -521,15 +521,15 @@ export async function getUserInfoFromChain(walletAddress: string) {
 
     // 额外字段：新版合约已拆分到 StakeCore 只读接口。
     const [teamInvest, energy, pendingSOL, dLevel, validAddressCount, nodeLevel] = await Promise.all([
-      withRpcRetry(() => stakeContract.getTeamSales(walletAddress), `getTeamSales(${walletAddress})`).catch(() => 0n),
+      withRpcRetry(() => stakeContract.teamSales(walletAddress), `teamSales(${walletAddress})`).catch(() => 0n),
       withRpcRetry(() => contract.getAvailableEnergy(walletAddress), `getAvailableEnergy(${walletAddress})`).catch(() => 0n),
-      withRpcRetry(() => stakeContract.getPendingSOL(walletAddress), `getPendingSOL(${walletAddress})`).catch(() => 0n),
+      withRpcRetry(() => stakeContract.userPendingSOL(walletAddress), `userPendingSOL(${walletAddress})`).catch(() => 0n),
       withRpcRetry(() => stakeContract.userDLevel(walletAddress), `userDLevel(${walletAddress})`).catch(() => 0n),
       withRpcRetry(
         () => stakeContract.countValidAddresses(walletAddress),
         `countValidAddresses(${walletAddress})`
       ).catch(() => 0n),
-      withRpcRetry(() => stakeContract.getUserNodeLevel(walletAddress), `getUserNodeLevel(${walletAddress})`).catch(() => 0n),
+      withRpcRetry(() => stakeContract.userNodeLevel(walletAddress), `userNodeLevel(${walletAddress})`).catch(() => 0n),
     ]);
 
     return {
@@ -576,17 +576,18 @@ export async function getReferralLineage(
 
       try {
         const userInfo = await withRpcRetry(
-          () => contract.users(currentAddress),
-          `users(${currentAddress})`
+          () => contract.getUser(currentAddress),
+          `getUser(${currentAddress})`
         );
 
+        const referrer = String(userInfo?.[0] || ethers.ZeroAddress).toLowerCase();
+
         // 检查是否有效用户
-        if (userInfo.referrer === ethers.ZeroAddress || userInfo.referrer === '0x0000000000000000000000000000000000000000') {
+        if (referrer === ethers.ZeroAddress || referrer === '0x0000000000000000000000000000000000000000') {
           console.log(`[BSC] 用户 ${currentAddress} 无推荐人，停止追溯`);
           break;
         }
 
-        const referrer = userInfo.referrer.toLowerCase();
         lineage.push({ address: referrer, depth });
 
         currentAddress = referrer;
