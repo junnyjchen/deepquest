@@ -3,7 +3,11 @@
 /* eslint-disable */
 export { IMintableToken__factory } from "./IMintableToken__factory";
 export { MockDQCard__factory } from "./MockDQCard__factory";
+export { MockDQMCoreForStake__factory } from "./MockDQMCoreForStake__factory";
 export { MockDQMiningStake__factory } from "./MockDQMiningStake__factory";
 export { MockERC20Token__factory } from "./MockERC20Token__factory";
+export { MockMineContract__factory } from "./MockMineContract__factory";
+export { MockPairToken__factory } from "./MockPairToken__factory";
 export { MockPancakeRouter__factory } from "./MockPancakeRouter__factory";
+export { MockPancakeRouterFull__factory } from "./MockPancakeRouterFull__factory";
 export { MockPancakeRouterV3__factory } from "./MockPancakeRouterV3__factory";

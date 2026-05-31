@@ -35,12 +35,18 @@ export interface DQCardInterface extends Interface {
       | "PRICE_A"
       | "PRICE_B"
       | "PRICE_C"
+      | "USDT"
+      | "adminContract"
       | "approve"
       | "balanceOf"
+      | "buyCard"
       | "cardType"
+      | "coreContract"
       | "getApproved"
       | "getCardPrice"
-      | "getUserNodePerformance"
+      | "getNodePerformance"
+      | "getRemainingSupply"
+      | "getUserCardCount"
       | "isApprovedForAll"
       | "miningContract"
       | "mintBatchByOwner"
@@ -51,11 +57,16 @@ export interface DQCardInterface extends Interface {
       | "renounceOwnership"
       | "safeTransferFrom(address,address,uint256)"
       | "safeTransferFrom(address,address,uint256,bytes)"
+      | "setAdminContract"
       | "setApprovalForAll"
+      | "setCoreContract"
       | "setMaxA"
       | "setMaxB"
       | "setMaxC"
       | "setMiningContract"
+      | "setStakeContract"
+      | "setTreasury"
+      | "stakeContract"
       | "supportsInterface"
       | "symbol"
       | "tokenByIndex"
@@ -67,17 +78,23 @@ export interface DQCardInterface extends Interface {
       | "totalSupply"
       | "transferFrom"
       | "transferOwnership"
-      | "updateNodePerformance"
+      | "treasury"
       | "userNodePerformance"
+      | "withdrawToken"
   ): FunctionFragment;
 
   getEvent(
     nameOrSignatureOrTopic:
+      | "AdminContractUpdated"
       | "Approval"
       | "ApprovalForAll"
+      | "CardMinted"
+      | "CardPurchased"
+      | "MaxSupplyUpdated"
       | "NodePerformanceUpdated"
       | "OwnershipTransferred"
       | "Transfer"
+      | "TreasuryUpdated"
   ): EventFragment;
 
   encodeFunctionData(functionFragment: "CARD_A", values?: undefined): string;
@@ -89,6 +106,11 @@ export interface DQCardInterface extends Interface {
   encodeFunctionData(functionFragment: "PRICE_A", values?: undefined): string;
   encodeFunctionData(functionFragment: "PRICE_B", values?: undefined): string;
   encodeFunctionData(functionFragment: "PRICE_C", values?: undefined): string;
+  encodeFunctionData(functionFragment: "USDT", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "adminContract",
+    values?: undefined
+  ): string;
   encodeFunctionData(
     functionFragment: "approve",
     values: [AddressLike, BigNumberish]
@@ -98,8 +120,16 @@ export interface DQCardInterface extends Interface {
     values: [AddressLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "buyCard",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "cardType",
     values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "coreContract",
+    values?: undefined
   ): string;
   encodeFunctionData(
     functionFragment: "getApproved",
@@ -110,8 +140,16 @@ export interface DQCardInterface extends Interface {
     values: [BigNumberish]
   ): string;
   encodeFunctionData(
-    functionFragment: "getUserNodePerformance",
+    functionFragment: "getNodePerformance",
     values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getRemainingSupply",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getUserCardCount",
+    values: [AddressLike, BigNumberish]
   ): string;
   encodeFunctionData(
     functionFragment: "isApprovedForAll",
@@ -148,8 +186,16 @@ export interface DQCardInterface extends Interface {
     values: [AddressLike, AddressLike, BigNumberish, BytesLike]
   ): string;
   encodeFunctionData(
+    functionFragment: "setAdminContract",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
     functionFragment: "setApprovalForAll",
     values: [AddressLike, boolean]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setCoreContract",
+    values: [AddressLike]
   ): string;
   encodeFunctionData(
     functionFragment: "setMaxA",
@@ -166,6 +212,18 @@ export interface DQCardInterface extends Interface {
   encodeFunctionData(
     functionFragment: "setMiningContract",
     values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setStakeContract",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setTreasury",
+    values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "stakeContract",
+    values?: undefined
   ): string;
   encodeFunctionData(
     functionFragment: "supportsInterface",
@@ -199,13 +257,14 @@ export interface DQCardInterface extends Interface {
     functionFragment: "transferOwnership",
     values: [AddressLike]
   ): string;
-  encodeFunctionData(
-    functionFragment: "updateNodePerformance",
-    values: [AddressLike, BigNumberish]
-  ): string;
+  encodeFunctionData(functionFragment: "treasury", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "userNodePerformance",
     values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "withdrawToken",
+    values: [AddressLike, AddressLike, BigNumberish]
   ): string;
 
   decodeFunctionResult(functionFragment: "CARD_A", data: BytesLike): Result;
@@ -217,9 +276,19 @@ export interface DQCardInterface extends Interface {
   decodeFunctionResult(functionFragment: "PRICE_A", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "PRICE_B", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "PRICE_C", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "USDT", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "adminContract",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "approve", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "buyCard", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "cardType", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "coreContract",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "getApproved",
     data: BytesLike
@@ -229,7 +298,15 @@ export interface DQCardInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "getUserNodePerformance",
+    functionFragment: "getNodePerformance",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getRemainingSupply",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getUserCardCount",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -264,7 +341,15 @@ export interface DQCardInterface extends Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "setAdminContract",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "setApprovalForAll",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "setCoreContract",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "setMaxA", data: BytesLike): Result;
@@ -272,6 +357,18 @@ export interface DQCardInterface extends Interface {
   decodeFunctionResult(functionFragment: "setMaxC", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "setMiningContract",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "setStakeContract",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "setTreasury",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "stakeContract",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -303,14 +400,27 @@ export interface DQCardInterface extends Interface {
     functionFragment: "transferOwnership",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(
-    functionFragment: "updateNodePerformance",
-    data: BytesLike
-  ): Result;
+  decodeFunctionResult(functionFragment: "treasury", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "userNodePerformance",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(
+    functionFragment: "withdrawToken",
+    data: BytesLike
+  ): Result;
+}
+
+export namespace AdminContractUpdatedEvent {
+  export type InputTuple = [adminContract: AddressLike];
+  export type OutputTuple = [adminContract: string];
+  export interface OutputObject {
+    adminContract: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
 }
 
 export namespace ApprovalEvent {
@@ -346,6 +456,62 @@ export namespace ApprovalForAllEvent {
     owner: string;
     operator: string;
     approved: boolean;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace CardMintedEvent {
+  export type InputTuple = [
+    to: AddressLike,
+    tokenId: BigNumberish,
+    cardType: BigNumberish
+  ];
+  export type OutputTuple = [to: string, tokenId: bigint, cardType: bigint];
+  export interface OutputObject {
+    to: string;
+    tokenId: bigint;
+    cardType: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace CardPurchasedEvent {
+  export type InputTuple = [
+    buyer: AddressLike,
+    tokenId: BigNumberish,
+    cardType: BigNumberish,
+    price: BigNumberish
+  ];
+  export type OutputTuple = [
+    buyer: string,
+    tokenId: bigint,
+    cardType: bigint,
+    price: bigint
+  ];
+  export interface OutputObject {
+    buyer: string;
+    tokenId: bigint;
+    cardType: bigint;
+    price: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace MaxSupplyUpdatedEvent {
+  export type InputTuple = [cardType: BigNumberish, newMax: BigNumberish];
+  export type OutputTuple = [cardType: bigint, newMax: bigint];
+  export interface OutputObject {
+    cardType: bigint;
+    newMax: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -390,6 +556,18 @@ export namespace TransferEvent {
     from: string;
     to: string;
     tokenId: bigint;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace TreasuryUpdatedEvent {
+  export type InputTuple = [treasury: AddressLike];
+  export type OutputTuple = [treasury: string];
+  export interface OutputObject {
+    treasury: string;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -458,6 +636,10 @@ export interface DQCard extends BaseContract {
 
   PRICE_C: TypedContractMethod<[], [bigint], "view">;
 
+  USDT: TypedContractMethod<[], [string], "view">;
+
+  adminContract: TypedContractMethod<[], [string], "view">;
+
   approve: TypedContractMethod<
     [to: AddressLike, tokenId: BigNumberish],
     [void],
@@ -466,14 +648,30 @@ export interface DQCard extends BaseContract {
 
   balanceOf: TypedContractMethod<[owner: AddressLike], [bigint], "view">;
 
+  buyCard: TypedContractMethod<[_type: BigNumberish], [void], "nonpayable">;
+
   cardType: TypedContractMethod<[arg0: BigNumberish], [bigint], "view">;
+
+  coreContract: TypedContractMethod<[], [string], "view">;
 
   getApproved: TypedContractMethod<[tokenId: BigNumberish], [string], "view">;
 
   getCardPrice: TypedContractMethod<[_type: BigNumberish], [bigint], "view">;
 
-  getUserNodePerformance: TypedContractMethod<
+  getNodePerformance: TypedContractMethod<
     [_user: AddressLike],
+    [bigint],
+    "view"
+  >;
+
+  getRemainingSupply: TypedContractMethod<
+    [],
+    [[bigint, bigint, bigint] & { a: bigint; b: bigint; c: bigint }],
+    "view"
+  >;
+
+  getUserCardCount: TypedContractMethod<
+    [_user: AddressLike, _type: BigNumberish],
     [bigint],
     "view"
   >;
@@ -487,13 +685,13 @@ export interface DQCard extends BaseContract {
   miningContract: TypedContractMethod<[], [string], "view">;
 
   mintBatchByOwner: TypedContractMethod<
-    [to: AddressLike[], _types: BigNumberish[]],
+    [_to: AddressLike[], _types: BigNumberish[]],
     [void],
     "nonpayable"
   >;
 
   mintByOwner: TypedContractMethod<
-    [to: AddressLike, _type: BigNumberish],
+    [_to: AddressLike, _type: BigNumberish],
     [void],
     "nonpayable"
   >;
@@ -523,11 +721,19 @@ export interface DQCard extends BaseContract {
     "nonpayable"
   >;
 
+  setAdminContract: TypedContractMethod<
+    [_addr: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
   setApprovalForAll: TypedContractMethod<
     [operator: AddressLike, approved: boolean],
     [void],
     "nonpayable"
   >;
+
+  setCoreContract: TypedContractMethod<[_c: AddressLike], [void], "nonpayable">;
 
   setMaxA: TypedContractMethod<[_max: BigNumberish], [void], "nonpayable">;
 
@@ -540,6 +746,20 @@ export interface DQCard extends BaseContract {
     [void],
     "nonpayable"
   >;
+
+  setStakeContract: TypedContractMethod<
+    [_s: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
+  setTreasury: TypedContractMethod<
+    [_treasury: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
+  stakeContract: TypedContractMethod<[], [string], "view">;
 
   supportsInterface: TypedContractMethod<
     [interfaceId: BytesLike],
@@ -579,16 +799,18 @@ export interface DQCard extends BaseContract {
     "nonpayable"
   >;
 
-  updateNodePerformance: TypedContractMethod<
-    [_user: AddressLike, _performance: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
+  treasury: TypedContractMethod<[], [string], "view">;
 
   userNodePerformance: TypedContractMethod<
     [arg0: AddressLike],
     [bigint],
     "view"
+  >;
+
+  withdrawToken: TypedContractMethod<
+    [_token: AddressLike, _to: AddressLike, _amount: BigNumberish],
+    [void],
+    "nonpayable"
   >;
 
   getFunction<T extends ContractMethod = ContractMethod>(
@@ -623,6 +845,12 @@ export interface DQCard extends BaseContract {
     nameOrSignature: "PRICE_C"
   ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
+    nameOrSignature: "USDT"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "adminContract"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
     nameOrSignature: "approve"
   ): TypedContractMethod<
     [to: AddressLike, tokenId: BigNumberish],
@@ -633,8 +861,14 @@ export interface DQCard extends BaseContract {
     nameOrSignature: "balanceOf"
   ): TypedContractMethod<[owner: AddressLike], [bigint], "view">;
   getFunction(
+    nameOrSignature: "buyCard"
+  ): TypedContractMethod<[_type: BigNumberish], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "cardType"
   ): TypedContractMethod<[arg0: BigNumberish], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "coreContract"
+  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "getApproved"
   ): TypedContractMethod<[tokenId: BigNumberish], [string], "view">;
@@ -642,8 +876,22 @@ export interface DQCard extends BaseContract {
     nameOrSignature: "getCardPrice"
   ): TypedContractMethod<[_type: BigNumberish], [bigint], "view">;
   getFunction(
-    nameOrSignature: "getUserNodePerformance"
+    nameOrSignature: "getNodePerformance"
   ): TypedContractMethod<[_user: AddressLike], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "getRemainingSupply"
+  ): TypedContractMethod<
+    [],
+    [[bigint, bigint, bigint] & { a: bigint; b: bigint; c: bigint }],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "getUserCardCount"
+  ): TypedContractMethod<
+    [_user: AddressLike, _type: BigNumberish],
+    [bigint],
+    "view"
+  >;
   getFunction(
     nameOrSignature: "isApprovedForAll"
   ): TypedContractMethod<
@@ -657,14 +905,14 @@ export interface DQCard extends BaseContract {
   getFunction(
     nameOrSignature: "mintBatchByOwner"
   ): TypedContractMethod<
-    [to: AddressLike[], _types: BigNumberish[]],
+    [_to: AddressLike[], _types: BigNumberish[]],
     [void],
     "nonpayable"
   >;
   getFunction(
     nameOrSignature: "mintByOwner"
   ): TypedContractMethod<
-    [to: AddressLike, _type: BigNumberish],
+    [_to: AddressLike, _type: BigNumberish],
     [void],
     "nonpayable"
   >;
@@ -700,12 +948,18 @@ export interface DQCard extends BaseContract {
     "nonpayable"
   >;
   getFunction(
+    nameOrSignature: "setAdminContract"
+  ): TypedContractMethod<[_addr: AddressLike], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "setApprovalForAll"
   ): TypedContractMethod<
     [operator: AddressLike, approved: boolean],
     [void],
     "nonpayable"
   >;
+  getFunction(
+    nameOrSignature: "setCoreContract"
+  ): TypedContractMethod<[_c: AddressLike], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "setMaxA"
   ): TypedContractMethod<[_max: BigNumberish], [void], "nonpayable">;
@@ -718,6 +972,15 @@ export interface DQCard extends BaseContract {
   getFunction(
     nameOrSignature: "setMiningContract"
   ): TypedContractMethod<[_m: AddressLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "setStakeContract"
+  ): TypedContractMethod<[_s: AddressLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "setTreasury"
+  ): TypedContractMethod<[_treasury: AddressLike], [void], "nonpayable">;
+  getFunction(
+    nameOrSignature: "stakeContract"
+  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "supportsInterface"
   ): TypedContractMethod<[interfaceId: BytesLike], [boolean], "view">;
@@ -760,16 +1023,26 @@ export interface DQCard extends BaseContract {
     nameOrSignature: "transferOwnership"
   ): TypedContractMethod<[newOwner: AddressLike], [void], "nonpayable">;
   getFunction(
-    nameOrSignature: "updateNodePerformance"
-  ): TypedContractMethod<
-    [_user: AddressLike, _performance: BigNumberish],
-    [void],
-    "nonpayable"
-  >;
+    nameOrSignature: "treasury"
+  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "userNodePerformance"
   ): TypedContractMethod<[arg0: AddressLike], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "withdrawToken"
+  ): TypedContractMethod<
+    [_token: AddressLike, _to: AddressLike, _amount: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
 
+  getEvent(
+    key: "AdminContractUpdated"
+  ): TypedContractEvent<
+    AdminContractUpdatedEvent.InputTuple,
+    AdminContractUpdatedEvent.OutputTuple,
+    AdminContractUpdatedEvent.OutputObject
+  >;
   getEvent(
     key: "Approval"
   ): TypedContractEvent<
@@ -783,6 +1056,27 @@ export interface DQCard extends BaseContract {
     ApprovalForAllEvent.InputTuple,
     ApprovalForAllEvent.OutputTuple,
     ApprovalForAllEvent.OutputObject
+  >;
+  getEvent(
+    key: "CardMinted"
+  ): TypedContractEvent<
+    CardMintedEvent.InputTuple,
+    CardMintedEvent.OutputTuple,
+    CardMintedEvent.OutputObject
+  >;
+  getEvent(
+    key: "CardPurchased"
+  ): TypedContractEvent<
+    CardPurchasedEvent.InputTuple,
+    CardPurchasedEvent.OutputTuple,
+    CardPurchasedEvent.OutputObject
+  >;
+  getEvent(
+    key: "MaxSupplyUpdated"
+  ): TypedContractEvent<
+    MaxSupplyUpdatedEvent.InputTuple,
+    MaxSupplyUpdatedEvent.OutputTuple,
+    MaxSupplyUpdatedEvent.OutputObject
   >;
   getEvent(
     key: "NodePerformanceUpdated"
@@ -805,8 +1099,26 @@ export interface DQCard extends BaseContract {
     TransferEvent.OutputTuple,
     TransferEvent.OutputObject
   >;
+  getEvent(
+    key: "TreasuryUpdated"
+  ): TypedContractEvent<
+    TreasuryUpdatedEvent.InputTuple,
+    TreasuryUpdatedEvent.OutputTuple,
+    TreasuryUpdatedEvent.OutputObject
+  >;
 
   filters: {
+    "AdminContractUpdated(address)": TypedContractEvent<
+      AdminContractUpdatedEvent.InputTuple,
+      AdminContractUpdatedEvent.OutputTuple,
+      AdminContractUpdatedEvent.OutputObject
+    >;
+    AdminContractUpdated: TypedContractEvent<
+      AdminContractUpdatedEvent.InputTuple,
+      AdminContractUpdatedEvent.OutputTuple,
+      AdminContractUpdatedEvent.OutputObject
+    >;
+
     "Approval(address,address,uint256)": TypedContractEvent<
       ApprovalEvent.InputTuple,
       ApprovalEvent.OutputTuple,
@@ -827,6 +1139,39 @@ export interface DQCard extends BaseContract {
       ApprovalForAllEvent.InputTuple,
       ApprovalForAllEvent.OutputTuple,
       ApprovalForAllEvent.OutputObject
+    >;
+
+    "CardMinted(address,uint256,uint256)": TypedContractEvent<
+      CardMintedEvent.InputTuple,
+      CardMintedEvent.OutputTuple,
+      CardMintedEvent.OutputObject
+    >;
+    CardMinted: TypedContractEvent<
+      CardMintedEvent.InputTuple,
+      CardMintedEvent.OutputTuple,
+      CardMintedEvent.OutputObject
+    >;
+
+    "CardPurchased(address,uint256,uint256,uint256)": TypedContractEvent<
+      CardPurchasedEvent.InputTuple,
+      CardPurchasedEvent.OutputTuple,
+      CardPurchasedEvent.OutputObject
+    >;
+    CardPurchased: TypedContractEvent<
+      CardPurchasedEvent.InputTuple,
+      CardPurchasedEvent.OutputTuple,
+      CardPurchasedEvent.OutputObject
+    >;
+
+    "MaxSupplyUpdated(uint8,uint256)": TypedContractEvent<
+      MaxSupplyUpdatedEvent.InputTuple,
+      MaxSupplyUpdatedEvent.OutputTuple,
+      MaxSupplyUpdatedEvent.OutputObject
+    >;
+    MaxSupplyUpdated: TypedContractEvent<
+      MaxSupplyUpdatedEvent.InputTuple,
+      MaxSupplyUpdatedEvent.OutputTuple,
+      MaxSupplyUpdatedEvent.OutputObject
     >;
 
     "NodePerformanceUpdated(address,uint256)": TypedContractEvent<
@@ -860,6 +1205,17 @@ export interface DQCard extends BaseContract {
       TransferEvent.InputTuple,
       TransferEvent.OutputTuple,
       TransferEvent.OutputObject
+    >;
+
+    "TreasuryUpdated(address)": TypedContractEvent<
+      TreasuryUpdatedEvent.InputTuple,
+      TreasuryUpdatedEvent.OutputTuple,
+      TreasuryUpdatedEvent.OutputObject
+    >;
+    TreasuryUpdated: TypedContractEvent<
+      TreasuryUpdatedEvent.InputTuple,
+      TreasuryUpdatedEvent.OutputTuple,
+      TreasuryUpdatedEvent.OutputObject
     >;
   };
 }

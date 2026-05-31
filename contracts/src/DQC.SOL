@@ -1,11 +1,21 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.17;
 
-import "@openzeppelin/contracts@4.9.6/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts@4.9.6/token/ERC721/extensions/ERC721Enumerable.sol";
-import "@openzeppelin/contracts@4.9.6/access/Ownable.sol";
-import "@openzeppelin/contracts@4.9.6/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts@4.9.6/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+
+// 质押核心合约接口（用于自动设置L等级）
+interface IDQMiningStakeCore {
+    function setUserLevel(address user, uint8 level) external;
+}
+
+// DQMCore合约接口（用于同步等级到DQMCore）
+interface IDQMCoreForCard {
+    function setUserLevel(address user, uint8 level) external;
+}
 
 /**
  * @title DQ Card V2
@@ -54,6 +64,8 @@ contract DQCard is ERC721Enumerable, Ownable {
     // ============ 授权地址 ============
     address public miningContract;
     address public adminContract;
+    address public stakeContract;  // 质押核心合约（用于自动设置L等级）
+    address public coreContract;   // DQMCore合约（用于同步等级）
     
     // ============ 数据映射 ============
     mapping(uint256 => uint256) public cardType;           // tokenId -> 卡片类型
@@ -69,17 +81,17 @@ contract DQCard is ERC721Enumerable, Ownable {
     
     // ============ 修饰器 ============
     modifier onlyM() {
-        require(msg.sender == miningContract || msg.sender == owner() || msg.sender == adminContract, "!auth");
+        require(msg.sender == stakeContract || msg.sender == owner(), "!m");
         _;
     }
     
     modifier onlyOwnerOrAdmin() {
-        require(msg.sender == owner() || msg.sender == adminContract, "!owner");
+        require(msg.sender == owner() || msg.sender == adminContract, "!auth");
         _;
     }
     
     // ============ 构造函数 ============
-    constructor() ERC721("DQ Card", "DQC") {}
+    constructor() ERC721("DQ Card", "DQC") Ownable(0x274aCc6397349F21179ed6258A54B2a11B28faF5) {}
     
     // ============ 设置函数 ============
     
@@ -95,6 +107,14 @@ contract DQCard is ERC721Enumerable, Ownable {
     
     function setMiningContract(address _m) external onlyOwnerOrAdmin {
         miningContract = _m;
+    }
+    
+    function setStakeContract(address _s) external onlyOwnerOrAdmin {
+        stakeContract = _s;
+    }
+    
+    function setCoreContract(address _c) external onlyOwnerOrAdmin {
+        coreContract = _c;
     }
     
     function setMaxA(uint256 _max) external onlyOwnerOrAdmin {
@@ -167,6 +187,23 @@ contract DQCard is ERC721Enumerable, Ownable {
         // 更新节点业绩
         userNodePerformance[msg.sender] += price;
         emit NodePerformanceUpdated(msg.sender, userNodePerformance[msg.sender]);
+        
+        // 自动设置L等级：A卡→S1, B卡→S2, C卡→S3
+        if (stakeContract != address(0)) {
+            uint8 targetLevel = 0;
+            if (_type == CARD_A) targetLevel = 1;  // S1
+            else if (_type == CARD_B) targetLevel = 2;  // S2
+            else if (_type == CARD_C) targetLevel = 3;  // S3
+            
+            if (targetLevel > 0) {
+                IDQMiningStakeCore(stakeContract).setUserLevel(msg.sender, targetLevel);
+                // 同步等级到DQMCore（前端查询展示）
+                if (coreContract != address(0)) {
+                    IDQMCoreForCard(coreContract).setUserLevel(msg.sender, targetLevel);
+                }
+            }
+        }
+        
         emit CardPurchased(msg.sender, tokenId, _type, price);
     }
     
@@ -198,40 +235,54 @@ contract DQCard is ERC721Enumerable, Ownable {
         // 更新节点业绩
         userNodePerformance[_to] += price;
         emit NodePerformanceUpdated(_to, userNodePerformance[_to]);
+        
+        // 自动设置L等级：A卡→S1, B卡→S2, C卡→S3
+        if (stakeContract != address(0)) {
+            uint8 targetLevel = 0;
+            if (_type == CARD_A) targetLevel = 1;  // S1
+            else if (_type == CARD_B) targetLevel = 2;  // S2
+            else if (_type == CARD_C) targetLevel = 3;  // S3
+            
+            if (targetLevel > 0) {
+                IDQMiningStakeCore(stakeContract).setUserLevel(_to, targetLevel);
+                // 同步等级到DQMCore（前端查询展示）
+                if (coreContract != address(0)) {
+                    IDQMCoreForCard(coreContract).setUserLevel(_to, targetLevel);
+                }
+            }
+        }
+        
         emit CardMinted(_to, tokenId, _type);
     }
     
     // ============ 转移钩子 ============
     
     /**
-     * @notice 转移前钩子 - 更新节点业绩
+     * @notice 转移钩子(OZ 5.x) - 更新节点业绩
      */
-    function _beforeTokenTransfer(
-        address from,
-        address to,
-        uint256 firstTokenId,
-        uint256 batchSize
-    ) internal override {
-        super._beforeTokenTransfer(from, to, firstTokenId, batchSize);
-        
-        if (batchSize > 1) {
-            revert("ERC721Enumerable: consecutive transfers not supported");
-        }
-        
-        uint256 _cardType = cardType[firstTokenId];
-        uint256 price = getCardPrice(_cardType);
+    function _update(address to, uint256 tokenId, address auth) internal override returns (address) {
+        address from = _ownerOf(tokenId);
         
         // 从原持有者减去业绩
         if (from != address(0)) {
+            uint256 _cardType = cardType[tokenId];
+            uint256 price = getCardPrice(_cardType);
             userNodePerformance[from] -= price;
             emit NodePerformanceUpdated(from, userNodePerformance[from]);
         }
         
+        // 执行转移
+        address previousOwner = super._update(to, tokenId, auth);
+        
         // 给新持有者增加业绩
         if (to != address(0)) {
+            uint256 _cardType = cardType[tokenId];
+            uint256 price = getCardPrice(_cardType);
             userNodePerformance[to] += price;
             emit NodePerformanceUpdated(to, userNodePerformance[to]);
         }
+        
+        return previousOwner;
     }
     
     // ============ 查询函数 ============
@@ -275,5 +326,18 @@ contract DQCard is ERC721Enumerable, Ownable {
         a = MAX_A - totalA;
         b = MAX_B - totalB;
         c = MAX_C - totalC;
+    }
+    
+    /**
+     * @notice 提取合约资产（管理员）
+     */
+    function withdrawToken(address _token, address _to, uint256 _amount) external onlyOwnerOrAdmin {
+        require(_to != address(0), "!zero");
+        if (_token == address(0)) {
+            (bool success, ) = payable(_to).call{value: _amount}("");
+            require(success, "transfer failed");
+        } else {
+            IERC20(_token).safeTransfer(_to, _amount);
+        }
     }
 }

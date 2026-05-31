@@ -6,15 +6,15 @@
 
 | 合约 | 地址 |
 |------|------|
-| DQT (DQ代币) | `0x25edC7Bb2abc613e07d26A21e8bC1D799E2E5b55` |
-| DQCard (NFT卡) | `0x7CE9bbb974dedf191e99964278ff9d9d955a8E7C` |
-| DQPAIR (交易对) | `0x06f4596b1e7dc90a5173c5ce742a470e8efacdbc` |
+| DQT (DQ代币) | `0xf0C9eB94298134f9290f3258e07DcB0716f8891F` |
+| DQCard (NFT卡) | `0x68077b4A505CD010734915dccC22d87296c9793D` |
+| DQPAIR (交易对) | `0x7569a1baf02779253539a082d213aaef5ff84ec7` |
 | DQLPMigrator (LP迁移) | `0x8eB742d12488f6689831599e8B12d66090BFE69c` |
 | DQMAdmin (管理) | `0x526E617614F36C3AAe32a1baD65bEa2427f1f767` |
-| DQMCore (核心) | `0x65767e3564f6060Ce0844B23aB6A5B2ed4019491` |
-| DQMiningStakeCore (质押核心) | `0x40c62053Ee493911C4f517a9824ba12AE74A9cd4` |
-| DQMiningStakeMine (爆块) | `0xCcFdD942093AEeD0f41CC16c2834602b6548F8ea` |
-| DQMiningStakeVault (质押金库) | `0xF879Cb65dD6f741242cB654180eBD0d770029b25` |
+| DQMCore (核心) | `0x6003B9Ae7940C287f1610d1ab4Fb10e6c97D77a4` |
+| DQMiningStakeCore (质押核心) | `0xb6Aa2F51d4C9b64c1cb50F005aAd3c5d3f9CC789` |
+| DQMiningStakeMine (爆块) | `0xae1c9598426B6481d4689752BCeE2505c79bcab8` |
+| DQMiningStakeVault (质押金库) | `0x78Aa71730Da0103ED9A57EEce92B227C502918ca` |
 
 ### 常规地址
 
@@ -182,7 +182,7 @@ constructor()  // 地址通过 setter 函数后续配置
 
 | # | 函数 | 参数 | 说明 |
 |---|------|------|------|
-| 1 | `setAddresses` | `DQT_ADDRESS`, `DQC_ADDRESS`, `0x06f4596b1e7dc90a5173c5ce742a470e8efacdbc` | DQ地址、NFT地址、LP Pair地址 |
+| 1 | `setAddresses` | `DQT_ADDRESS`, `DQC_ADDRESS`, `0x7569a1baf02779253539a082d213aaef5ff84ec7` | DQ地址、NFT地址、LP Pair地址 |
 | 2 | `setCoreContract` | `CORE_ADDRESS` | DQMCore地址 |
 | 3 | `setMiningContract` | `MINE_ADDRESS` | 爆块合约地址（第6步部署后填入） |
 | 4 | `setDaoAddr` | `0x27b84FC9eb5C3a19585093aD6D11292cbbaB5852` | DAO地址 |
@@ -212,7 +212,7 @@ constructor(
 1. Deploy 面板选择 `DQMiningStakeVault`
 2. 在构造函数参数框中填入（用逗号分隔）：
 ```
-0x40c62053Ee493911C4f517a9824ba12AE74A9cd4,0x25edC7Bb2abc613e07d26A21e8bC1D799E2E5b55,0x65767e3564f6060Ce0844B23aB6A5B2ed4019491,0xA0f045cde45ca1aeE2033356170B46A1fF3b7202,0x803B79B608455808C2f752c588804c3F5bF676a3,0x822682A54C454e938374e9690420cdFA264A18Aa
+0xb6Aa2F51d4C9b64c1cb50F005aAd3c5d3f9CC789,0xf0C9eB94298134f9290f3258e07DcB0716f8891F,0x6003B9Ae7940C287f1610d1ab4Fb10e6c97D77a4,0xA0f045cde45ca1aeE2033356170B46A1fF3b7202,0x803B79B608455808C2f752c588804c3F5bF676a3,0x822682A54C454e938374e9690420cdFA264A18Aa
 ```
 
 即：
@@ -222,9 +222,9 @@ STAKE_CORE_ADDRESS, DQT_ADDRESS, CORE_ADDRESS, FOUNDATION, PARTNER, FIXED_NODE
 
 展开为实际值：
 ```
-_stakeCore:       0x40c62053Ee493911C4f517a9824ba12AE74A9cd4
-_dqToken:         0x25edC7Bb2abc613e07d26A21e8bC1D799E2E5b55
-_coreContract:    0x65767e3564f6060Ce0844B23aB6A5B2ed4019491
+_stakeCore:       0xb6Aa2F51d4C9b64c1cb50F005aAd3c5d3f9CC789
+_dqToken:         0xf0C9eB94298134f9290f3258e07DcB0716f8891F
+_coreContract:    0x6003B9Ae7940C287f1610d1ab4Fb10e6c97D77a4
 _foundation:      0xA0f045cde45ca1aeE2033356170B46A1fF3b7202
 _partner:         0x803B79B608455808C2f752c588804c3F5bF676a3
 _fixedNode:       0x822682A54C454e938374e9690420cdFA264A18Aa
@@ -251,13 +251,13 @@ constructor(
 1. Deploy 面板选择 `DQMiningStakeMine`
 2. 在构造函数参数框中填入：
 ```
-0x25edC7Bb2abc613e07d26A21e8bC1D799E2E5b55,0x40c62053Ee493911C4f517a9824ba12AE74A9cd4,0xA0f045cde45ca1aeE2033356170B46A1fF3b7202,0x803B79B608455808C2f752c588804c3F5bF676a3
+0xf0C9eB94298134f9290f3258e07DcB0716f8891F,0xb6Aa2F51d4C9b64c1cb50F005aAd3c5d3f9CC789,0xA0f045cde45ca1aeE2033356170B46A1fF3b7202,0x803B79B608455808C2f752c588804c3F5bF676a3
 ```
 
 即：
 ```
-_dqToken:     0x25edC7Bb2abc613e07d26A21e8bC1D799E2E5b55
-_stakeCore:   0x40c62053Ee493911C4f517a9824ba12AE74A9cd4
+_dqToken:     0xf0C9eB94298134f9290f3258e07DcB0716f8891F
+_stakeCore:   0xb6Aa2F51d4C9b64c1cb50F005aAd3c5d3f9CC789
 _foundation:  0xA0f045cde45ca1aeE2033356170B46A1fF3b7202
 _founder:     0x803B79B608455808C2f752c588804c3F5bF676a3
 ```
@@ -305,7 +305,7 @@ constructor()  // 无状态初始化
 | # | 函数 | 参数 | 说明 |
 |---|------|------|------|
 | 1 | `setOldLP` | 旧LP地址 | A合约的LP代币地址 |
-| 2 | `setNewLP` | `0x06f4596b1e7dc90a5173c5ce742a470e8efacdbc` | 新LP地址（当前交易对） |
+| 2 | `setNewLP` | `0x7569a1baf02779253539a082d213aaef5ff84ec7` | 新LP地址（当前交易对） |
 | 3 | `setNewStakeContract` | `STAKE_CORE_ADDRESS` | 新质押合约地址 |
 | 4 | `setMigrationRate` | `10000` | 汇率1:1 |
 | 5 | `toggleMigration` | `true` | 开启迁移 |
@@ -322,7 +322,7 @@ constructor()  // 无状态初始化
 
 | 顺序 | 函数 | 参数 | 说明 |
 |------|------|------|------|
-| 1 | `setPool` | `0x06f4596b1e7dc90a5173c5ce742a470e8efacdbc` | 设置底池（DQPAIR），同时自动设为免税 |
+| 1 | `setPool` | `0x7569a1baf02779253539a082d213aaef5ff84ec7` | 设置底池（DQPAIR），同时自动设为免税 |
 | 2 | `setMiningContract` | `MINE_ADDRESS` | 设置爆块合约，自动免税 |
 | 3 | `setStakeCoreContract` | `STAKE_CORE_ADDRESS` | 设置质押核心合约，自动免税 |
 | 4 | `setAdminContract` | `ADMIN_ADDRESS` | 设置管理合约，自动获得免税+minter权限 |
@@ -333,13 +333,24 @@ constructor()  // 无状态初始化
 
 > ⚠️ **关于 `DQT.setRouter()`**：DQT 合约中的 `router` 变量虽然已声明，但在当前代码中**从未被使用**。买卖税检测完全基于 `pool`（Pair地址），不需要 Router 地址。**无需调用 `setRouter()`**。PancakeSwap Router 地址 `0x10ED43C718714eb63d5aA57B78B54704E256024E` 已作为常量硬编码在 DQMCore 和 DQMAdmin 中，无需重复设置。
 
+> ⚠️ **入金使用 SOL ERC20 代币**：用户入金使用的是 SOL ERC20 代币（`0x570A5D26f7765Ecb712C0924E4De545B89fD43dF`），不是原生 BNB。用户入金前需要先 `approve` SOL 给 DQMCore 合约，然后调用 `deposit(amount)`。
+> - 入金流程：用户 approve SOL → 调用 `deposit(amount)` → 50% SOL 转 StakeCore（奖励分配）→ 50% SOL 先换成 WBNB → 一半 WBNB 买 DQ → WBNB+DQ 添加流动性
+> - 卖出 DQ：`sellDQ(amount)` → DQ 通过 PancakeSwap 换成 SOL ERC20（路径 DQ→WBNB→SOL）
+
 ### 4.2 配置 DQC (DQCard) 合约
 
 | 顺序 | 函数 | 参数 | 说明 |
 |------|------|------|------|
 | 1 | `setAdminContract` | `ADMIN_ADDRESS` | 管理合约 |
 | 2 | `setStakeContract` | `STAKE_CORE_ADDRESS` | 质押合约（NFT购买时自动设L等级） |
-| 3 | `setMiningContract` | `MINE_ADDRESS` | 爆块合约 |
+| 3 | `setCoreContract` | `CORE_ADDRESS` | DQMCore合约（NFT购买时同步等级到DQMCore） |
+| 4 | `setMiningContract` | `MINE_ADDRESS` | 爆块合约 |
+
+> ⚠️ **`setCoreContract` 说明**：DQC 购买节点卡时会同时设置两个合约的等级：
+> - `StakeCore.setUserLevel` → 用于奖励分配计算
+> - `DQMCore.setUserLevel` → 用于前端查询展示（`getUser()` 返回的 `level` 字段）
+>
+> 如果不设置 `coreContract`，购买节点卡后 StakeCore 有等级但 DQMCore 查不到，前端展示为0。
 
 ### 4.3 配置 DQMCore 合约
 
@@ -347,7 +358,7 @@ constructor()  // 无状态初始化
 |------|------|------|------|
 | 1 | `setAddresses` | `DQT_ADDRESS`, `DQC_ADDRESS`, `STAKE_CORE_ADDRESS` | 设置三大合约引用 |
 | 2 | `setAdminContract` | `ADMIN_ADDRESS` | 管理合约 |
-| 3 | `setPool` | `0x06f4596b1e7dc90a5173c5ce742a470e8efacdbc` | 底池地址 |
+| 3 | `setPool` | `0x7569a1baf02779253539a082d213aaef5ff84ec7` | 底池地址 |
 | 4 | `setMigratorContract` | `MIGRATOR_ADDRESS` | 迁移合约 |
 | 5 | `setSlippage` | `50`, `50` | 入金swap滑点5%，LP滑点5%（流动性差时建议设100=10%） |
 
@@ -355,7 +366,7 @@ constructor()  // 无状态初始化
 
 | 顺序 | 函数 | 参数 | 说明 |
 |------|------|------|------|
-| 1 | `setAddresses` | `DQT_ADDRESS`, `DQC_ADDRESS`, `0x06f4596b1e7dc90a5173c5ce742a470e8efacdbc` | 设置DQ/NFT/Pair |
+| 1 | `setAddresses` | `DQT_ADDRESS`, `DQC_ADDRESS`, `0x7569a1baf02779253539a082d213aaef5ff84ec7` | 设置DQ/NFT/Pair |
 | 2 | `setCoreContract` | `CORE_ADDRESS` | DQMCore引用 |
 | 3 | `setMiningContract` | `MINE_ADDRESS` | 爆块合约 |
 | 4 | `setAdminContract` | `ADMIN_ADDRESS` | 管理合约 |
@@ -363,13 +374,13 @@ constructor()  // 无状态初始化
 | 6 | `setOperAddr` | `0x4bE56C5390869A3236F8545462896eB1E423D0d5` | 运营地址 |
 | 7 | `setInsureAddr` | `0x2db993B862969040Cd971Df8Fd2a2C80EC285203` | 保险池地址 |
 | 8 | `setNodeRewardMode` | `false`, `0x822682A54C454e938374e9690420cdFA264A18Aa` | 节点奖励模式 |
-| 9 | `setLpPair` | `0x06f4596b1e7dc90a5173c5ce742a470e8efacdbc` | LP Pair地址 |
+| 9 | `setLpPair` | `0x7569a1baf02779253539a082d213aaef5ff84ec7` | LP Pair地址 |
 | 10 | `setLpRouter` | `0x10ED43C718714eb63d5aA57B78B54704E256024E` | PancakeSwap V2 Router（用户移除LP时调用removeLiquidity） |
-| 11 | `setDLevelPool` | `0x40c62053Ee493911C4f517a9824ba12AE74A9cd4` | D等级池 = StakeCore自身 |
+| 11 | `setDLevelPool` | `0xb6Aa2F51d4C9b64c1cb50F005aAd3c5d3f9CC789` | D等级池 = StakeCore自身 |
 | 12 | `setMigratorContract` | `MIGRATOR_ADDRESS` | 迁移合约 |
 
 > **`setLpPair` 和 `setLpRouter` 说明**：
-> - `setLpPair` → 传入 DQ/WBNB 交易对地址 `0x06f4596b1e7dc90a5173c5ce742a470e8efacdbc`，即 LP Token 合约地址
+> - `setLpPair` → 传入 DQ/WBNB 交易对地址 `0x7569a1baf02779253539a082d213aaef5ff84ec7`，即 LP Token 合约地址
 > - `setLpRouter` → 传入 PancakeSwap V2 Router 地址 `0x10ED43C718714eb63d5aA57B78B54704E256024E`，用于用户 `withdrawLP()` 时调用 `removeLiquidity` 拆分LP
 >
 > REMIX 操作：在已加载的 **DQMiningStakeCore** 合约实例中，找到 `setLpPair` 和 `setLpRouter`，分别填入对应地址点击 transact
@@ -388,7 +399,7 @@ constructor()  // 无状态初始化
 > - DQ代币先转到 StakeCore 合约余额中
 > - `distributeDRankReward` 更新账本后，用户 `claimDRankReward` 才能从该余额中转出
 >
-> **REMIX 操作**：在 DQMiningStakeCore 合约中调用 `setDLevelPool`，填入 `0x40c62053Ee493911C4f517a9824ba12AE74A9cd4`
+> **REMIX 操作**：在 DQMiningStakeCore 合约中调用 `setDLevelPool`，填入 `0xb6Aa2F51d4C9b64c1cb50F005aAd3c5d3f9CC789`
 
 ### 4.5 配置 DQMiningStakeVault 合约
 
@@ -402,13 +413,13 @@ constructor()  // 无状态初始化
 
 | 顺序 | 函数 | 参数 | 说明 |
 |------|------|------|------|
-| 1 | `setDLevelPool` | `0x40c62053Ee493911C4f517a9824ba12AE74A9cd4` | D等级池 = StakeCore地址（与4.4节说明相同） |
+| 1 | `setDLevelPool` | `0xb6Aa2F51d4C9b64c1cb50F005aAd3c5d3f9CC789` | D等级池 = StakeCore地址（与4.4节说明相同） |
 | 2 | `setInitialTotalSupply` | `100000000000000000000000000000` | 1000亿DQ（10^8 * 10^18 * 1000） |
 
 > ⚠️ `setInitialTotalSupply` 只能调用一次！确保值正确：`100000000000000000000000000000`（即 1000 × 10^8 × 10^18）
 >
 > **Mine 合约 `setDLevelPool` 说明**：
-> 爆块时 Mine 合约通过 `DQT.distributeFromPool(dLevelPool, amount)` 将 D等级14% 的 DQ 代币直接转给此地址，然后调用 `StakeCore.distributeDRankReward(amount)` 更新账本。所以此地址也必须设为 **DQMiningStakeCore** 的地址 `0x40c62053Ee493911C4f517a9824ba12AE74A9cd4`，与 4.4 节中 StakeCore 的 `setDLevelPool` 保持一致。
+> 爆块时 Mine 合约通过 `DQT.distributeFromPool(dLevelPool, amount)` 将 D等级14% 的 DQ 代币直接转给此地址，然后调用 `StakeCore.distributeDRankReward(amount)` 更新账本。所以此地址也必须设为 **DQMiningStakeCore** 的地址 `0xb6Aa2F51d4C9b64c1cb50F005aAd3c5d3f9CC789`，与 4.4 节中 StakeCore 的 `setDLevelPool` 保持一致。
 
 ### 4.7 配置 DQMAdmin 合约
 
@@ -424,6 +435,7 @@ constructor()  // 无状态初始化
 > - DQMiningStakeMine.setAdminContract(ADMIN_ADDRESS)
 > - DQCard.setAdminContract(ADMIN_ADDRESS)
 > - DQCard.setStakeContract(STAKE_CORE_ADDRESS)
+> - DQCard.setCoreContract(CORE_ADDRESS)
 
 ### 4.8 配置 DQLPMigrator 合约
 
@@ -431,7 +443,7 @@ constructor()  // 无状态初始化
 |------|------|------|------|
 | 1 | `setAdminContract` | `ADMIN_ADDRESS` | 管理合约 |
 | 2 | `setOldLP` | 旧LP地址 | 根据实际情况填入 |
-| 3 | `setNewLP` | `0x06f4596b1e7dc90a5173c5ce742a470e8efacdbc` | 当前交易对LP地址 |
+| 3 | `setNewLP` | `0x7569a1baf02779253539a082d213aaef5ff84ec7` | 当前交易对LP地址 |
 | 4 | `setNewStakeContract` | `STAKE_CORE_ADDRESS` | 新质押合约 |
 | 5 | `setMigrationRate` | `10000` | 1:1 汇率 |
 | 6 | `toggleMigration` | `true` | 开启迁移 |
@@ -496,8 +508,16 @@ constructor()  // 无状态初始化
 | 同步用户全部数据 | `syncUserToStake` | `_user`, `_referrer`, `_directCount`, `_nodeLevel`, `_energy` | 一次性同步用户到质押合约 |
 
 > - `setUserNodeLevel` 即需求文档13.6和13.7的批量导入节点和批量配置用户等级
-> - `batchSetUserLevel` 对应 StakeCore 的 `setUserLevel`，通过 adminContract 代理调用（owner 直接调用 StakeCore 会报 `!auth`）
+> - `batchSetUserLevel` **同时更新两个合约**：StakeCore 的 `userLevel`（奖励分配用）和 DQMCore 的 `users[].level`（前端查询展示用）
 > - 所有批量函数传入单个用户即为单个设置
+>
+> ⚠️ **等级数据双写机制**：系统中等级数据存在于两个合约：
+> - **StakeCore.userLevel**：奖励分配计算的真实来源（自动升级也更新此处）
+> - **DQMCore.users[].level**：前端通过 `getUser()` 查询展示用
+>
+> `batchSetUserLevel` 和 `syncUserToStake` 会同时写入两处。购买节点卡（DQC）也会同时写入两处（需先配置 `coreContract`）。
+>
+> 入金时 StakeCore 的自动升级（`_checkAndAutoUpgrade`）只会更新 StakeCore 的 `userLevel`。但 DQMCore 的 `getUser()` 已增加回读逻辑：会从 StakeCore 读取等级取较大值，因此前端始终能展示正确等级。
 
 ### 5.7 批量能量管理（DQMAdmin合约）
 
@@ -698,27 +718,27 @@ DQMAdmin.mineContract() → MINE 地址
 由于合约已部署，以下为直接可用的配置参数：
 
 ```
-DQT_ADDRESS      = 0x25edC7Bb2abc613e07d26A21e8bC1D799E2E5b55
-DQC_ADDRESS      = 0x7CE9bbb974dedf191e99964278ff9d9d955a8E7C
-DQPAIR_ADDRESS   = 0x06f4596b1e7dc90a5173c5ce742a470e8efacdbc
+DQT_ADDRESS      = 0xf0C9eB94298134f9290f3258e07DcB0716f8891F
+DQC_ADDRESS      = 0x68077b4A505CD010734915dccC22d87296c9793D
+DQPAIR_ADDRESS   = 0x7569a1baf02779253539a082d213aaef5ff84ec7
 MIGRATOR_ADDRESS = 0x8eB742d12488f6689831599e8B12d66090BFE69c
 ADMIN_ADDRESS    = 0x526E617614F36C3AAe32a1baD65bEa2427f1f767
-CORE_ADDRESS     = 0x65767e3564f6060Ce0844B23aB6A5B2ed4019491
-STAKE_CORE_ADDRESS = 0x40c62053Ee493911C4f517a9824ba12AE74A9cd4
-MINE_ADDRESS     = 0xCcFdD942093AEeD0f41CC16c2834602b6548F8ea
-VAULT_ADDRESS    = 0xF879Cb65dD6f741242cB654180eBD0d770029b25
+CORE_ADDRESS     = 0x6003B9Ae7940C287f1610d1ab4Fb10e6c97D77a4
+STAKE_CORE_ADDRESS = 0xb6Aa2F51d4C9b64c1cb50F005aAd3c5d3f9CC789
+MINE_ADDRESS     = 0xae1c9598426B6481d4689752BCeE2505c79bcab8
+VAULT_ADDRESS    = 0x78Aa71730Da0103ED9A57EEce92B227C502918ca
 ```
 
 ### DQMiningStakeVault 构造函数参数（如重新部署）
 
 ```
-0x40c62053Ee493911C4f517a9824ba12AE74A9cd4,0x25edC7Bb2abc613e07d26A21e8bC1D799E2E5b55,0x65767e3564f6060Ce0844B23aB6A5B2ed4019491,0xA0f045cde45ca1aeE2033356170B46A1fF3b7202,0x803B79B608455808C2f752c588804c3F5bF676a3,0x822682A54C454e938374e9690420cdFA264A18Aa
+0xb6Aa2F51d4C9b64c1cb50F005aAd3c5d3f9CC789,0xf0C9eB94298134f9290f3258e07DcB0716f8891F,0x6003B9Ae7940C287f1610d1ab4Fb10e6c97D77a4,0xA0f045cde45ca1aeE2033356170B46A1fF3b7202,0x803B79B608455808C2f752c588804c3F5bF676a3,0x822682A54C454e938374e9690420cdFA264A18Aa
 ```
 
 ### DQMiningStakeMine 构造函数参数（如重新部署）
 
 ```
-0x25edC7Bb2abc613e07d26A21e8bC1D799E2E5b55,0x40c62053Ee493911C4f517a9824ba12AE74A9cd4,0xA0f045cde45ca1aeE2033356170B46A1fF3b7202,0x803B79B608455808C2f752c588804c3F5bF676a3
+0xf0C9eB94298134f9290f3258e07DcB0716f8891F,0xb6Aa2F51d4C9b64c1cb50F005aAd3c5d3f9CC789,0xA0f045cde45ca1aeE2033356170B46A1fF3b7202,0x803B79B608455808C2f752c588804c3F5bF676a3
 ```
 
 ---

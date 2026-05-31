@@ -18,21 +18,41 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.Ownable__factory>;
     getContractFactory(
+      name: "IERC1155Errors",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IERC1155Errors__factory>;
+    getContractFactory(
+      name: "IERC20Errors",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IERC20Errors__factory>;
+    getContractFactory(
+      name: "IERC721Errors",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IERC721Errors__factory>;
+    getContractFactory(
+      name: "IERC1363",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IERC1363__factory>;
+    getContractFactory(
       name: "ERC20",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.ERC20__factory>;
+    getContractFactory(
+      name: "ERC20Burnable",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ERC20Burnable__factory>;
     getContractFactory(
       name: "IERC20Metadata",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC20Metadata__factory>;
     getContractFactory(
-      name: "IERC20Permit",
-      signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.IERC20Permit__factory>;
-    getContractFactory(
       name: "IERC20",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC20__factory>;
+    getContractFactory(
+      name: "SafeERC20",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.SafeERC20__factory>;
     getContractFactory(
       name: "ERC721",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -66,49 +86,109 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IERC165__factory>;
     getContractFactory(
+      name: "SafeCast",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.SafeCast__factory>;
+    getContractFactory(
+      name: "ReentrancyGuard",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.ReentrancyGuard__factory>;
+    getContractFactory(
+      name: "Strings",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.Strings__factory>;
+    getContractFactory(
       name: "DQCard",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.DQCard__factory>;
     getContractFactory(
-      name: "DQMiningV4",
+      name: "IDQMCoreForCard",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.DQMiningV4__factory>;
+    ): Promise<Contracts.IDQMCoreForCard__factory>;
     getContractFactory(
-      name: "IDQCard",
+      name: "IDQMiningStakeCore",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.IDQCard__factory>;
+    ): Promise<Contracts.IDQMiningStakeCore__factory>;
+    getContractFactory(
+      name: "DQLPMigrator",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.DQLPMigrator__factory>;
+    getContractFactory(
+      name: "DQMAdmin",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.DQMAdmin__factory>;
+    getContractFactory(
+      name: "IDQCardAdmin",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IDQCardAdmin__factory>;
+    getContractFactory(
+      name: "IDQMCoreAdmin",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IDQMCoreAdmin__factory>;
+    getContractFactory(
+      name: "IDQMiningStakeAdmin",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IDQMiningStakeAdmin__factory>;
+    getContractFactory(
+      name: "IDQTokenAdmin",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IDQTokenAdmin__factory>;
+    getContractFactory(
+      name: "DQMCore",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.DQMCore__factory>;
     getContractFactory(
       name: "IDQMiningStake",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IDQMiningStake__factory>;
     getContractFactory(
-      name: "IDQToken",
+      name: "IRouter",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.IDQToken__factory>;
+    ): Promise<Contracts.IRouter__factory>;
     getContractFactory(
-      name: "IPancakeRouter02",
+      name: "DQMiningStakeCore",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.IPancakeRouter02__factory>;
+    ): Promise<Contracts.DQMiningStakeCore__factory>;
     getContractFactory(
-      name: "DQMiningStakeV3",
+      name: "IDQMCore",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.DQMiningStakeV3__factory>;
+    ): Promise<Contracts.IDQMCore__factory>;
     getContractFactory(
-      name: "IDQCard",
+      name: "IDQT",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.IDQCard__factory>;
+    ): Promise<Contracts.IDQT__factory>;
     getContractFactory(
-      name: "IDQToken",
+      name: "IEnergy",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.IDQToken__factory>;
+    ): Promise<Contracts.IEnergy__factory>;
     getContractFactory(
-      name: "IPancakeRouter02",
+      name: "ILP",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.IPancakeRouter02__factory>;
+    ): Promise<Contracts.ILP__factory>;
     getContractFactory(
-      name: "DQToken",
+      name: "IPancakeRouter01",
       signerOrOptions?: ethers.Signer | FactoryOptions
-    ): Promise<Contracts.DQToken__factory>;
+    ): Promise<Contracts.IPancakeRouter01__factory>;
+    getContractFactory(
+      name: "DQMiningStakeMine",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.DQMiningStakeMine__factory>;
+    getContractFactory(
+      name: "DQMiningStakeVault",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.DQMiningStakeVault__factory>;
+    getContractFactory(
+      name: "IDQMCoreForVault",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IDQMCoreForVault__factory>;
+    getContractFactory(
+      name: "IDQMiningStakeCore",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IDQMiningStakeCore__factory>;
+    getContractFactory(
+      name: "DQT",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.DQT__factory>;
     getContractFactory(
       name: "IMintableToken",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -118,6 +198,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MockDQCard__factory>;
     getContractFactory(
+      name: "MockDQMCoreForStake",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockDQMCoreForStake__factory>;
+    getContractFactory(
       name: "MockDQMiningStake",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MockDQMiningStake__factory>;
@@ -126,9 +210,21 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MockERC20Token__factory>;
     getContractFactory(
+      name: "MockMineContract",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockMineContract__factory>;
+    getContractFactory(
+      name: "MockPairToken",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockPairToken__factory>;
+    getContractFactory(
       name: "MockPancakeRouter",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.MockPancakeRouter__factory>;
+    getContractFactory(
+      name: "MockPancakeRouterFull",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.MockPancakeRouterFull__factory>;
     getContractFactory(
       name: "MockPancakeRouterV3",
       signerOrOptions?: ethers.Signer | FactoryOptions
@@ -140,25 +236,50 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.Ownable>;
     getContractAt(
+      name: "IERC1155Errors",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IERC1155Errors>;
+    getContractAt(
+      name: "IERC20Errors",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IERC20Errors>;
+    getContractAt(
+      name: "IERC721Errors",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IERC721Errors>;
+    getContractAt(
+      name: "IERC1363",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IERC1363>;
+    getContractAt(
       name: "ERC20",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.ERC20>;
+    getContractAt(
+      name: "ERC20Burnable",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ERC20Burnable>;
     getContractAt(
       name: "IERC20Metadata",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.IERC20Metadata>;
     getContractAt(
-      name: "IERC20Permit",
-      address: string | ethers.Addressable,
-      signer?: ethers.Signer
-    ): Promise<Contracts.IERC20Permit>;
-    getContractAt(
       name: "IERC20",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.IERC20>;
+    getContractAt(
+      name: "SafeERC20",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.SafeERC20>;
     getContractAt(
       name: "ERC721",
       address: string | ethers.Addressable,
@@ -200,60 +321,135 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.IERC165>;
     getContractAt(
+      name: "SafeCast",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.SafeCast>;
+    getContractAt(
+      name: "ReentrancyGuard",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.ReentrancyGuard>;
+    getContractAt(
+      name: "Strings",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.Strings>;
+    getContractAt(
       name: "DQCard",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.DQCard>;
     getContractAt(
-      name: "DQMiningV4",
+      name: "IDQMCoreForCard",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.DQMiningV4>;
+    ): Promise<Contracts.IDQMCoreForCard>;
     getContractAt(
-      name: "IDQCard",
+      name: "IDQMiningStakeCore",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.IDQCard>;
+    ): Promise<Contracts.IDQMiningStakeCore>;
+    getContractAt(
+      name: "DQLPMigrator",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.DQLPMigrator>;
+    getContractAt(
+      name: "DQMAdmin",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.DQMAdmin>;
+    getContractAt(
+      name: "IDQCardAdmin",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IDQCardAdmin>;
+    getContractAt(
+      name: "IDQMCoreAdmin",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IDQMCoreAdmin>;
+    getContractAt(
+      name: "IDQMiningStakeAdmin",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IDQMiningStakeAdmin>;
+    getContractAt(
+      name: "IDQTokenAdmin",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IDQTokenAdmin>;
+    getContractAt(
+      name: "DQMCore",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.DQMCore>;
     getContractAt(
       name: "IDQMiningStake",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.IDQMiningStake>;
     getContractAt(
-      name: "IDQToken",
+      name: "IRouter",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.IDQToken>;
+    ): Promise<Contracts.IRouter>;
     getContractAt(
-      name: "IPancakeRouter02",
+      name: "DQMiningStakeCore",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.IPancakeRouter02>;
+    ): Promise<Contracts.DQMiningStakeCore>;
     getContractAt(
-      name: "DQMiningStakeV3",
+      name: "IDQMCore",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.DQMiningStakeV3>;
+    ): Promise<Contracts.IDQMCore>;
     getContractAt(
-      name: "IDQCard",
+      name: "IDQT",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.IDQCard>;
+    ): Promise<Contracts.IDQT>;
     getContractAt(
-      name: "IDQToken",
+      name: "IEnergy",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.IDQToken>;
+    ): Promise<Contracts.IEnergy>;
     getContractAt(
-      name: "IPancakeRouter02",
+      name: "ILP",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.IPancakeRouter02>;
+    ): Promise<Contracts.ILP>;
     getContractAt(
-      name: "DQToken",
+      name: "IPancakeRouter01",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
-    ): Promise<Contracts.DQToken>;
+    ): Promise<Contracts.IPancakeRouter01>;
+    getContractAt(
+      name: "DQMiningStakeMine",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.DQMiningStakeMine>;
+    getContractAt(
+      name: "DQMiningStakeVault",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.DQMiningStakeVault>;
+    getContractAt(
+      name: "IDQMCoreForVault",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IDQMCoreForVault>;
+    getContractAt(
+      name: "IDQMiningStakeCore",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IDQMiningStakeCore>;
+    getContractAt(
+      name: "DQT",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.DQT>;
     getContractAt(
       name: "IMintableToken",
       address: string | ethers.Addressable,
@@ -265,6 +461,11 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.MockDQCard>;
     getContractAt(
+      name: "MockDQMCoreForStake",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockDQMCoreForStake>;
+    getContractAt(
       name: "MockDQMiningStake",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
@@ -275,10 +476,25 @@ declare module "hardhat/types/runtime" {
       signer?: ethers.Signer
     ): Promise<Contracts.MockERC20Token>;
     getContractAt(
+      name: "MockMineContract",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockMineContract>;
+    getContractAt(
+      name: "MockPairToken",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockPairToken>;
+    getContractAt(
       name: "MockPancakeRouter",
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.MockPancakeRouter>;
+    getContractAt(
+      name: "MockPancakeRouterFull",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.MockPancakeRouterFull>;
     getContractAt(
       name: "MockPancakeRouterV3",
       address: string | ethers.Addressable,
@@ -290,21 +506,41 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Ownable>;
     deployContract(
+      name: "IERC1155Errors",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IERC1155Errors>;
+    deployContract(
+      name: "IERC20Errors",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IERC20Errors>;
+    deployContract(
+      name: "IERC721Errors",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IERC721Errors>;
+    deployContract(
+      name: "IERC1363",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IERC1363>;
+    deployContract(
       name: "ERC20",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ERC20>;
+    deployContract(
+      name: "ERC20Burnable",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ERC20Burnable>;
     deployContract(
       name: "IERC20Metadata",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC20Metadata>;
     deployContract(
-      name: "IERC20Permit",
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IERC20Permit>;
-    deployContract(
       name: "IERC20",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC20>;
+    deployContract(
+      name: "SafeERC20",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SafeERC20>;
     deployContract(
       name: "ERC721",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -338,49 +574,109 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC165>;
     deployContract(
+      name: "SafeCast",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SafeCast>;
+    deployContract(
+      name: "ReentrancyGuard",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ReentrancyGuard>;
+    deployContract(
+      name: "Strings",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Strings>;
+    deployContract(
       name: "DQCard",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.DQCard>;
     deployContract(
-      name: "DQMiningV4",
+      name: "IDQMCoreForCard",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.DQMiningV4>;
+    ): Promise<Contracts.IDQMCoreForCard>;
     deployContract(
-      name: "IDQCard",
+      name: "IDQMiningStakeCore",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IDQCard>;
+    ): Promise<Contracts.IDQMiningStakeCore>;
+    deployContract(
+      name: "DQLPMigrator",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DQLPMigrator>;
+    deployContract(
+      name: "DQMAdmin",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DQMAdmin>;
+    deployContract(
+      name: "IDQCardAdmin",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IDQCardAdmin>;
+    deployContract(
+      name: "IDQMCoreAdmin",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IDQMCoreAdmin>;
+    deployContract(
+      name: "IDQMiningStakeAdmin",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IDQMiningStakeAdmin>;
+    deployContract(
+      name: "IDQTokenAdmin",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IDQTokenAdmin>;
+    deployContract(
+      name: "DQMCore",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DQMCore>;
     deployContract(
       name: "IDQMiningStake",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IDQMiningStake>;
     deployContract(
-      name: "IDQToken",
+      name: "IRouter",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IDQToken>;
+    ): Promise<Contracts.IRouter>;
     deployContract(
-      name: "IPancakeRouter02",
+      name: "DQMiningStakeCore",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IPancakeRouter02>;
+    ): Promise<Contracts.DQMiningStakeCore>;
     deployContract(
-      name: "DQMiningStakeV3",
+      name: "IDQMCore",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.DQMiningStakeV3>;
+    ): Promise<Contracts.IDQMCore>;
     deployContract(
-      name: "IDQCard",
+      name: "IDQT",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IDQCard>;
+    ): Promise<Contracts.IDQT>;
     deployContract(
-      name: "IDQToken",
+      name: "IEnergy",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IDQToken>;
+    ): Promise<Contracts.IEnergy>;
     deployContract(
-      name: "IPancakeRouter02",
+      name: "ILP",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IPancakeRouter02>;
+    ): Promise<Contracts.ILP>;
     deployContract(
-      name: "DQToken",
+      name: "IPancakeRouter01",
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.DQToken>;
+    ): Promise<Contracts.IPancakeRouter01>;
+    deployContract(
+      name: "DQMiningStakeMine",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DQMiningStakeMine>;
+    deployContract(
+      name: "DQMiningStakeVault",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DQMiningStakeVault>;
+    deployContract(
+      name: "IDQMCoreForVault",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IDQMCoreForVault>;
+    deployContract(
+      name: "IDQMiningStakeCore",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IDQMiningStakeCore>;
+    deployContract(
+      name: "DQT",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DQT>;
     deployContract(
       name: "IMintableToken",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -390,6 +686,10 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockDQCard>;
     deployContract(
+      name: "MockDQMCoreForStake",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockDQMCoreForStake>;
+    deployContract(
       name: "MockDQMiningStake",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockDQMiningStake>;
@@ -398,9 +698,21 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockERC20Token>;
     deployContract(
+      name: "MockMineContract",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockMineContract>;
+    deployContract(
+      name: "MockPairToken",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockPairToken>;
+    deployContract(
       name: "MockPancakeRouter",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockPancakeRouter>;
+    deployContract(
+      name: "MockPancakeRouterFull",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockPancakeRouterFull>;
     deployContract(
       name: "MockPancakeRouterV3",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -412,25 +724,50 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.Ownable>;
     deployContract(
+      name: "IERC1155Errors",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IERC1155Errors>;
+    deployContract(
+      name: "IERC20Errors",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IERC20Errors>;
+    deployContract(
+      name: "IERC721Errors",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IERC721Errors>;
+    deployContract(
+      name: "IERC1363",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IERC1363>;
+    deployContract(
       name: "ERC20",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.ERC20>;
+    deployContract(
+      name: "ERC20Burnable",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ERC20Burnable>;
     deployContract(
       name: "IERC20Metadata",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC20Metadata>;
     deployContract(
-      name: "IERC20Permit",
-      args: any[],
-      signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IERC20Permit>;
-    deployContract(
       name: "IERC20",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC20>;
+    deployContract(
+      name: "SafeERC20",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SafeERC20>;
     deployContract(
       name: "ERC721",
       args: any[],
@@ -472,60 +809,135 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IERC165>;
     deployContract(
+      name: "SafeCast",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.SafeCast>;
+    deployContract(
+      name: "ReentrancyGuard",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.ReentrancyGuard>;
+    deployContract(
+      name: "Strings",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.Strings>;
+    deployContract(
       name: "DQCard",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.DQCard>;
     deployContract(
-      name: "DQMiningV4",
+      name: "IDQMCoreForCard",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.DQMiningV4>;
+    ): Promise<Contracts.IDQMCoreForCard>;
     deployContract(
-      name: "IDQCard",
+      name: "IDQMiningStakeCore",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IDQCard>;
+    ): Promise<Contracts.IDQMiningStakeCore>;
+    deployContract(
+      name: "DQLPMigrator",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DQLPMigrator>;
+    deployContract(
+      name: "DQMAdmin",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DQMAdmin>;
+    deployContract(
+      name: "IDQCardAdmin",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IDQCardAdmin>;
+    deployContract(
+      name: "IDQMCoreAdmin",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IDQMCoreAdmin>;
+    deployContract(
+      name: "IDQMiningStakeAdmin",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IDQMiningStakeAdmin>;
+    deployContract(
+      name: "IDQTokenAdmin",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IDQTokenAdmin>;
+    deployContract(
+      name: "DQMCore",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DQMCore>;
     deployContract(
       name: "IDQMiningStake",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.IDQMiningStake>;
     deployContract(
-      name: "IDQToken",
+      name: "IRouter",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IDQToken>;
+    ): Promise<Contracts.IRouter>;
     deployContract(
-      name: "IPancakeRouter02",
+      name: "DQMiningStakeCore",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IPancakeRouter02>;
+    ): Promise<Contracts.DQMiningStakeCore>;
     deployContract(
-      name: "DQMiningStakeV3",
+      name: "IDQMCore",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.DQMiningStakeV3>;
+    ): Promise<Contracts.IDQMCore>;
     deployContract(
-      name: "IDQCard",
+      name: "IDQT",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IDQCard>;
+    ): Promise<Contracts.IDQT>;
     deployContract(
-      name: "IDQToken",
+      name: "IEnergy",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IDQToken>;
+    ): Promise<Contracts.IEnergy>;
     deployContract(
-      name: "IPancakeRouter02",
+      name: "ILP",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.IPancakeRouter02>;
+    ): Promise<Contracts.ILP>;
     deployContract(
-      name: "DQToken",
+      name: "IPancakeRouter01",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
-    ): Promise<Contracts.DQToken>;
+    ): Promise<Contracts.IPancakeRouter01>;
+    deployContract(
+      name: "DQMiningStakeMine",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DQMiningStakeMine>;
+    deployContract(
+      name: "DQMiningStakeVault",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DQMiningStakeVault>;
+    deployContract(
+      name: "IDQMCoreForVault",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IDQMCoreForVault>;
+    deployContract(
+      name: "IDQMiningStakeCore",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IDQMiningStakeCore>;
+    deployContract(
+      name: "DQT",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DQT>;
     deployContract(
       name: "IMintableToken",
       args: any[],
@@ -537,6 +949,11 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockDQCard>;
     deployContract(
+      name: "MockDQMCoreForStake",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockDQMCoreForStake>;
+    deployContract(
       name: "MockDQMiningStake",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -547,10 +964,25 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockERC20Token>;
     deployContract(
+      name: "MockMineContract",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockMineContract>;
+    deployContract(
+      name: "MockPairToken",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockPairToken>;
+    deployContract(
       name: "MockPancakeRouter",
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.MockPancakeRouter>;
+    deployContract(
+      name: "MockPancakeRouterFull",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.MockPancakeRouterFull>;
     deployContract(
       name: "MockPancakeRouterV3",
       args: any[],

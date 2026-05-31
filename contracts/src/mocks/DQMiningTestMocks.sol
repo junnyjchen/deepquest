@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.17;
 
+// =========================================================
+// DQMiningTestMocks.sol — 全系统测试用 Mock 合约
+// 包含：MockERC20Token / MockPairToken / MockDQCard /
+//       MockPancakeRouter / MockPancakeRouterV3 /
+//       MockPancakeRouterFull / MockRemoveLiquidityRouter /
+//       MockDQMiningStake / MockMineContract / MockDQMCore
+// =========================================================
+
 interface IMintableToken {
     function mint(address to, uint256 amount) external;
 }
@@ -67,6 +75,24 @@ contract MockERC20Token {
         balanceOf[from] -= amount;
         balanceOf[to] += amount;
         emit Transfer(from, to, amount);
+    }
+
+    // ── DQT compat: called by DQMiningStakeMine via low-level call ──
+    // 模拟 DQT.burnFromPool：从调用者(mine合约)余额销毁
+    function burnFromPool(uint256 amount) external {
+        require(balanceOf[msg.sender] >= amount, "burnFromPool: insufficient");
+        balanceOf[msg.sender] -= amount;
+        totalSupply -= amount;
+        emit Transfer(msg.sender, address(0), amount);
+    }
+
+    // 模拟 DQT.distributeFromPool：从调用者(mine合约)余额转给接收方
+    function distributeFromPool(address to, uint256 amount) external {
+        require(to != address(0), "distributeFromPool: zero addr");
+        require(balanceOf[msg.sender] >= amount, "distributeFromPool: insufficient");
+        balanceOf[msg.sender] -= amount;
+        balanceOf[to] += amount;
+        emit Transfer(msg.sender, to, amount);
     }
 }
 
@@ -228,4 +254,182 @@ contract MockDQMiningStake {
     function unstake(address, uint) external {}
     function clmS(address, uint) external {}
     function mine() external {}
+}
+
+// =========================================================
+// MockPairToken: ERC20 with sync() + mint/burn — 用作 LP Pair
+// =========================================================
+contract MockPairToken {
+    string public name;
+    string public symbol;
+    uint8 public constant decimals = 18;
+    uint256 public totalSupply;
+
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+
+    bool private initialized;
+
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+
+    function initialize(string memory _name, string memory _symbol) external {
+        require(!initialized, "initialized");
+        initialized = true;
+        name = _name;
+        symbol = _symbol;
+    }
+
+    // PancakeSwap Pair 要求的 sync()
+    function sync() external {}
+
+    function mint(address to, uint256 amount) external {
+        balanceOf[to] += amount;
+        totalSupply += amount;
+        emit Transfer(address(0), to, amount);
+    }
+
+    function burn(address from, uint256 amount) external {
+        require(balanceOf[from] >= amount, "burn exceeds balance");
+        balanceOf[from] -= amount;
+        totalSupply -= amount;
+        emit Transfer(from, address(0), amount);
+    }
+
+    function approve(address spender, uint256 amount) external returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        emit Approval(msg.sender, spender, amount);
+        return true;
+    }
+
+    function transfer(address to, uint256 amount) external returns (bool) {
+        _transfer(msg.sender, to, amount);
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+        uint256 allowed = allowance[from][msg.sender];
+        require(allowed >= amount, "insufficient allowance");
+        if (allowed != type(uint256).max) {
+            allowance[from][msg.sender] = allowed - amount;
+        }
+        _transfer(from, to, amount);
+        return true;
+    }
+
+    function _transfer(address from, address to, uint256 amount) internal {
+        require(balanceOf[from] >= amount, "insufficient balance");
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount;
+        emit Transfer(from, to, amount);
+    }
+}
+
+// =========================================================
+// MockPancakeRouterFull: 完整 Router mock，供 DQMCore 使用
+// swap: 从 caller 取 path[0]，向 to 铸造 path[1]（1:1）
+// addLiquidity: 从 caller 取两种代币，向 to 铸造 LP
+// removeLiquidity: 向 to 分别转 tokenA / tokenB
+// =========================================================
+contract MockPancakeRouterFull {
+    address public lpToken;
+    bool private initialized;
+
+    function initialize(address _lpToken) external {
+        require(!initialized, "initialized");
+        initialized = true;
+        lpToken = _lpToken;
+    }
+
+    function getAmountsOut(uint amountIn, address[] calldata path)
+        external pure returns (uint[] memory amounts)
+    {
+        amounts = new uint[](path.length);
+        amounts[0] = amountIn;
+        for (uint i = 1; i < path.length; i++) {
+            amounts[i] = amountIn; // 1:1 rate
+        }
+    }
+
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        uint amountIn,
+        uint,
+        address[] calldata path,
+        address to,
+        uint
+    ) external {
+        MockERC20Token(path[0]).transferFrom(msg.sender, address(this), amountIn);
+        IMintableToken(path[1]).mint(to, amountIn);
+    }
+
+    function addLiquidity(
+        address tokenA,
+        address tokenB,
+        uint amountADesired,
+        uint amountBDesired,
+        uint,
+        uint,
+        address to,
+        uint
+    ) external returns (uint amountA, uint amountB, uint liquidity) {
+        MockERC20Token(tokenA).transferFrom(msg.sender, address(this), amountADesired);
+        MockERC20Token(tokenB).transferFrom(msg.sender, address(this), amountBDesired);
+        amountA = amountADesired;
+        amountB = amountBDesired;
+        liquidity = amountADesired < amountBDesired ? amountADesired : amountBDesired;
+        if (liquidity > 0) {
+            IMintableToken(lpToken).mint(to, liquidity);
+        }
+    }
+
+    // removeLiquidity 供 DQMiningStakeCore.cancelLPEquity 使用
+    function removeLiquidity(
+        address tokenA,
+        address tokenB,
+        uint256 liquidity,
+        uint256,
+        uint256,
+        address to,
+        uint256
+    ) external returns (uint256 amountA, uint256 amountB) {
+        // 从 caller 回收 LP
+        MockPairToken(lpToken).transferFrom(msg.sender, address(this), liquidity);
+        // 向 to 发放等额 tokenA / tokenB
+        amountA = liquidity;
+        amountB = liquidity;
+        IMintableToken(tokenA).mint(to, amountA);
+        IMintableToken(tokenB).mint(to, amountB);
+    }
+}
+
+// =========================================================
+// MockMineContract: 供 DQMiningStakeCore 使用
+// =========================================================
+contract MockMineContract {
+    function distributeLPReward(uint256) external {}
+    function distributeNodeReward(uint256) external {}
+    function distributeDRankReward(uint256) external {}
+}
+
+// =========================================================
+// MockDQMCoreForStake: 供 DQMiningStakeCore 调用的 DQMCore 接口 mock
+// =========================================================
+contract MockDQMCoreForStake {
+    mapping(address => uint256) public totalInvest;
+    mapping(address => bool) public blacklist;
+
+    function setTotalInvest(address user, uint256 amount) external {
+        totalInvest[user] = amount;
+    }
+
+    function getUserTotalInvest(address user) external view returns (uint256) {
+        return totalInvest[user];
+    }
+
+    function isBlacklisted(address user) external view returns (bool) {
+        return blacklist[user];
+    }
+
+    function setReferrer(address, address) external {}
+    function getUserEnergy(address) external view returns (uint256) { return 0; }
 }

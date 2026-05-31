@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.17;
 
-import "@openzeppelin/contracts@4.9.6/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts@4.9.6/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts@4.9.6/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
  * @title DQM Admin V2
@@ -39,7 +39,7 @@ contract DQMAdmin is ReentrancyGuard {
     
     // ============ 修饰器 ============
     modifier onlyOwner() {
-        require(msg.sender == OWNER, "!owner");
+        require(msg.sender == OWNER, "!owner"); // Admin合约只能由部署者钱包调用
         _;
     }
     
@@ -92,19 +92,14 @@ contract DQMAdmin is ReentrancyGuard {
         
         // 设置DQCard
         IDQCardAdmin(dqCard).setAdminContract(address(this));
+        IDQCardAdmin(dqCard).setStakeContract(stakeContract);
+        IDQCardAdmin(dqCard).setCoreContract(coreContract);
     }
     
     // ============ 用户数据导入 ============
     
     /**
-     * @notice 导入单个用户
-     */
-    function importUser(address _user, address _referrer) external onlyOwner {
-        IDQMCoreAdmin(coreContract).importUser(_user, _referrer);
-    }
-    
-    /**
-     * @notice 批量导入用户
+     * @notice 批量导入用户（传入单个用户即为单个导入）
      */
     function importUsers(address[] calldata _users, address[] calldata _referrers) external onlyOwner {
         IDQMCoreAdmin(coreContract).importUsers(_users, _referrers);
@@ -131,6 +126,42 @@ contract DQMAdmin is ReentrancyGuard {
     }
     
     /**
+     * @notice 批量设置用户L等级 (S1-S6对应1-6)
+     * @dev 同时更新 StakeCore 和 DQMCore 两个合约的等级记录
+     */
+    function batchSetUserLevel(address[] calldata _users, uint8[] calldata _levels) external onlyOwner {
+        require(_users.length == _levels.length, "length mismatch");
+        for (uint256 i = 0; i < _users.length; i++) {
+            // 更新 StakeCore 的 userLevel（用于奖励分配）
+            IDQMiningStakeAdmin(stakeContract).importUserLevel(_users[i], _levels[i]);
+            // 同步更新 DQMCore 的 users[].level（用于前端查询展示）
+            IDQMCoreAdmin(coreContract).setUserLevel(_users[i], _levels[i]);
+        }
+    }
+    
+    /**
+     * @notice 批量增加用户能量（同时更新 StakeCore 和 DQMCore）
+     */
+    function batchAddEnergy(address[] calldata _users, uint256[] calldata _amounts) external onlyOwner {
+        require(_users.length == _amounts.length, "length mismatch");
+        for (uint256 i = 0; i < _users.length; i++) {
+            IDQMiningStakeAdmin(stakeContract).addEnergy(_users[i], _amounts[i]);
+            IDQMCoreAdmin(coreContract).adminAddEnergy(_users[i], _amounts[i]);
+        }
+    }
+    
+    /**
+     * @notice 批量设置用户能量（同时更新 StakeCore 和 DQMCore）
+     */
+    function batchSetEnergy(address[] calldata _users, uint256[] calldata _amounts) external onlyOwner {
+        require(_users.length == _amounts.length, "length mismatch");
+        for (uint256 i = 0; i < _users.length; i++) {
+            IDQMiningStakeAdmin(stakeContract).setEnergy(_users[i], _amounts[i]);
+            IDQMCoreAdmin(coreContract).adminSetEnergy(_users[i], _amounts[i]);
+        }
+    }
+    
+    /**
      * @notice 同步用户数据到质押合约
      */
     function syncUserToStake(
@@ -142,8 +173,16 @@ contract DQMAdmin is ReentrancyGuard {
     ) external onlyOwner {
         IDQMiningStakeAdmin(stakeContract).registerUser(_user, _referrer);
         if (_directCount > 0) IDQMiningStakeAdmin(stakeContract).addDirectSales(_user, _directCount);
-        if (_nodeLevel > 0) IDQMiningStakeAdmin(stakeContract).setUserNodeLevel(_user, _nodeLevel);
-        if (_energy > 0) IDQMiningStakeAdmin(stakeContract).setEnergy(_user, _energy);
+        if (_nodeLevel > 0) {
+            IDQMiningStakeAdmin(stakeContract).importUserLevel(_user, _nodeLevel);
+            IDQMiningStakeAdmin(stakeContract).setUserNodeLevel(_user, _nodeLevel);
+            // 同步等级到 DQMCore（前端查询展示）
+            IDQMCoreAdmin(coreContract).setUserLevel(_user, _nodeLevel);
+        }
+        if (_energy > 0) {
+            IDQMiningStakeAdmin(stakeContract).setEnergy(_user, _energy);
+            IDQMCoreAdmin(coreContract).adminSetEnergy(_user, _energy);
+        }
     }
     
     // ============ DQ转入底池 ============
@@ -293,8 +332,10 @@ interface IDQTokenAdmin {
 
 interface IDQMCoreAdmin {
     function setAdminContract(address _addr) external;
-    function importUser(address _user, address _referrer) external;
     function importUsers(address[] calldata _users, address[] calldata _referrers) external;
+    function adminSetEnergy(address _user, uint256 _energy) external;
+    function adminAddEnergy(address _user, uint256 _amount) external;
+    function setUserLevel(address _user, uint8 _level) external;
 }
 
 interface IDQMiningStakeAdmin {
@@ -302,7 +343,10 @@ interface IDQMiningStakeAdmin {
     function registerUser(address _user, address _referrer) external;
     function addDirectSales(address _user, uint256 _amount) external;
     function setUserNodeLevel(address _user, uint8 _level) external;
+    function setUserLevel(address _user, uint8 _level) external;
+    function importUserLevel(address _user, uint8 _level) external;
     function setEnergy(address _user, uint256 _energy) external;
+    function addEnergy(address _user, uint256 _amount) external;
     function registerDLevel(address _user, uint8 _level) external;
     function mine() external;
     function getMineInfo() external view returns (
@@ -315,4 +359,6 @@ interface IDQMiningStakeAdmin {
 
 interface IDQCardAdmin {
     function setAdminContract(address _addr) external;
+    function setStakeContract(address _addr) external;
+    function setCoreContract(address _addr) external;
 }

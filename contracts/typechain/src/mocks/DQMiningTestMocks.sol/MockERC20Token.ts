@@ -30,7 +30,9 @@ export interface MockERC20TokenInterface extends Interface {
       | "approve"
       | "balanceOf"
       | "burn"
+      | "burnFromPool"
       | "decimals"
+      | "distributeFromPool"
       | "initialize"
       | "mint"
       | "name"
@@ -55,7 +57,15 @@ export interface MockERC20TokenInterface extends Interface {
     values: [AddressLike]
   ): string;
   encodeFunctionData(functionFragment: "burn", values: [BigNumberish]): string;
+  encodeFunctionData(
+    functionFragment: "burnFromPool",
+    values: [BigNumberish]
+  ): string;
   encodeFunctionData(functionFragment: "decimals", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "distributeFromPool",
+    values: [AddressLike, BigNumberish]
+  ): string;
   encodeFunctionData(
     functionFragment: "initialize",
     values: [string, string, BigNumberish]
@@ -83,7 +93,15 @@ export interface MockERC20TokenInterface extends Interface {
   decodeFunctionResult(functionFragment: "approve", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "burn", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "burnFromPool",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "decimals", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "distributeFromPool",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "initialize", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "mint", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "name", data: BytesLike): Result;
@@ -194,7 +212,19 @@ export interface MockERC20Token extends BaseContract {
 
   burn: TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
 
+  burnFromPool: TypedContractMethod<
+    [amount: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
+
   decimals: TypedContractMethod<[], [bigint], "view">;
+
+  distributeFromPool: TypedContractMethod<
+    [to: AddressLike, amount: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
 
   initialize: TypedContractMethod<
     [_name: string, _symbol: string, _decimals: BigNumberish],
@@ -251,8 +281,18 @@ export interface MockERC20Token extends BaseContract {
     nameOrSignature: "burn"
   ): TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
   getFunction(
+    nameOrSignature: "burnFromPool"
+  ): TypedContractMethod<[amount: BigNumberish], [void], "nonpayable">;
+  getFunction(
     nameOrSignature: "decimals"
   ): TypedContractMethod<[], [bigint], "view">;
+  getFunction(
+    nameOrSignature: "distributeFromPool"
+  ): TypedContractMethod<
+    [to: AddressLike, amount: BigNumberish],
+    [void],
+    "nonpayable"
+  >;
   getFunction(
     nameOrSignature: "initialize"
   ): TypedContractMethod<

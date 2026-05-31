@@ -3,11 +3,16 @@
 /* eslint-disable */
 import type * as dqcSol from "./DQC.sol";
 export type { dqcSol };
-import type * as dqmSol from "./DQM.sol";
-export type { dqmSol };
-import type * as dqmsSol from "./DQMS.sol";
-export type { dqmsSol };
-import type * as dqtSol from "./DQT.sol";
-export type { dqtSol };
+import type * as dqmAdminSol from "./DQMAdmin.sol";
+export type { dqmAdminSol };
+import type * as dqmCoreSol from "./DQMCore.sol";
+export type { dqmCoreSol };
+import type * as dqMiningStakeCoreSol from "./DQMiningStakeCore.sol";
+export type { dqMiningStakeCoreSol };
+import type * as dqMiningStakeVaultSol from "./DQMiningStakeVault.sol";
+export type { dqMiningStakeVaultSol };
 import type * as mocks from "./mocks";
 export type { mocks };
+export type { DQLPMigrator } from "./DQLPMigrator";
+export type { DQMiningStakeMine } from "./DQMiningStakeMine";
+export type { DQT } from "./DQT";

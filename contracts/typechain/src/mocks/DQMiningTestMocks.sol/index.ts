@@ -3,7 +3,11 @@
 /* eslint-disable */
 export type { IMintableToken } from "./IMintableToken";
 export type { MockDQCard } from "./MockDQCard";
+export type { MockDQMCoreForStake } from "./MockDQMCoreForStake";
 export type { MockDQMiningStake } from "./MockDQMiningStake";
 export type { MockERC20Token } from "./MockERC20Token";
+export type { MockMineContract } from "./MockMineContract";
+export type { MockPairToken } from "./MockPairToken";
 export type { MockPancakeRouter } from "./MockPancakeRouter";
+export type { MockPancakeRouterFull } from "./MockPancakeRouterFull";
 export type { MockPancakeRouterV3 } from "./MockPancakeRouterV3";

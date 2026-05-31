@@ -2,3 +2,5 @@
 /* tslint:disable */
 /* eslint-disable */
 export { DQCard__factory } from "./DQCard__factory";
+export { IDQMCoreForCard__factory } from "./IDQMCoreForCard__factory";
+export { IDQMiningStakeCore__factory } from "./IDQMiningStakeCore__factory";

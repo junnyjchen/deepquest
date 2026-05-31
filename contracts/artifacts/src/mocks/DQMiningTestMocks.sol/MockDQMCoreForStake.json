@@ -1,0 +1,142 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "MockDQMCoreForStake",
+  "sourceName": "src/mocks/DQMiningTestMocks.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "blacklist",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "getUserEnergy",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "user",
+          "type": "address"
+        }
+      ],
+      "name": "getUserTotalInvest",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "user",
+          "type": "address"
+        }
+      ],
+      "name": "isBlacklisted",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "setReferrer",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "user",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
+        }
+      ],
+      "name": "setTotalInvest",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "totalInvest",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x6080604052348015600e575f5ffd5b5061024f8061001c5f395ff3fe608060405234801561000f575f5ffd5b506004361061007a575f3560e01c8063879077c711610058578063879077c714610103578063bbddaca314610116578063f9f92be414610128578063fe575a871461015a575f5ffd5b806313b0dec71461007e5780635fd98f38146100b9578063776756aa146100d8575b5f5ffd5b6100a661008c3660046101a0565b6001600160a01b03165f9081526020819052604090205490565b6040519081526020015b60405180910390f35b6100a66100c73660046101a0565b5f6020819052908152604090205481565b6101016100e63660046101c0565b6001600160a01b039091165f90815260208190526040902055565b005b6100a66101113660046101a0565b505f90565b6101016101243660046101e8565b5050565b61014a6101363660046101a0565b60016020525f908152604090205460ff1681565b60405190151581526020016100b0565b61014a6101683660046101a0565b6001600160a01b03165f9081526001602052604090205460ff1690565b80356001600160a01b038116811461019b575f5ffd5b919050565b5f602082840312156101b0575f5ffd5b6101b982610185565b9392505050565b5f5f604083850312156101d1575f5ffd5b6101da83610185565b946020939093013593505050565b5f5f604083850312156101f9575f5ffd5b61020283610185565b915061021060208401610185565b9050925092905056fea26469706673582212205239b80c48b5905aee07849bf5a966bbb7bb0f1e323ee1e41a659f3f45f34fcb64736f6c63430008230033",
+  "deployedBytecode": "0x608060405234801561000f575f5ffd5b506004361061007a575f3560e01c8063879077c711610058578063879077c714610103578063bbddaca314610116578063f9f92be414610128578063fe575a871461015a575f5ffd5b806313b0dec71461007e5780635fd98f38146100b9578063776756aa146100d8575b5f5ffd5b6100a661008c3660046101a0565b6001600160a01b03165f9081526020819052604090205490565b6040519081526020015b60405180910390f35b6100a66100c73660046101a0565b5f6020819052908152604090205481565b6101016100e63660046101c0565b6001600160a01b039091165f90815260208190526040902055565b005b6100a66101113660046101a0565b505f90565b6101016101243660046101e8565b5050565b61014a6101363660046101a0565b60016020525f908152604090205460ff1681565b60405190151581526020016100b0565b61014a6101683660046101a0565b6001600160a01b03165f9081526001602052604090205460ff1690565b80356001600160a01b038116811461019b575f5ffd5b919050565b5f602082840312156101b0575f5ffd5b6101b982610185565b9392505050565b5f5f604083850312156101d1575f5ffd5b6101da83610185565b946020939093013593505050565b5f5f604083850312156101f9575f5ffd5b61020283610185565b915061021060208401610185565b9050925092905056fea26469706673582212205239b80c48b5905aee07849bf5a966bbb7bb0f1e323ee1e41a659f3f45f34fcb64736f6c63430008230033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

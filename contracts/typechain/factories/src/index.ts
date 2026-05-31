@@ -2,7 +2,11 @@
 /* tslint:disable */
 /* eslint-disable */
 export * as dqcSol from "./DQC.sol";
-export * as dqmSol from "./DQM.sol";
-export * as dqmsSol from "./DQMS.sol";
-export * as dqtSol from "./DQT.sol";
+export * as dqmAdminSol from "./DQMAdmin.sol";
+export * as dqmCoreSol from "./DQMCore.sol";
+export * as dqMiningStakeCoreSol from "./DQMiningStakeCore.sol";
+export * as dqMiningStakeVaultSol from "./DQMiningStakeVault.sol";
 export * as mocks from "./mocks";
+export { DQLPMigrator__factory } from "./DQLPMigrator__factory";
+export { DQMiningStakeMine__factory } from "./DQMiningStakeMine__factory";
+export { DQT__factory } from "./DQT__factory";

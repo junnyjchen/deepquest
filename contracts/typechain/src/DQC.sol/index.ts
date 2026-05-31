@@ -2,3 +2,5 @@
 /* tslint:disable */
 /* eslint-disable */
 export type { DQCard } from "./DQCard";
+export type { IDQMCoreForCard } from "./IDQMCoreForCard";
+export type { IDQMiningStakeCore } from "./IDQMiningStakeCore";

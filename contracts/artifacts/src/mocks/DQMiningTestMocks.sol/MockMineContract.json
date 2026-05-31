@@ -1,0 +1,50 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "MockMineContract",
+  "sourceName": "src/mocks/DQMiningTestMocks.sol",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "distributeDRankReward",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "distributeLPReward",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "distributeNodeReward",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x6080604052348015600e575f5ffd5b50609a80601a5f395ff3fe6080604052348015600e575f5ffd5b5060043610603a575f3560e01c8063450b545714603e57806346bb0cd614603e5780637c85bb6214603e575b5f5ffd5b604c6049366004604e565b50565b005b5f60208284031215605d575f5ffd5b503591905056fea2646970667358221220073cddd97f4348c2d9f515d3e777b3cc474ccc5d753cffc45ca422b76254ec6164736f6c63430008230033",
+  "deployedBytecode": "0x6080604052348015600e575f5ffd5b5060043610603a575f3560e01c8063450b545714603e57806346bb0cd614603e5780637c85bb6214603e575b5f5ffd5b604c6049366004604e565b50565b005b5f60208284031215605d575f5ffd5b503591905056fea2646970667358221220073cddd97f4348c2d9f515d3e777b3cc474ccc5d753cffc45ca422b76254ec6164736f6c63430008230033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}
