@@ -16,7 +16,7 @@ export const CONTRACT_ADDRESSES = {
     name: 'DQStakeCore'
   },
   DQSTAKEMINE: {
-    address: '0xCf8B03F7F89d53277D4Bc7A6B957fD35B9f15a4b',
+    address: '0x377CdAf2dACF3a233af8a2F52c98fcB1eFC135eC',
     name: 'DQStakeMine'
   },
   DQSTAKEVAULT: {
