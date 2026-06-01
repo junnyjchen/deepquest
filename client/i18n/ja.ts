@@ -224,6 +224,7 @@ export default {
     solBalance: 'SOL残高',
     dqBalance: 'DQ残高',
     stakeDays: 'ステーク日数',
+    energy: 'エネルギー',
     pendingRewards: '受取待ち報酬',
     totalRewards: '累計報酬',
     personalInvest: '個人投資',

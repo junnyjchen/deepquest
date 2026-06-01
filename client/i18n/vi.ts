@@ -224,6 +224,7 @@ export default {
     solBalance: 'Số dư SOL',
     dqBalance: 'Số dư DQ',
     stakeDays: 'Số ngày stake',
+    energy: 'Năng lượng',
     pendingRewards: 'Phần thưởng chờ nhận',
     totalRewards: 'Tổng phần thưởng',
     personalInvest: 'Đầu tư cá nhân',

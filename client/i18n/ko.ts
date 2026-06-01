@@ -224,6 +224,7 @@ export default {
     solBalance: 'SOL 잔액',
     dqBalance: 'DQ 잔액',
     stakeDays: '스테이킹 일수',
+    energy: '에너지',
     pendingRewards: '대기 보상',
     totalRewards: '누적 보상',
     personalInvest: '개인 투자',

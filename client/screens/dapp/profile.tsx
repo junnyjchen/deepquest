@@ -83,6 +83,7 @@ export default function DappProfile() {
     totalReward: '0.0',
     referrerAddress: null as string | null,
     dLevel: 'D0',
+    energy: '0',
   });
 
   const fetchChainData = useCallback(async (address: string) => {
@@ -140,8 +141,9 @@ export default function DappProfile() {
           false;
         next.isActivated = prev.isActivated || activatedOnChain;
 
-  // 备注：solTokenBalance、pendingSol 当前没有直接展示在 UI；如果你希望展示，可扩展 userData 结构。
-        // void solTokenBalance;
+        // 能量值：直接用链上最新值
+        if (chainUser?.energy !== undefined) next.energy = chainUser.energy;
+
         return next;
       });
     } catch (error) {
@@ -329,6 +331,7 @@ export default function DappProfile() {
             totalReward: '0.0',
             referrerAddress: null,
             dLevel: 'D0',
+            energy: '0',
           });
         }
       },
@@ -520,6 +523,13 @@ export default function DappProfile() {
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('profile.stakeDays')}</Text>
                 <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>
                   {userLoading ? '...' : userData.stakeDays} {t('common.daysUnit')}
+                </Text>
+              </View>
+              {/* 能量值 - 独占一行 */}
+              <View className="col-span-2 pt-3 mt-1 border-t border-[rgba(48,48,64,0.5)]">
+                <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('profile.energy')}</Text>
+                <Text className="text-base font-bold" style={{ color: CYAN }}>
+                  {chainLoading ? '...' : parseFloat(userData.energy).toFixed(2)}
                 </Text>
               </View>
             </View>

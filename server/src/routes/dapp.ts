@@ -26,6 +26,9 @@ const ERC20_DECIMALS_ABI = [
 type PoolCacheData = {
   usdtPoolBalance: string;
   dqtPoolBalance: string;
+  solRaw: string;        // SOL 储备原始精度，用于价格计算
+  dqtRaw: string;        // DQT 储备原始精度，用于价格计算
+  solUsdtPrice: string;  // SOL/USDT 价格
   token0?: string;
   token1?: string;
   updatedAt: string;
@@ -79,14 +82,37 @@ async function getTokenDecimals(provider: ethers.JsonRpcProvider, tokenAddress: 
   }
 }
 
+// 从 Binance 公开 API 获取 SOL/USDT 价格
+async function getSolUsdtPrice(): Promise<string> {
+  try {
+    const res = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT');
+    if (!res.ok) throw new Error(`Binance API 响应异常: ${res.status}`);
+    const json = await res.json() as { price: string };
+    return json.price;
+  } catch (error) {
+    console.warn('[DApp] 获取 SOL/USDT 价格失败，使用备用源:', error);
+    // 备用：CoinGecko 公开 API
+    try {
+      const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+      if (!res.ok) throw new Error(`CoinGecko API 响应异常: ${res.status}`);
+      const json = await res.json() as { solana: { usd: number } };
+      return String(json.solana.usd);
+    } catch (err2) {
+      console.error('[DApp] 备用价格源也失败:', err2);
+      return '0';
+    }
+  }
+}
+
 async function getPoolDataFromChain(): Promise<PoolCacheData> {
   const provider = new ethers.JsonRpcProvider(BSC_RPC_URL, undefined, { batchMaxCount: 1 });
   const pair = new ethers.Contract(AVE_PAIR_ADDRESS, AVE_PAIR_ABI, provider);
 
-  const [reserves, token0Raw, token1Raw] = await Promise.all([
+  const [reserves, token0Raw, token1Raw, solUsdtPrice] = await Promise.all([
     pair.getReserves(),
     pair.token0(),
     pair.token1(),
+    getSolUsdtPrice(),
   ]);
 
   const token0 = String(token0Raw).toLowerCase();
@@ -101,11 +127,14 @@ async function getPoolDataFromChain(): Promise<PoolCacheData> {
 
   const dqtToken = DQTOKEN_CONTRACT_ADDRESS.toLowerCase();
   const dqtBalance = token0 === dqtToken ? reserve0 : reserve1;
-  const usdtBalance = token0 === dqtToken ? reserve1 : reserve0;
+  const solBalance = token0 === dqtToken ? reserve1 : reserve0;
 
   const data: PoolCacheData = {
-    usdtPoolBalance: formatFixed2(usdtBalance),
+    usdtPoolBalance: formatFixed2(solBalance),  // 展示用（SOL 储备）
     dqtPoolBalance: formatFixed2(dqtBalance),
+    solRaw: solBalance,
+    dqtRaw: dqtBalance,
+    solUsdtPrice,
     token0,
     token1,
     updatedAt: new Date().toISOString(),
@@ -144,7 +173,6 @@ router.get('/stats', async (req, res) => {
     // 计算统计数据
     const totalUsers = usersResult.count || 0;
     const todayDeposit = todayDepositsResult.data?.reduce((sum: number, d: { amount?: string }) => sum + parseFloat(d.amount || '0'), 0) || 0;
-
     // 模拟一些动态数据
     const stats = {
       // 平台数据
@@ -156,6 +184,9 @@ router.get('/stats', async (req, res) => {
       // 底池数据
       usdtPoolBalance: poolData.usdtPoolBalance,
       dqtPoolBalance: poolData.dqtPoolBalance,
+      dqtPrice: (parseFloat(poolData.solRaw) && parseFloat(poolData.dqtRaw) && parseFloat(poolData.solUsdtPrice))
+        ? ((parseFloat(poolData.solRaw) / parseFloat(poolData.dqtRaw)) * parseFloat(poolData.solUsdtPrice)).toFixed(8)
+        : '0.00000000',
       
       // 全网数据
       totalUsers: totalUsers,

@@ -217,6 +217,7 @@ export default {
         solBalance: 'SOL Balance',
         dqBalance: 'DQ Balance',
         stakeDays: 'Staking Days',
+        energy: 'Energy',
         pendingRewards: 'Pending rewards',
         totalRewards: 'Total rewards',
     personalInvest: 'Personal investment',

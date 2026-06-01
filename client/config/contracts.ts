@@ -37,6 +37,8 @@ export const CONTRACT_ADDRESSES = {
   }
 };
 
+export const AVE_PAIR_ADDRESS = '0x540a8eee2be3d8bca4d59af43f15b6f1fc0c979c';
+
 export {
   DQPROJECT_ABI,
   DQSTAKE_ABI,

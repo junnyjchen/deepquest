@@ -234,6 +234,7 @@ export default {
     solBalance: 'SOL余额',
     dqBalance: 'DQ余额',
     stakeDays: '质押天数',
+    energy: '能量值',
     pendingRewards: '待领取收益',
     totalRewards: '累计收益',
     personalInvest: '个人投资',

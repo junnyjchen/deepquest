@@ -1510,14 +1510,14 @@ export default function DappIndex() {
             {t('home.networkData')}
           </Text>
           <View className="flex-row flex-wrap gap-2">
-            {/* 今日入单 */}
+            {/* DQ价格 */}
             <View 
               className="w-[calc(50%-4px)] p-3 rounded-xl"
               style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 1, borderColor: YELLOW }}
             >
-              <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('home.todayDeposit')}</Text>
+              <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('home.dqtPrice')}</Text>
               <Text className="text-lg font-bold" style={{ color: YELLOW }}>
-                {statsLoading ? '...' : stats.todayDeposit}
+                {statsLoading ? '...' : `$${stats.dqtPrice}`}
               </Text>
             </View>
             

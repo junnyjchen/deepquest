@@ -369,11 +369,14 @@ export const getUserFromChain = async (userAddress: string) => {
 
     if (!isRegistered) return null;
 
+    const energyRaw = await contract.getAvailableEnergy(userAddress).catch(() => 0n);
+
     return {
       referrer,
       directCount: Number(directCount),
       level: Number(level),
       totalInvest: ethers.formatEther(totalInvest),
+      energy: ethers.formatEther(energyRaw),
     };
   } catch (e) {
     // 如果调用本身 revert / ABI 不匹配，也返回 null（但建议日志打出来）
