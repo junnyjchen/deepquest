@@ -369,7 +369,8 @@ export const getUserFromChain = async (userAddress: string) => {
 
     if (!isRegistered) return null;
 
-    const energyRaw = await contract.getAvailableEnergy(userAddress).catch(() => 0n);
+    const stakeContract = getStakeCoreContract();
+    const energyRaw = await stakeContract.userEnergy(userAddress).catch(() => 0n);
 
     return {
       referrer,
