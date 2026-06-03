@@ -1,4 +1,5 @@
-﻿const { ethers } = require("ethers");
+﻿/* global require */
+const { ethers } = require("ethers");
 
 async function main() {
     const provider = new ethers.JsonRpcProvider("https://bsc-dataseed.binance.org/");

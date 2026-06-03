@@ -101,7 +101,7 @@ export const toastConfig: ToastConfig = {
         gap: 12,
       }}
     >
-      <Text style={{ fontSize: 20 }}>ℹ</Text>
+      <Text style={{ fontSize: 20 }}>i</Text>
       <View style={{ flex: 1 }}>
         {props.text1 && (
           <Text style={{ color: TEXT_WHITE, fontSize: 15, fontWeight: '600', marginBottom: 4 }}>

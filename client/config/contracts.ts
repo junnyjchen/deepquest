@@ -7,12 +7,16 @@
 
 // 主合约地址
 export const CONTRACT_ADDRESSES = {
+  DQADMIN: {
+    address: '0xf6E4ab5e212cACC52dF1927F8AF9d99B2b7590b5',
+    name: 'DQMAdmin',
+  },
   DQPROJECT: {
-    address: '0x85f20cD995e36C19419AfB71559a7234a153EF2f',
+    address: '0xc99C923703D1dAb41B92ABF59D5a35d3a9375B34',
     name: 'DQMCore'
   },
   DQSTAKE: {
-    address: '0xF8045E6521d38670b139799c99bc5744FB6C7411',
+    address: '0xa261563844F240D2e2B68BA1aB38Ae05d52D50De',
     name: 'DQStakeCore'
   },
   DQSTAKEMINE: {
@@ -40,6 +44,7 @@ export const CONTRACT_ADDRESSES = {
 export const AVE_PAIR_ADDRESS = '0x540a8eee2be3d8bca4d59af43f15b6f1fc0c979c';
 
 export {
+  DQADMIN_ABI,
   DQPROJECT_ABI,
   DQSTAKE_ABI,
   DQSTAKEMINE_ABI,

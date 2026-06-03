@@ -660,7 +660,9 @@ export const stakeDQOnChain = async (
 };
 
 export interface ChainStakeRecord {
+  level: number;
   recordIndex: number;
+  recordKey: string;
   amount: string;
   startTime: number;
   duration: number;
@@ -675,30 +677,58 @@ export interface ChainStakeRecord {
 export const getStakeRecordsFromChain = async (userAddress: string): Promise<ChainStakeRecord[]> => {
   try {
     const contract = getStakeVaultContract();
-    const [[amounts, times, pendingRewards], durations] = await Promise.all([
+    const [stakeInfo, durations, recordsByLevel] = await Promise.all([
       contract.getStakeInfo(userAddress),
       Promise.all([0, 1, 2, 3].map((level) => contract.stakeDurations(level))),
+      Promise.all(
+        [0, 1, 2, 3].map((level) => contract.getStakeRecords(userAddress, level).catch(() => [[], [], [], []]))
+      ),
     ]);
 
-    const now = Math.floor(Date.now() / 1000);
-    const records = amounts
-      .map((amount: bigint, index: number) => {
-        const startTime = Number(times[index]);
-        const duration = Number(durations[index]);
-        const active = BigInt(amount) > 0n;
+    const [amountsSummary] = stakeInfo;
+    const hasAnyStake = Array.isArray(amountsSummary)
+      ? amountsSummary.some((amount: bigint) => BigInt(amount) > 0n)
+      : false;
+    if (!hasAnyStake) {
+      return [];
+    }
 
-        return {
+    const now = Math.floor(Date.now() / 1000);
+    const records: ChainStakeRecord[] = [];
+
+    for (let level = 0; level < 4; level++) {
+      const duration = Number(durations[level]);
+      const [amounts, startTimes, actives, pendingRewards] = recordsByLevel[level] as [
+        bigint[],
+        bigint[],
+        boolean[],
+        bigint[]
+      ];
+
+      for (let index = 0; index < amounts.length; index++) {
+        const amount = BigInt(amounts[index] ?? 0n);
+        const startTime = Number(startTimes[index] ?? 0n);
+        const active = Boolean(actives[index]);
+
+        if (!active || amount <= 0n) {
+          continue;
+        }
+
+        records.push({
+          level,
           recordIndex: index,
+          recordKey: `${level}-${index}`,
           amount: ethers.formatEther(amount),
           startTime,
           duration,
-          pendingReward: ethers.formatEther(pendingRewards[index]),
+          pendingReward: ethers.formatEther(BigInt(pendingRewards[index] ?? 0n)),
           active,
-          canUnstake: active && startTime > 0 && now >= startTime + duration,
-        } satisfies ChainStakeRecord;
-      })
-      .filter((record: ChainStakeRecord) => record.active);
+          canUnstake: startTime > 0 && now >= startTime + duration,
+        });
+      }
+    }
 
+    records.sort((left, right) => right.startTime - left.startTime);
     return records;
   } catch (error) {
     console.error('[Web3] 获取链上质押记录失败:', error);
@@ -711,18 +741,24 @@ export const getStakeRecordsFromChain = async (userAddress: string): Promise<Cha
  */
 export const unstakeDQOnChain = async (
   signer: ethers.Signer,
+  level: number,
   recordIndex: number
 ): Promise<ethers.TransactionResponse> => {
   const userAddress = await signer.getAddress();
   const stakeContract = await getSignedStakeVaultContract(signer);
 
   try {
-    const [amounts, times] = await stakeContract.getStakeInfo(userAddress);
+    if (level < 0 || level > 3) {
+      throw new Error('质押等级无效（0-3）');
+    }
+
+    const [amounts, startTimes, actives] = await stakeContract.getStakeRecords(userAddress, level);
     const amount = BigInt(amounts[recordIndex] ?? 0n);
-    const startTime = Number(times[recordIndex] ?? 0n);
-    const duration = Number(await stakeContract.stakeDurations(recordIndex));
+    const startTime = Number(startTimes[recordIndex] ?? 0n);
+    const duration = Number(await stakeContract.stakeDurations(level));
+    const isActiveFlag = Boolean(actives[recordIndex]);
     const active = amount > 0n;
-    const canUnstake = active && startTime > 0 && Math.floor(Date.now() / 1000) >= startTime + duration;
+    const canUnstake = active && isActiveFlag && startTime > 0 && Math.floor(Date.now() / 1000) >= startTime + duration;
 
     if (!active) {
       throw new Error('该质押记录已解押');
@@ -732,13 +768,13 @@ export const unstakeDQOnChain = async (
     }
 
     try {
-      await stakeContract.unstake.staticCall(recordIndex, amount);
+      await stakeContract.unstake.staticCall(level, recordIndex);
     } catch (error) {
       console.error('[Web3] unstake staticCall 失败:', error);
       throw error;
     }
 
-    const tx = await stakeContract.unstake(recordIndex, amount);
+    const tx = await stakeContract.unstake(level, recordIndex);
     console.log('[Web3] 解押交易已发送:', tx.hash);
     return tx;
   } catch (preflightError) {
@@ -1124,7 +1160,7 @@ export const getPendingBlockReward = async (userAddress: string): Promise<string
 export const getPendingStakeReward = async (userAddress: string, periodIndex: number): Promise<string> => {
   try {
     const contract = getStakeVaultContract();
-    const [, , pendingRewards] = await contract.getStakeInfo(userAddress);
+    const [, pendingRewards] = await contract.getStakeInfo(userAddress);
     return ethers.formatEther(pendingRewards[periodIndex] ?? 0n);
   } catch (error) {
     console.error('[Web3] 获取待领取质押奖励失败:', error);

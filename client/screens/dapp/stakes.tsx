@@ -31,7 +31,9 @@ const CYAN = '#00F0FF';
 const WALLET_STORAGE_KEY = '@deepquest_wallet';
 
 interface StakeRecord {
-  id: number;
+  id: string;
+  level: number;
+  recordIndex: number;
   amount: string;
   duration: number;
   startTime: number;
@@ -46,7 +48,7 @@ export default function DappStakes() {
   const [refreshing, setRefreshing] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [stakes, setStakes] = useState<StakeRecord[]>([]);
-  const [unstakingId, setUnstakingId] = useState<number | null>(null);
+  const [unstakingId, setUnstakingId] = useState<string | null>(null);
   const [confirmRecord, setConfirmRecord] = useState<StakeRecord | null>(null);
 
   useFocusEffect(
@@ -74,7 +76,9 @@ export default function DappStakes() {
       setLoading(true);
       const records = await getStakeRecordsFromChain(address);
       setStakes(records.map((record) => ({
-        id: record.recordIndex,
+        id: record.recordKey,
+        level: record.level,
+        recordIndex: record.recordIndex,
         amount: record.amount,
         duration: record.duration,
         startTime: record.startTime,
@@ -144,7 +148,7 @@ export default function DappStakes() {
         return;
       }
 
-      const tx = await unstakeDQOnChain(walletInfo.signer, confirmRecord.id);
+      const tx = await unstakeDQOnChain(walletInfo.signer, confirmRecord.level, confirmRecord.recordIndex);
       await tx.wait();
 
       showToast.success(t('common.success'), t('stakes.unstakeSuccess'));

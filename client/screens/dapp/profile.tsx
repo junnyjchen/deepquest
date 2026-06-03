@@ -210,6 +210,7 @@ export default function DappProfile() {
           teamInvest: response.data.team_invest || '0.0',
           totalReward: response.data.total_reward || '0.0',
           referrerAddress: response.data.referrer_address || null,
+          energy: response.data.energy || '0',
         });
       }
     } catch (error) {

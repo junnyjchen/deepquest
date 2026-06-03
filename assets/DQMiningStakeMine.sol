@@ -25,7 +25,7 @@ contract DQMiningStakeMine is Ownable, ReentrancyGuard {
     address public adminContract;  // 管理员合约
     
     // 爆块参数
-    uint256 public constant DAILY_RELEASE_RATE = 13; // 1.3% (基点)
+    uint256 public constant DAILY_RELEASE_RATE = 130; // 1.3% (基点)
     uint256 public constant MAX_BURN_RATE = 8000;    // 初始销毁率 80%
     uint256 public constant MIN_BURN_RATE = 3000;    // 最低销毁率 30%
     uint256 public constant BURN_DECAY_RATE = 50;    // 每天递减 0.5%
@@ -72,7 +72,12 @@ contract DQMiningStakeMine is Ownable, ReentrancyGuard {
     event DLevelRewardNotified(uint256 amount, bool success);
     
     modifier onlyStakeCore() {
-        require(msg.sender == stakeCore || msg.sender == owner(), "!core");
+        require(msg.sender == stakeCore || msg.sender == owner() || msg.sender == adminContract, "!core");
+        _;
+    }
+    
+    modifier onlyOwnerOrAdmin() {
+        require(msg.sender == owner() || msg.sender == adminContract, "!auth");
         _;
     }
     
@@ -92,7 +97,7 @@ contract DQMiningStakeMine is Ownable, ReentrancyGuard {
     /**
      * @dev 设置D等级池地址
      */
-    function setDLevelPool(address _dLevelPool) external onlyOwner {
+    function setDLevelPool(address _dLevelPool) external onlyOwnerOrAdmin {
         dLevelPool = _dLevelPool;
     }
     
@@ -100,7 +105,7 @@ contract DQMiningStakeMine is Ownable, ReentrancyGuard {
      * @dev 设置初始总量（如1000亿DQ）
      * @param _initialTotalSupply 初始总量（带18位小数）
      */
-    function setInitialTotalSupply(uint256 _initialTotalSupply) external onlyOwner {
+    function setInitialTotalSupply(uint256 _initialTotalSupply) external onlyOwnerOrAdmin {
         require(initialTotalSupply == 0, "Already set");
         initialTotalSupply = _initialTotalSupply;
         emit InitialSupplySet(_initialTotalSupply);
@@ -124,7 +129,7 @@ contract DQMiningStakeMine is Ownable, ReentrancyGuard {
     /**
      * @dev 设置合伙人地址 (创始人6%接收地址)
      */
-    function setPartnerAddress(address _partner) external onlyOwner {
+    function setPartnerAddress(address _partner) external onlyOwnerOrAdmin {
         founder = _partner;
     }
     
@@ -136,7 +141,7 @@ contract DQMiningStakeMine is Ownable, ReentrancyGuard {
         address _foundation,
         address _founder,
         address _dLevelPool
-    ) external onlyOwner {
+    ) external onlyOwnerOrAdmin {
         stakeCore = _stakeCore;
         foundation = _foundation;
         founder = _founder;
@@ -153,7 +158,7 @@ contract DQMiningStakeMine is Ownable, ReentrancyGuard {
         uint256 _dLevel,
         uint256 _foundation,
         uint256 _founder
-    ) external onlyOwner {
+    ) external onlyOwnerOrAdmin {
         require(_lp + _node + _dLevel + _foundation + _founder == 10000, "Invalid ratios");
         lpRatio = _lp;
         nodeRatio = _node;
@@ -379,7 +384,7 @@ contract DQMiningStakeMine is Ownable, ReentrancyGuard {
     /**
      * @dev 紧急提取
      */
-    function emergencyWithdraw(address token, address to, uint256 amount) external onlyOwner {
+    function emergencyWithdraw(address token, address to, uint256 amount) external onlyOwnerOrAdmin {
         if (token == address(0)) {
             payable(to).transfer(amount);
         } else {
