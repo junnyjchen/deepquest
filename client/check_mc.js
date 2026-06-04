@@ -2,6 +2,7 @@
  * 诊断脚本：检查 DQMiningStakeCore.mc 是否指向 DQMCore 地址
  * 运行: node check_mc.js
  */
+/* global require */
 const { ethers } = require("ethers");
 
 async function main() {
@@ -38,10 +39,10 @@ async function main() {
   console.log("DQStake (DQSTAKE)    :", DQ_STAKE_ADDR);
   console.log("");
   console.log("DQMCore.stakeContract:", coreStakeAddr);
-  console.log("  → 应等于 DQSTAKE 地址:", coreStakeAddr === DQ_STAKE_ADDR ? "✅ 匹配" : "❌ 不匹配！");
+  console.log("  → 应等于 DQSTAKE 地址:", coreStakeAddr === DQ_STAKE_ADDR ? "[OK] 匹配" : "[FAIL] 不匹配！");
   console.log("");
   console.log("DQMiningStakeCore.mc :", mc);
-  console.log("  → 应等于 DQMCore 地址:", mc === DQ_CORE_ADDR ? "✅ 匹配" : "❌ 不匹配！需要管理员调用 setM()");
+  console.log("  → 应等于 DQMCore 地址:", mc === DQ_CORE_ADDR ? "[OK] 匹配" : "[FAIL] 不匹配！需要管理员调用 setM()");
   console.log("");
   console.log("DQMiningStakeCore.adminContract:", adminContract);
   console.log("DQMiningStakeCore.lpPair       :", lpPair);
@@ -49,7 +50,7 @@ async function main() {
 
   if (mc !== DQ_CORE_ADDR) {
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    console.log("🔴 问题确认：mc 未设置为 DQMCore 地址");
+    console.log("[ISSUE] 问题确认：mc 未设置为 DQMCore 地址");
     console.log("   导致 addLP 调用时 onlyM 鉴权失败（!op）");
     console.log("   入金交易会 revert，lpS[user] 永远为 0");
     console.log("");

@@ -50,7 +50,7 @@ const COLORS = {
   cardBg: 'rgba(26, 26, 48, 0.6)',
 };
 
-const noop = (): void => {};
+const noop = (): void => undefined;
 
 type ConfirmDialogState = {
   visible: boolean;

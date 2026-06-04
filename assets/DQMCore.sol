@@ -67,7 +67,6 @@ contract DQMCore is ReentrancyGuard {
     address public dqCard;
     address public stakeContract;
     address public adminContract;
-    address public migratorContract;  // 迁移合约
     address public pool;  // 底池地址
     
     // DAO/运营/保险地址（由DQMCore直接分发奖励，与原始代码一致）
@@ -98,10 +97,12 @@ contract DQMCore is ReentrancyGuard {
     mapping(address => User) internal users;
     address[] public allUsers;
     mapping(address => bool) public isBlacklisted;
-    mapping(address => uint256) public dailyDeposit;       // 用户已入金累计金额（非白名单用户受currentDepositLimit限制）
+    mapping(address => uint256) public dailyDeposit;       // 用户当日已入金累计金额（非白名单用户受currentDepositLimit限制）
+    mapping(address => uint256) public dailyDepositDay;    // 用户入金日期（用于每日重置）
     mapping(address => bool) public depositWhiteList;
     mapping(address => uint256) public userEnergy;         // 用户能量
     mapping(address => uint256) public userEnergyUsed;     // 用户已使用能量
+    mapping(address => address) public userReferrer;      // 用户推荐关系
     uint256 public totalEnergy;                            // 系统总能量
     uint256 public startTime;
     uint256 public currentPhase = 1;                       // 当前阶段
@@ -182,10 +183,6 @@ contract DQMCore is ReentrancyGuard {
         isBlacklisted[_user] = _status;
     }
     
-    function setMigratorContract(address _migrator) external onlyOwner {
-        migratorContract = _migrator;
-    }
-    
     function setDAO(address _dao) external onlyOwner {
         DAO = _dao;
     }
@@ -221,7 +218,7 @@ contract DQMCore is ReentrancyGuard {
         
         // 同步推荐关系到StakeCore
         if (stakeContract != address(0)) {
-            IDQMiningStake(stakeContract).setReferrer(msg.sender, referrer);
+            IDQMiningStake(stakeContract).registerUser(msg.sender, referrer, 0);
         }
         
         emit Register(msg.sender, referrer);
@@ -279,6 +276,12 @@ contract DQMCore is ReentrancyGuard {
         require(_amount <= currentDepositLimit, "!limit");
 
         if (!depositWhiteList[msg.sender]) {
+            // 每日重置：检查是否跨天
+            uint256 today = block.timestamp / 1 days;
+            if (dailyDepositDay[msg.sender] != today) {
+                dailyDeposit[msg.sender] = 0;
+                dailyDepositDay[msg.sender] = today;
+            }
             uint256 lim = currentDepositLimit;
             require(dailyDeposit[msg.sender] + _amount <= lim, "!lim");
             dailyDeposit[msg.sender] += _amount;
@@ -530,6 +533,19 @@ contract DQMCore is ReentrancyGuard {
     function transferSOLToUser(address _user, uint256 _amount) external {
         require(msg.sender == stakeContract, "!stake");
         IERC20(SOL).safeTransfer(_user, _amount);
+    }
+
+    /**
+     * @notice 设置用户推荐关系（供StakeCore批量导入调用，同步推荐关系）
+     */
+    function setReferrer(address _user, address _referrer) external {
+        require(msg.sender == stakeContract || msg.sender == adminContract || msg.sender == OWNER, "!auth");
+        if (userReferrer[_user] == address(0) && _referrer != address(0) && _user != _referrer) {
+            userReferrer[_user] = _referrer;
+            if (stakeContract != address(0)) {
+                IDQMiningStake(stakeContract).registerUser(_user, _referrer, 0);
+            }
+        }
     }
     
     // ============ 查询函数 ============
@@ -799,5 +815,5 @@ interface IDQMiningStake {
     function recordLP(address _user, uint256 _lpAmount) external;
     function withdrawSOL(address _user, uint256 _amount) external;
     function userLevel(address _user) external view returns (uint8);
-    function setReferrer(address _user, address _referrer) external;
+    function registerUser(address _user, address _referrer, uint8 _level) external;
 }

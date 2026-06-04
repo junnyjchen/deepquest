@@ -269,36 +269,38 @@ export default function NodeCsvImportScreen() {
                 </Text>
               </View>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View>
-                <View className="flex-row bg-gray-100 rounded-t-lg">
-                  <Text className="w-36 p-2 text-sm font-medium">钱包地址</Text>
-                  <Text className="w-36 p-2 text-sm font-medium">推荐人地址</Text>
-                  <Text className="w-20 p-2 text-sm font-medium">等级</Text>
-                </View>
-                {parsedData.slice(0, 10).map((row, idx) => (
-                  <View
-                    key={idx}
-                    className={`flex-row ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
-                  >
-                    <Text className="w-36 p-2 text-xs" numberOfLines={1}>
-                      {row.wallet_address}
-                    </Text>
-                    <Text className="w-36 p-2 text-xs" numberOfLines={1}>
-                      {row.parent_address || '-'}
-                    </Text>
-                    <Text className={`w-20 p-2 text-xs ${row.level ? 'text-green-600' : 'text-gray-400'}`}>
-                      {row.level || '-'}
-                    </Text>
+            <View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View>
+                  <View className="flex-row bg-gray-100 rounded-t-lg">
+                    <Text className="w-36 p-2 text-sm font-medium">钱包地址</Text>
+                    <Text className="w-36 p-2 text-sm font-medium">推荐人地址</Text>
+                    <Text className="w-20 p-2 text-sm font-medium">等级</Text>
                   </View>
-                ))}
-                {parsedData.length > 10 && (
-                  <Text className="p-2 text-xs text-gray-500">
-                    ... 还有 {parsedData.length - 10} 条数据
-                  </Text>
-                )}
-              </View>
-            </ScrollView>
+                  {parsedData.slice(0, 10).map((row, idx) => (
+                    <View
+                      key={idx}
+                      className={`flex-row ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                    >
+                      <Text className="w-36 p-2 text-xs" numberOfLines={1}>
+                        {row.wallet_address}
+                      </Text>
+                      <Text className="w-36 p-2 text-xs" numberOfLines={1}>
+                        {row.parent_address || '-'}
+                      </Text>
+                      <Text className={`w-20 p-2 text-xs ${row.level ? 'text-green-600' : 'text-gray-400'}`}>
+                        {row.level || '-'}
+                      </Text>
+                    </View>
+                  ))}
+                  {parsedData.length > 10 && (
+                    <Text className="p-2 text-xs text-gray-500">
+                      ... 还有 {parsedData.length - 10} 条数据
+                    </Text>
+                  )}
+                </View>
+              </ScrollView>
+            </View>
           </View>
         )}
 

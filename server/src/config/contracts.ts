@@ -69,6 +69,7 @@ function loadAbi(fileName: string): InterfaceAbi {
 }
 
 export const DQPROJECT_ABI = loadAbi('DQMCore.txt');
+export const DQADMIN_ABI = loadAbi('DQMAdmin.txt');
 export const DQSTAKE_ABI = loadAbi('DQMiningStakeCore.txt');
 export const DQSTAKEMINE_ABI = loadAbi('DQMiningStakeMine.txt');
 export const DQSTAKEVAULT_ABI = loadAbi('DQMiningStakeVault.txt');
@@ -76,12 +77,16 @@ export const DQTOKEN_ABI = loadAbi('DQT.txt');
 export const DQCARD_ABI = loadAbi('DQC.txt');
 
 export const CONTRACT_ADDRESSES = {
+  DQADMIN: {
+    address: '0xf6E4ab5e212cACC52dF1927F8AF9d99B2b7590b5',
+    name: 'DQMAdmin',
+  },
   DQPROJECT: {
-    address: '0x85f20cD995e36C19419AfB71559a7234a153EF2f',
+    address: '0xc99C923703D1dAb41B92ABF59D5a35d3a9375B34',
     name: 'DQMCore',
   },
   DQSTAKE: {
-    address: '0xF8045E6521d38670b139799c99bc5744FB6C7411',
+    address: '0xa261563844F240D2e2B68BA1aB38Ae05d52D50De',
     name: 'DQStakeCore',
   },
   DQSTAKEMINE: {
@@ -107,6 +112,7 @@ export const CONTRACT_ADDRESSES = {
 } as const;
 
 export const DQ_CONTRACT_ADDRESS = CONTRACT_ADDRESSES.DQPROJECT.address;
+export const DQADMIN_CONTRACT_ADDRESS = CONTRACT_ADDRESSES.DQADMIN.address;
 export const DQSTAKE_CONTRACT_ADDRESS = CONTRACT_ADDRESSES.DQSTAKE.address;
 export const DQSTAKEMINE_CONTRACT_ADDRESS = CONTRACT_ADDRESSES.DQSTAKEMINE.address;
 export const DQSTAKEVAULT_CONTRACT_ADDRESS = CONTRACT_ADDRESSES.DQSTAKEVAULT.address;
