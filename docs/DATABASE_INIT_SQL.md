@@ -171,6 +171,16 @@ CREATE INDEX IF NOT EXISTS withdrawals_created_idx ON withdrawals(created_at);
 CREATE TABLE IF NOT EXISTS lp_stakes (
     id SERIAL PRIMARY KEY,
     user_address VARCHAR(64) NOT NULL,
+    tx_hash VARCHAR(128),
+    close_tx_hash VARCHAR(128),
+    event_name VARCHAR(20) NOT NULL DEFAULT 'Staked',
+    close_event_name VARCHAR(20),
+    event_id VARCHAR(191),
+    close_event_id VARCHAR(191),
+    chain_log_index INTEGER,
+    close_log_index INTEGER,
+    block_number INTEGER,
+    close_block_number INTEGER,
     amount NUMERIC(20, 9) NOT NULL,
     stake_days INTEGER NOT NULL,
     start_time TIMESTAMPTZ DEFAULT NOW() NOT NULL,
@@ -182,6 +192,20 @@ CREATE TABLE IF NOT EXISTS lp_stakes (
 
 CREATE INDEX IF NOT EXISTS lp_stakes_user_idx ON lp_stakes(user_address);
 CREATE INDEX IF NOT EXISTS lp_stakes_claimed_idx ON lp_stakes(is_claimed);
+CREATE INDEX IF NOT EXISTS lp_stakes_event_id_idx ON lp_stakes(event_id);
+
+-- 旧库升级到事件级质押记录模型时，可补执行以下 SQL
+ALTER TABLE lp_stakes ADD COLUMN IF NOT EXISTS tx_hash VARCHAR(128);
+ALTER TABLE lp_stakes ADD COLUMN IF NOT EXISTS close_tx_hash VARCHAR(128);
+ALTER TABLE lp_stakes ADD COLUMN IF NOT EXISTS event_name VARCHAR(20) NOT NULL DEFAULT 'Staked';
+ALTER TABLE lp_stakes ADD COLUMN IF NOT EXISTS close_event_name VARCHAR(20);
+ALTER TABLE lp_stakes ADD COLUMN IF NOT EXISTS event_id VARCHAR(191);
+ALTER TABLE lp_stakes ADD COLUMN IF NOT EXISTS close_event_id VARCHAR(191);
+ALTER TABLE lp_stakes ADD COLUMN IF NOT EXISTS chain_log_index INTEGER;
+ALTER TABLE lp_stakes ADD COLUMN IF NOT EXISTS close_log_index INTEGER;
+ALTER TABLE lp_stakes ADD COLUMN IF NOT EXISTS block_number INTEGER;
+ALTER TABLE lp_stakes ADD COLUMN IF NOT EXISTS close_block_number INTEGER;
+CREATE INDEX IF NOT EXISTS lp_stakes_event_id_idx ON lp_stakes(event_id);
 
 -- 8. 爆块记录表
 CREATE TABLE IF NOT EXISTS block_rewards (

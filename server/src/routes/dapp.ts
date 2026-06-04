@@ -255,6 +255,8 @@ router.post('/stake', async (req, res) => {
       .from('lp_stakes')
       .insert({
         user_address: wallet_address.toLowerCase(),
+        tx_hash: tx_hash,
+        event_name: 'Staked',
         amount: amount,
         stake_days: normalizedStakeDays,
         start_time: now.toISOString(),
@@ -2169,6 +2171,28 @@ router.get('/sync/status', async (req, res) => {
 });
 
 /**
+ * 获取质押同步状态
+ * GET /api/v1/dapp/sync/stakes/status
+ */
+router.get('/sync/stakes/status', async (req, res) => {
+  try {
+    const { getStakeSyncStatus } = await import('../utils/sync-chain-service');
+    const status = getStakeSyncStatus();
+
+    res.json({
+      code: 0,
+      data: status,
+    });
+  } catch (error: any) {
+    console.error('获取质押同步状态失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: error.message || '获取质押同步状态失败',
+    });
+  }
+});
+
+/**
  * 触发增量同步（仅同步新增用户）
  * POST /api/v1/dapp/sync/incremental
  * Header: X-API-Key (可选的 API 密钥验证)
@@ -2221,6 +2245,47 @@ router.post('/sync/incremental', async (req, res) => {
 });
 
 /**
+ * 触发链上质押事件增量同步
+ * POST /api/v1/dapp/sync/stakes/incremental
+ * Header: X-API-Key (可选的 API 密钥验证)
+ *
+ * 返回: { success, fromBlock, toBlock, processedEvents, insertedRecords, updatedRecords, claimedRecords, duration, error? }
+ *
+ * 用途:
+ * - 增量扫描 DQStakeVault 的 Staked / Unstaked 事件
+ * - 本地缓存已处理事件与当前质押快照
+ * - 将 lp_stakes 与链上状态对齐
+ */
+router.post('/sync/stakes/incremental', async (req, res) => {
+  try {
+    const apiKey = req.headers['x-api-key'];
+    const expectedApiKey = process.env.SYNC_API_KEY;
+
+    if (expectedApiKey && apiKey !== expectedApiKey) {
+      return res.status(401).json({
+        code: 401,
+        message: '无效的 API Key',
+      });
+    }
+
+    const { syncStakeDataIncremental } = await import('../utils/sync-chain-service');
+    const result = await syncStakeDataIncremental();
+
+    res.json({
+      code: 0,
+      message: '质押增量同步完成',
+      data: result,
+    });
+  } catch (error: any) {
+    console.error('质押增量同步失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: error.message || '质押增量同步失败',
+    });
+  }
+});
+
+/**
  * 重置同步索引（重新开始完整同步）
  * DELETE /api/v1/dapp/sync/index
  * Header: X-API-Key (可选的 API 密钥验证)
@@ -2263,6 +2328,43 @@ router.delete('/sync/index', async (req, res) => {
     res.status(500).json({
       code: 500,
       message: error.message || '重置失败'
+    });
+  }
+});
+
+/**
+ * 重置质押事件同步索引
+ * DELETE /api/v1/dapp/sync/stakes/index
+ * Header: X-API-Key (可选的 API 密钥验证)
+ *
+ * 说明:
+ * - 清空本地质押事件缓存与快照
+ * - 下次质押增量同步会从 STAKE_SYNC_START_BLOCK 重新开始
+ */
+router.delete('/sync/stakes/index', async (req, res) => {
+  try {
+    const apiKey = req.headers['x-api-key'];
+    const expectedApiKey = process.env.SYNC_API_KEY;
+
+    if (expectedApiKey && apiKey !== expectedApiKey) {
+      return res.status(401).json({
+        code: 401,
+        message: '无效的 API Key',
+      });
+    }
+
+    const { resetStakeSyncIndex } = await import('../utils/sync-chain-service');
+    resetStakeSyncIndex();
+
+    res.json({
+      code: 0,
+      message: '质押同步索引已重置，下次会从起始区块重新扫描',
+    });
+  } catch (error: any) {
+    console.error('重置质押同步索引失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: error.message || '重置质押同步索引失败',
     });
   }
 });

@@ -9,6 +9,7 @@ import path from 'path';
 
 // 状态文件路径（存储在项目根目录的 .sync-state 文件）
 const STATE_FILE = path.join(process.cwd(), '.sync-state.json');
+const STAKE_STATE_FILE = path.join(process.cwd(), '.stake-sync-state.json');
 
 /**
  * 同步状态接口
@@ -21,6 +22,27 @@ interface SyncState {
   version: number;                 // 状态版本（用于兼容性）
 }
 
+export interface StakePositionSnapshot {
+  userAddress: string;
+  stakeDays: number;
+  amount: string;
+  startTime: string;
+  endTime: string | null;
+  lastEventName: 'Staked' | 'Unstaked';
+  lastTxHash: string;
+  lastBlockNumber: number;
+  updatedAt: string;
+}
+
+export interface StakeSyncState {
+  lastProcessedBlock: number;
+  lastSyncTime: string | null;
+  lastError: string | null;
+  recentEventIds: string[];
+  positions: Record<string, StakePositionSnapshot>;
+  version: number;
+}
+
 /**
  * 默认状态
  */
@@ -29,6 +51,15 @@ const defaultState: SyncState = {
   lastSyncTime: null,
   lastError: null,
   totalSyncedCount: 0,
+  version: 1,
+};
+
+const defaultStakeState: StakeSyncState = {
+  lastProcessedBlock: 0,
+  lastSyncTime: null,
+  lastError: null,
+  recentEventIds: [],
+  positions: {},
   version: 1,
 };
 
@@ -52,6 +83,25 @@ export function loadSyncState(): SyncState {
   return { ...defaultState };
 }
 
+export function loadStakeSyncState(): StakeSyncState {
+  try {
+    if (fs.existsSync(STAKE_STATE_FILE)) {
+      const content = fs.readFileSync(STAKE_STATE_FILE, 'utf-8');
+      const state = JSON.parse(content) as Partial<StakeSyncState>;
+      return {
+        ...defaultStakeState,
+        ...state,
+        recentEventIds: Array.isArray(state.recentEventIds) ? state.recentEventIds : [],
+        positions: state.positions && typeof state.positions === 'object' ? state.positions : {},
+      };
+    }
+  } catch (error) {
+    console.error('[SyncState] 加载质押同步状态文件失败:', error);
+  }
+
+  return { ...defaultStakeState };
+}
+
 /**
  * 保存同步状态到文件
  */
@@ -64,12 +114,37 @@ export function saveSyncState(state: SyncState): void {
   }
 }
 
+export function saveStakeSyncState(state: StakeSyncState): void {
+  try {
+    fs.writeFileSync(STAKE_STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
+    console.log('[SyncState] 质押同步状态已保存');
+  } catch (error) {
+    console.error('[SyncState] 保存质押同步状态文件失败:', error);
+  }
+}
+
 /**
  * 获取上次同步的索引
  */
 export function getLastSyncedIndex(): number {
   const state = loadSyncState();
   return state.lastSyncedIndex;
+}
+
+export function getStakeSyncState(): StakeSyncState {
+  return loadStakeSyncState();
+}
+
+export function updateStakeSyncState(statePatch: Partial<StakeSyncState>): StakeSyncState {
+  const state = loadStakeSyncState();
+  const nextState: StakeSyncState = {
+    ...state,
+    ...statePatch,
+    recentEventIds: statePatch.recentEventIds ?? state.recentEventIds,
+    positions: statePatch.positions ?? state.positions,
+  };
+  saveStakeSyncState(nextState);
+  return nextState;
 }
 
 /**
@@ -100,11 +175,20 @@ export function resetSyncState(): void {
   saveSyncState({ ...defaultState });
 }
 
+export function resetStakeSyncState(): void {
+  console.log('[SyncState] 重置质押同步状态');
+  saveStakeSyncState({ ...defaultStakeState });
+}
+
 /**
  * 获取完整的同步状态
  */
 export function getFullSyncState(): SyncState {
   return loadSyncState();
+}
+
+export function getFullStakeSyncState(): StakeSyncState {
+  return loadStakeSyncState();
 }
 
 /**
@@ -116,6 +200,13 @@ export function updateSyncError(error: string | null): void {
   saveSyncState(state);
 }
 
+export function updateStakeSyncError(error: string | null): void {
+  const state = loadStakeSyncState();
+  state.lastError = error;
+  state.lastSyncTime = new Date().toISOString();
+  saveStakeSyncState(state);
+}
+
 /**
  * 初始化状态文件（如果不存在）
  */
@@ -123,5 +214,10 @@ export function initSyncStateFile(): void {
   if (!fs.existsSync(STATE_FILE)) {
     console.log('[SyncState] 初始化同步状态文件');
     saveSyncState({ ...defaultState });
+  }
+
+  if (!fs.existsSync(STAKE_STATE_FILE)) {
+    console.log('[SyncState] 初始化质押同步状态文件');
+    saveStakeSyncState({ ...defaultStakeState });
   }
 }

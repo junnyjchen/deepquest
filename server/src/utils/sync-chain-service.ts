@@ -6,19 +6,22 @@
  */
 
 import { getSupabaseClient } from '../storage/database/supabase-client';
-import { DQ_CONTRACT_ADDRESS, DQ_ABI, DQCARD_ABI, DQCARD_CONTRACT_ADDRESS } from '../config/contracts.ts';
+import { DQ_CONTRACT_ADDRESS, DQ_ABI, DQCARD_ABI, DQCARD_CONTRACT_ADDRESS, DQSTAKEVAULT_ABI, DQSTAKEVAULT_CONTRACT_ADDRESS } from '../config/contracts.ts';
 import { ethers } from 'ethers';
 import fs from 'fs';
 import path from 'path';
 import {
-  loadSyncState,
-  saveSyncState,
   getLastSyncedIndex,
   updateLastSyncedIndex,
   updateSyncError,
   resetSyncState,
   getFullSyncState,
   initSyncStateFile,
+  getFullStakeSyncState,
+  resetStakeSyncState,
+  type StakePositionSnapshot,
+  updateStakeSyncError,
+  updateStakeSyncState,
 } from './sync-state';
 import { getUserRegisterTxHash, getReferralLineage } from './bsc-web3';
 
@@ -34,6 +37,13 @@ const provider = new ethers.JsonRpcProvider(BSC_RPC_URL, undefined, {
   batchMaxCount: 1,
 });
 const CARD_CONFIG_CACHE_FILE = process.env.CARD_CONFIG_CACHE_FILE || path.join(process.cwd(), 'cache', 'card-config.json');
+const STAKE_SYNC_START_BLOCK = Number(process.env.STAKE_SYNC_START_BLOCK || 0);
+const STAKE_SYNC_REORG_BLOCKS = Number(process.env.STAKE_SYNC_REORG_BLOCKS || 6);
+const STAKE_EVENT_BATCH_BLOCKS = Number(process.env.STAKE_EVENT_BATCH_BLOCKS || 2000);
+const STAKE_EVENT_CACHE_LIMIT = Number(process.env.STAKE_EVENT_CACHE_LIMIT || 5000);
+const STAKE_TOKEN_DECIMALS = 18;
+const STAKE_AMOUNT_SCALE = 9;
+const STAKE_DAYS_BY_LEVEL = [30, 90, 180, 360] as const;
 
 // 单次同步最大用户数（防止 Gas 限制）
 const BATCH_SIZE = 50;
@@ -50,6 +60,10 @@ let syncInProgress = false;
 let lastSyncTime: Date | null = null;
 let lastError: string | null = null;
 let lastSyncResult: { totalUsers: number; syncedUsers: number; failedUsers: number } | null = null;
+let stakeSyncInProgress = false;
+let lastStakeSyncTime: Date | null = null;
+let lastStakeSyncError: string | null = null;
+let lastStakeSyncResult: { scannedEvents: number; appliedEvents: number; syncedPositions: number; clearedPositions: number } | null = null;
 
 // 注意: lastSyncedIndex 现在从文件加载，不再存储在内存中
 // 使用 getLastSyncedIndex() 获取，使用 updateLastSyncedIndex() 更新
@@ -59,6 +73,10 @@ let lastSyncResult: { totalUsers: number; syncedUsers: number; failedUsers: numb
  */
 function getContract() {
   return new ethers.Contract(DQ_CONTRACT_ADDRESS, DQ_ABI, provider);
+}
+
+function getStakeVaultContract() {
+  return new ethers.Contract(DQSTAKEVAULT_CONTRACT_ADDRESS, DQSTAKEVAULT_ABI, provider);
 }
 
 type AllUsersQueryResult =
@@ -91,6 +109,33 @@ export type ChainCardRecord = {
   status: string;
 };
 
+type StakeEventName = 'Staked' | 'Unstaked';
+
+type StakeEventRecord = {
+  eventId: string;
+  eventName: StakeEventName;
+  userAddress: string;
+  level: number;
+  stakeDays: number;
+  amount: string;
+  txHash: string;
+  blockNumber: number;
+  logIndex: number;
+  blockTime: string;
+};
+
+type StakeSyncSummary = {
+  success: boolean;
+  fromBlock: number;
+  toBlock: number;
+  scannedEvents: number;
+  appliedEvents: number;
+  syncedPositions: number;
+  clearedPositions: number;
+  duration: number;
+  error?: string;
+};
+
 const CARD_METADATA: Record<number, { key: CardKey; name: string; level: string; rewardRate: number; feeRate: number }> = {
   1: { key: 'A', name: 'S1节点卡', level: 'S1', rewardRate: 4, feeRate: 10 },
   2: { key: 'B', name: 'S2节点卡', level: 'S2', rewardRate: 5, feeRate: 15 },
@@ -114,6 +159,576 @@ function normalizeChainReadError(error: unknown): { code?: string; reason: strin
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function toScaledAmount(value: string, scale: number = STAKE_AMOUNT_SCALE): bigint {
+  const normalized = (value || '0').trim();
+  if (!normalized) {
+    return 0n;
+  }
+
+  const negative = normalized.startsWith('-');
+  const unsigned = negative ? normalized.slice(1) : normalized;
+  const [integerPartRaw, decimalPartRaw = ''] = unsigned.split('.');
+  const integerPart = integerPartRaw || '0';
+  const decimalPart = decimalPartRaw.padEnd(scale, '0').slice(0, scale);
+  const combined = `${integerPart}${decimalPart}`.replace(/^0+(?=\d)/, '') || '0';
+  const scaled = BigInt(combined);
+
+  return negative ? -scaled : scaled;
+}
+
+function fromScaledAmount(value: bigint, scale: number = STAKE_AMOUNT_SCALE): string {
+  const negative = value < 0;
+  const unsigned = negative ? -value : value;
+  const divisor = 10n ** BigInt(scale);
+  const integerPart = unsigned / divisor;
+  const decimalPart = unsigned % divisor;
+  const decimalText = decimalPart.toString().padStart(scale, '0');
+  return `${negative ? '-' : ''}${integerPart.toString()}.${decimalText}`;
+}
+
+function formatStakeTokenAmount(value: bigint): string {
+  const reduced = value / 10n ** BigInt(STAKE_TOKEN_DECIMALS - STAKE_AMOUNT_SCALE);
+  return fromScaledAmount(reduced, STAKE_AMOUNT_SCALE);
+}
+
+function getStakePositionKey(userAddress: string, stakeDays: number): string {
+  return `${userAddress.toLowerCase()}|${stakeDays}`;
+}
+
+function compactRecentEventIds(ids: string[]): string[] {
+  if (ids.length <= STAKE_EVENT_CACHE_LIMIT) {
+    return ids;
+  }
+
+  return ids.slice(ids.length - STAKE_EVENT_CACHE_LIMIT);
+}
+
+function buildStakeEventId(txHash: string, logIndex: number, eventName: StakeEventName): string {
+  return `${txHash.toLowerCase()}:${logIndex}:${eventName}`;
+}
+
+async function getBlockTimestamp(blockNumber: number, cache: Map<number, string>): Promise<string> {
+  const cached = cache.get(blockNumber);
+  if (cached) {
+    return cached;
+  }
+
+  const block = await withRpcRetry(() => provider.getBlock(blockNumber), `provider.getBlock(${blockNumber})`);
+  const timestamp = new Date(Number(block?.timestamp || 0) * 1000).toISOString();
+  cache.set(blockNumber, timestamp);
+  return timestamp;
+}
+
+async function fetchStakeEvents(fromBlock: number, toBlock: number): Promise<StakeEventRecord[]> {
+  if (toBlock < fromBlock) {
+    return [];
+  }
+
+  const contract = getStakeVaultContract();
+  const timestampCache = new Map<number, string>();
+  const events: StakeEventRecord[] = [];
+
+  for (let start = fromBlock; start <= toBlock; start += STAKE_EVENT_BATCH_BLOCKS) {
+    const end = Math.min(start + STAKE_EVENT_BATCH_BLOCKS - 1, toBlock);
+    const [stakedLogs, unstakedLogs] = await Promise.all([
+      withRpcRetry(() => contract.queryFilter(contract.filters.Staked(), start, end), `DQStakeVault.Staked(${start}-${end})`),
+      withRpcRetry(() => contract.queryFilter(contract.filters.Unstaked(), start, end), `DQStakeVault.Unstaked(${start}-${end})`),
+    ]);
+
+    for (const [eventName, logs] of [['Staked', stakedLogs], ['Unstaked', unstakedLogs]] as const) {
+      for (const log of logs as any[]) {
+        const userAddress = String(log.args?.user || '').toLowerCase();
+        const level = Number(log.args?.level ?? -1);
+        const rawAmount = log.args?.amount as bigint | undefined;
+
+        if (!userAddress || level < 0 || level >= STAKE_DAYS_BY_LEVEL.length || rawAmount === undefined) {
+          continue;
+        }
+
+        const blockTime = await getBlockTimestamp(Number(log.blockNumber), timestampCache);
+        events.push({
+          eventId: buildStakeEventId(String(log.transactionHash || ''), Number(log.index ?? log.logIndex ?? 0), eventName),
+          eventName,
+          userAddress,
+          level,
+          stakeDays: STAKE_DAYS_BY_LEVEL[level],
+          amount: formatStakeTokenAmount(rawAmount),
+          txHash: String(log.transactionHash || '').toLowerCase(),
+          blockNumber: Number(log.blockNumber),
+          logIndex: Number(log.index ?? log.logIndex ?? 0),
+          blockTime,
+        });
+      }
+    }
+  }
+
+  return events.sort((left, right) => {
+    if (left.blockNumber !== right.blockNumber) {
+      return left.blockNumber - right.blockNumber;
+    }
+    return left.logIndex - right.logIndex;
+  });
+}
+
+function applyStakeEvent(
+  positions: Record<string, StakePositionSnapshot>,
+  event: StakeEventRecord
+): void {
+  const key = getStakePositionKey(event.userAddress, event.stakeDays);
+  const current = positions[key];
+  const currentAmount = current ? toScaledAmount(current.amount) : 0n;
+  const delta = toScaledAmount(event.amount);
+
+  if (event.eventName === 'Staked') {
+    positions[key] = {
+      userAddress: event.userAddress,
+      stakeDays: event.stakeDays,
+      amount: fromScaledAmount(currentAmount + delta),
+      startTime: event.blockTime,
+      endTime: null,
+      lastEventName: event.eventName,
+      lastTxHash: event.txHash,
+      lastBlockNumber: event.blockNumber,
+      updatedAt: event.blockTime,
+    };
+    return;
+  }
+
+  const remaining = currentAmount > delta ? currentAmount - delta : 0n;
+  positions[key] = {
+    userAddress: event.userAddress,
+    stakeDays: event.stakeDays,
+    amount: fromScaledAmount(remaining),
+    startTime: current?.startTime || event.blockTime,
+    endTime: remaining === 0n ? event.blockTime : null,
+    lastEventName: event.eventName,
+    lastTxHash: event.txHash,
+    lastBlockNumber: event.blockNumber,
+    updatedAt: event.blockTime,
+  };
+}
+
+async function fetchAllLpStakeRows(): Promise<any[]> {
+  const pageSize = 1000;
+  const rows: any[] = [];
+
+  for (let from = 0; ; from += pageSize) {
+    const to = from + pageSize - 1;
+    const { data, error } = await supabase
+      .from('lp_stakes')
+      .select('id, user_address, tx_hash, close_tx_hash, event_name, close_event_name, event_id, close_event_id, chain_log_index, close_log_index, block_number, close_block_number, amount, stake_days, start_time, end_time, reward_amount, is_claimed, created_at')
+      .range(from, to)
+      .order('id', { ascending: true });
+
+    if (error) {
+      throw new Error(`读取 lp_stakes 失败: ${error.message}`);
+    }
+
+    if (!data || data.length === 0) {
+      break;
+    }
+
+    rows.push(...data);
+
+    if (data.length < pageSize) {
+      break;
+    }
+  }
+
+  return rows;
+}
+
+async function updateLpStakeRow(id: number, payload: Record<string, any>): Promise<void> {
+  const { error } = await supabase
+    .from('lp_stakes')
+    .update(payload)
+    .eq('id', id);
+
+  if (error) {
+    throw new Error(`更新 lp_stakes#${id} 失败: ${error.message}`);
+  }
+}
+
+async function insertLpStakeRow(payload: Record<string, any>): Promise<void> {
+  const { error } = await supabase
+    .from('lp_stakes')
+    .insert(payload);
+
+  if (error) {
+    throw new Error(`新增 lp_stakes 失败: ${error.message}`);
+  }
+}
+
+async function deleteLpStakeRow(id: number): Promise<void> {
+  const { error } = await supabase
+    .from('lp_stakes')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    throw new Error(`删除 lp_stakes#${id} 失败: ${error.message}`);
+  }
+}
+
+function sumStakeRowAmounts(rows: any[]): bigint {
+  return rows.reduce((sum, row) => sum + toScaledAmount(String(row.amount || '0')), 0n);
+}
+
+async function syncStakeEventToDatabase(event: StakeEventRecord): Promise<void> {
+  if (event.eventName === 'Staked') {
+    const { data: existingRow, error: existingError } = await supabase
+      .from('lp_stakes')
+      .select('id')
+      .eq('event_id', event.eventId)
+      .maybeSingle();
+
+    if (existingError) {
+      throw new Error(`查询质押事件 ${event.eventId} 失败: ${existingError.message}`);
+    }
+
+    if (existingRow) {
+      return;
+    }
+
+    await insertLpStakeRow({
+      user_address: event.userAddress,
+      tx_hash: event.txHash,
+      event_name: event.eventName,
+      event_id: event.eventId,
+      chain_log_index: event.logIndex,
+      block_number: event.blockNumber,
+      amount: event.amount,
+      stake_days: event.stakeDays,
+      start_time: event.blockTime,
+      end_time: null,
+      reward_amount: '0',
+      is_claimed: false,
+      created_at: event.blockTime,
+    });
+    return;
+  }
+
+  let remaining = toScaledAmount(event.amount);
+  if (remaining <= 0n) {
+    return;
+  }
+
+  const { data: activeRows, error: activeError } = await supabase
+    .from('lp_stakes')
+    .select('id, amount, start_time, created_at, is_claimed')
+    .eq('user_address', event.userAddress)
+    .eq('stake_days', event.stakeDays)
+    .eq('is_claimed', false)
+    .order('start_time', { ascending: true })
+    .order('id', { ascending: true });
+
+  if (activeError) {
+    throw new Error(`查询解押目标失败: ${activeError.message}`);
+  }
+
+  for (const row of activeRows || []) {
+    if (remaining <= 0n) {
+      break;
+    }
+
+    const rowAmount = toScaledAmount(String(row.amount || '0'));
+    if (rowAmount <= 0n) {
+      continue;
+    }
+
+    const consumed = rowAmount > remaining ? remaining : rowAmount;
+    const nextAmount = rowAmount - consumed;
+    remaining -= consumed;
+
+    await updateLpStakeRow(row.id, {
+      amount: fromScaledAmount(nextAmount),
+      end_time: nextAmount === 0n ? event.blockTime : null,
+      is_claimed: nextAmount === 0n,
+      close_tx_hash: nextAmount === 0n ? event.txHash : null,
+      close_event_name: nextAmount === 0n ? event.eventName : null,
+      close_event_id: nextAmount === 0n ? event.eventId : null,
+      close_log_index: nextAmount === 0n ? event.logIndex : null,
+      close_block_number: nextAmount === 0n ? event.blockNumber : null,
+    });
+  }
+
+  if (remaining > 0n) {
+    console.warn(
+      `[ChainSync] Unstaked 事件未完全匹配到本地活动记录: ${event.userAddress} / ${event.stakeDays}天 / 剩余 ${fromScaledAmount(remaining)}`
+    );
+  }
+}
+
+async function alignStakePositionsToDatabase(
+  positions: Record<string, StakePositionSnapshot>
+): Promise<{ syncedPositions: number; clearedPositions: number }> {
+  const allRows = await fetchAllLpStakeRows();
+  const rowsByKey = new Map<string, any[]>();
+
+  for (const row of allRows) {
+    const key = getStakePositionKey(String(row.user_address || '').toLowerCase(), Number(row.stake_days));
+    const existing = rowsByKey.get(key) || [];
+    existing.push(row);
+    rowsByKey.set(key, existing);
+  }
+
+  let syncedPositions = 0;
+  let clearedPositions = 0;
+
+  for (const [key, snapshot] of Object.entries(positions)) {
+    const rows = rowsByKey.get(key) || [];
+    const activeRows = rows.filter((row) => !row.is_claimed);
+    const hashlessRows = activeRows.filter((row) => !String(row.tx_hash || '').trim());
+    const validActiveRows = activeRows.filter((row) => String(row.tx_hash || '').trim());
+
+    for (const row of hashlessRows) {
+      await deleteLpStakeRow(row.id);
+      clearedPositions++;
+    }
+
+    const targetAmount = toScaledAmount(snapshot.amount);
+    const currentAmount = sumStakeRowAmounts(validActiveRows);
+    const hasActiveStake = targetAmount > 0n;
+
+    if (!hasActiveStake) {
+      for (const row of validActiveRows) {
+        await updateLpStakeRow(row.id, {
+          amount: '0.000000000',
+          end_time: snapshot.endTime || snapshot.updatedAt,
+          is_claimed: true,
+          close_tx_hash: snapshot.lastTxHash,
+          close_event_name: 'Unstaked',
+          close_event_id: `sync-reconcile-close:${key}:${snapshot.lastBlockNumber}`,
+          close_log_index: null,
+          close_block_number: snapshot.lastBlockNumber,
+        });
+        clearedPositions++;
+      }
+
+      rowsByKey.delete(key);
+      continue;
+    }
+
+    if (currentAmount < targetAmount) {
+      const missingAmount = targetAmount - currentAmount;
+      await insertLpStakeRow({
+        user_address: snapshot.userAddress,
+        tx_hash: snapshot.lastTxHash,
+        event_name: 'Staked',
+        event_id: `sync-reconcile:${key}:${snapshot.lastBlockNumber}`,
+        chain_log_index: null,
+        block_number: snapshot.lastBlockNumber,
+        amount: fromScaledAmount(missingAmount),
+        stake_days: snapshot.stakeDays,
+        start_time: snapshot.startTime,
+        end_time: null,
+        reward_amount: '0',
+        is_claimed: false,
+        created_at: snapshot.startTime,
+      });
+    } else if (currentAmount > targetAmount) {
+      let overflow = currentAmount - targetAmount;
+      const rowsToTrim = [...validActiveRows].sort((left, right) => {
+        return new Date(String(right.start_time || right.created_at)).getTime() - new Date(String(left.start_time || left.created_at)).getTime();
+      });
+
+      for (const row of rowsToTrim) {
+        if (overflow <= 0n) {
+          break;
+        }
+
+        const rowAmount = toScaledAmount(String(row.amount || '0'));
+        if (rowAmount <= 0n) {
+          continue;
+        }
+
+        const reduction = rowAmount > overflow ? overflow : rowAmount;
+        const nextAmount = rowAmount - reduction;
+        overflow -= reduction;
+
+        await updateLpStakeRow(row.id, {
+          amount: fromScaledAmount(nextAmount),
+          end_time: nextAmount === 0n ? snapshot.updatedAt : null,
+          is_claimed: nextAmount === 0n,
+          close_tx_hash: nextAmount === 0n ? snapshot.lastTxHash : null,
+          close_event_name: nextAmount === 0n ? 'Unstaked' : null,
+          close_event_id: nextAmount === 0n ? `sync-reconcile-close:${key}:${snapshot.lastBlockNumber}` : null,
+          close_log_index: null,
+          close_block_number: nextAmount === 0n ? snapshot.lastBlockNumber : null,
+        });
+
+        if (nextAmount === 0n) {
+          clearedPositions++;
+        }
+      }
+    }
+
+    syncedPositions++;
+    rowsByKey.delete(key);
+  }
+
+  for (const [key, rows] of rowsByKey.entries()) {
+    const snapshot = positions[key];
+    for (const row of rows.filter((item) => !item.is_claimed)) {
+      await updateLpStakeRow(row.id, {
+        amount: '0.000000000',
+        end_time: snapshot?.endTime || new Date().toISOString(),
+        is_claimed: true,
+        close_tx_hash: snapshot?.lastTxHash || null,
+        close_event_name: 'Unstaked',
+        close_event_id: snapshot ? `sync-reconcile-close:${key}:${snapshot.lastBlockNumber}` : `sync-reconcile-close:${key}`,
+        close_log_index: null,
+        close_block_number: snapshot?.lastBlockNumber || null,
+      });
+      clearedPositions++;
+    }
+  }
+
+  return { syncedPositions, clearedPositions };
+}
+
+export async function syncStakeDataIncremental(): Promise<StakeSyncSummary> {
+  if (stakeSyncInProgress) {
+    return {
+      success: false,
+      fromBlock: 0,
+      toBlock: 0,
+      scannedEvents: 0,
+      appliedEvents: 0,
+      syncedPositions: 0,
+      clearedPositions: 0,
+      duration: 0,
+      error: 'Stake sync already in progress',
+    };
+  }
+
+  stakeSyncInProgress = true;
+  const startedAt = Date.now();
+
+  try {
+    const state = getFullStakeSyncState();
+    const latestBlock = await withRpcRetry(() => provider.getBlockNumber(), 'provider.getBlockNumber()');
+    const toBlock = Math.max(0, latestBlock - STAKE_SYNC_REORG_BLOCKS);
+    const fromBlock = state.lastProcessedBlock > 0
+      ? Math.max(STAKE_SYNC_START_BLOCK, state.lastProcessedBlock - STAKE_SYNC_REORG_BLOCKS + 1)
+      : STAKE_SYNC_START_BLOCK;
+
+    if (toBlock < fromBlock) {
+      lastStakeSyncTime = new Date();
+      lastStakeSyncError = null;
+      updateStakeSyncError(null);
+      return {
+        success: true,
+        fromBlock,
+        toBlock,
+        scannedEvents: 0,
+        appliedEvents: 0,
+        syncedPositions: 0,
+        clearedPositions: 0,
+        duration: Date.now() - startedAt,
+      };
+    }
+
+    const events = await fetchStakeEvents(fromBlock, toBlock);
+    const recentEventIds = new Set(state.recentEventIds);
+    const nextPositions = { ...state.positions };
+    const appliedEventIds: string[] = [];
+    let appliedEvents = 0;
+
+    for (const event of events) {
+      const isHistoricalOverlap = event.blockNumber <= state.lastProcessedBlock;
+      if (isHistoricalOverlap && recentEventIds.has(event.eventId)) {
+        continue;
+      }
+
+      applyStakeEvent(nextPositions, event);
+      await syncStakeEventToDatabase(event);
+      appliedEventIds.push(event.eventId);
+      appliedEvents++;
+    }
+
+    const { syncedPositions, clearedPositions } = await alignStakePositionsToDatabase(nextPositions);
+    const duration = Date.now() - startedAt;
+    const nowIso = new Date().toISOString();
+    updateStakeSyncState({
+      lastProcessedBlock: toBlock,
+      lastSyncTime: nowIso,
+      lastError: null,
+      recentEventIds: compactRecentEventIds([...state.recentEventIds, ...appliedEventIds]),
+      positions: nextPositions,
+    });
+
+    lastStakeSyncTime = new Date(nowIso);
+    lastStakeSyncError = null;
+    lastStakeSyncResult = {
+      scannedEvents: events.length,
+      appliedEvents,
+      syncedPositions,
+      clearedPositions,
+    };
+
+    console.log(`[ChainSync] 质押增量同步完成，区块 ${fromBlock}-${toBlock}，扫描 ${events.length} 条事件，应用 ${appliedEvents} 条`);
+
+    return {
+      success: true,
+      fromBlock,
+      toBlock,
+      scannedEvents: events.length,
+      appliedEvents,
+      syncedPositions,
+      clearedPositions,
+      duration,
+    };
+  } catch (error: any) {
+    const duration = Date.now() - startedAt;
+    const message = error?.message || 'Stake sync failed';
+    lastStakeSyncError = message;
+    updateStakeSyncError(message);
+
+    return {
+      success: false,
+      fromBlock: 0,
+      toBlock: 0,
+      scannedEvents: 0,
+      appliedEvents: 0,
+      syncedPositions: 0,
+      clearedPositions: 0,
+      duration,
+      error: message,
+    };
+  } finally {
+    stakeSyncInProgress = false;
+  }
+}
+
+export function resetStakeSyncIndex(): void {
+  resetStakeSyncState();
+  lastStakeSyncTime = null;
+  lastStakeSyncError = null;
+  lastStakeSyncResult = null;
+}
+
+export function getStakeSyncStatus(): {
+  inProgress: boolean;
+  lastSyncTime: Date | null;
+  lastError: string | null;
+  lastResult: { scannedEvents: number; appliedEvents: number; syncedPositions: number; clearedPositions: number } | null;
+  lastProcessedBlock: number;
+  activePositions: number;
+} {
+  const state = getFullStakeSyncState();
+  const activePositions = Object.values(state.positions).filter((item) => toScaledAmount(item.amount) > 0n).length;
+
+  return {
+    inProgress: stakeSyncInProgress,
+    lastSyncTime: lastStakeSyncTime,
+    lastError: lastStakeSyncError,
+    lastResult: lastStakeSyncResult,
+    lastProcessedBlock: state.lastProcessedBlock,
+    activePositions,
+  };
 }
 
 function formatFixed2(value: string): string {

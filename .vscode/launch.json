@@ -28,6 +28,30 @@
             ]
         },
         {
+            "type": "node",
+            "name": "Debug export data",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/scripts",
+            "runtimeExecutable": "node",
+            "runtimeArgs": [
+                "--inspect"
+            ],
+            "args": [
+                "export-data.js"
+            ],
+            "env": {
+                "NODE_ENV": "development"
+            },
+            "sourceMaps": true,
+            "resolveSourceMapLocations": [
+                "${workspaceFolder}/server/src/**"
+            ],
+            "skipFiles": [
+                "<node_internals>/**",
+                "**/node_modules/**"
+            ]
+        },
+        {
             "type": "chrome",
             "name": "Debug Client (Chrome)",
             "request": "launch",

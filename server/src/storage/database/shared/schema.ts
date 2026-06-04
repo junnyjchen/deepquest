@@ -144,6 +144,16 @@ export const lpStakes = pgTable(
   {
     id: serial().primaryKey(),
     user_address: varchar("user_address", { length: 64 }).notNull(),
+    tx_hash: varchar("tx_hash", { length: 128 }),
+    close_tx_hash: varchar("close_tx_hash", { length: 128 }),
+    event_name: varchar("event_name", { length: 20 }).default("Staked").notNull(),
+    close_event_name: varchar("close_event_name", { length: 20 }),
+    event_id: varchar("event_id", { length: 191 }),
+    close_event_id: varchar("close_event_id", { length: 191 }),
+    chain_log_index: integer("chain_log_index"),
+    close_log_index: integer("close_log_index"),
+    block_number: integer("block_number"),
+    close_block_number: integer("close_block_number"),
     amount: numeric("amount", { precision: 20, scale: 9 }).notNull(),
     stake_days: integer("stake_days").notNull(), // 30, 90, 180, 360
     start_time: timestamp("start_time", { withTimezone: true }).defaultNow().notNull(),
@@ -155,6 +165,7 @@ export const lpStakes = pgTable(
   (table) => [
     index("lp_stakes_user_idx").on(table.user_address),
     index("lp_stakes_claimed_idx").on(table.is_claimed),
+    index("lp_stakes_event_id_idx").on(table.event_id),
   ]
 );
 

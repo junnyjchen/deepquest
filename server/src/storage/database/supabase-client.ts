@@ -97,6 +97,14 @@ function getSupabaseServiceRoleKey(): string | undefined {
   return process.env.COZE_SUPABASE_SERVICE_ROLE_KEY;
 }
 
+function resolveRequestProtocol(input: string | URL | Request): string {
+  if (typeof input === 'string' || input instanceof URL) {
+    return new URL(input).protocol;
+  }
+
+  return new URL(input.url).protocol;
+}
+
 function getSupabaseClient(token?: string): SupabaseClient {
   const { url, anonKey } = getSupabaseCredentials();
 
@@ -130,7 +138,7 @@ function getSupabaseClient(token?: string): SupabaseClient {
         headers: { Authorization: `Bearer ${token}` },
         fetch: (url, options = {}) => {
           // 根据协议选择合适的 agent
-          const protocol = new URL(url).protocol;
+          const protocol = resolveRequestProtocol(url);
           const agent = protocol === 'https:' ? httpsAgent : httpAgent;
           
           return fetch(url, {
@@ -155,7 +163,7 @@ function getSupabaseClient(token?: string): SupabaseClient {
     global: {
       fetch: (url, options = {}) => {
         // 根据协议选择合适的 agent
-        const protocol = new URL(url).protocol;
+        const protocol = resolveRequestProtocol(url);
         const agent = protocol === 'https:' ? httpsAgent : httpAgent;
         
         return fetch(url, {
@@ -352,6 +360,16 @@ async function initializeDatabase(): Promise<boolean> {
       `CREATE TABLE IF NOT EXISTS lp_stakes (
         id SERIAL PRIMARY KEY,
         user_address VARCHAR(64) NOT NULL,
+        tx_hash VARCHAR(128),
+        close_tx_hash VARCHAR(128),
+        event_name VARCHAR(20) NOT NULL DEFAULT 'Staked',
+        close_event_name VARCHAR(20),
+        event_id VARCHAR(191),
+        close_event_id VARCHAR(191),
+        chain_log_index INTEGER,
+        close_log_index INTEGER,
+        block_number INTEGER,
+        close_block_number INTEGER,
         amount NUMERIC(20, 9) NOT NULL,
         stake_days INTEGER NOT NULL,
         start_time TIMESTAMPTZ DEFAULT NOW() NOT NULL,
@@ -657,6 +675,16 @@ CREATE TABLE IF NOT EXISTS withdrawals (
 CREATE TABLE IF NOT EXISTS lp_stakes (
     id SERIAL PRIMARY KEY,
     user_address VARCHAR(64) NOT NULL,
+  tx_hash VARCHAR(128),
+  close_tx_hash VARCHAR(128),
+  event_name VARCHAR(20) NOT NULL DEFAULT 'Staked',
+  close_event_name VARCHAR(20),
+  event_id VARCHAR(191),
+  close_event_id VARCHAR(191),
+  chain_log_index INTEGER,
+  close_log_index INTEGER,
+  block_number INTEGER,
+  close_block_number INTEGER,
     amount NUMERIC(20, 9) NOT NULL,
     stake_days INTEGER NOT NULL,
     start_time TIMESTAMPTZ DEFAULT NOW() NOT NULL,
