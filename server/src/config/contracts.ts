@@ -90,11 +90,11 @@ export const CONTRACT_ADDRESSES = {
     name: 'DQStakeCore',
   },
   DQSTAKEMINE: {
-    address: '0xCf8B03F7F89d53277D4Bc7A6B957fD35B9f15a4b',
+    address: '0x0dD91BcC60c6f6f9BC565ad222a91dC84CD84853',
     name: 'DQStakeMine',
   },
   DQSTAKEVAULT: {
-    address: '0x101d8D4c2f199787e7EA74ADE3d73ED4025ac8e5',
+    address: '0x0f5C99794E164e68233EdAc63266F463C4601652',
     name: 'DQStakeVault',
   },
   DQTOKEN: {
