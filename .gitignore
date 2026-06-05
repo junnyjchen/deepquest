@@ -19,3 +19,4 @@ server/cache/
 .sync-state.json
 .sync-state.backup.*.json
 .cozeproj/reduction
+server/.stake-sync-state.json
