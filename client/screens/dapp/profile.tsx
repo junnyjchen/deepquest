@@ -514,13 +514,13 @@ export default function DappProfile() {
                   {userLoading ? '...' : userData.dqtBalance}
                 </Text>
               </View>
-              <View>
+              <View style={{ display: 'none' }}>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('profile.stakedAmount')}</Text>
                 <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>
                   {userLoading ? '...' : userData.stakedAmount} SOL
                 </Text>
               </View>
-              <View>
+              <View style={{ display: 'none' }}>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('profile.stakeDays')}</Text>
                 <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>
                   {userLoading ? '...' : userData.stakeDays} {t('common.daysUnit')}
@@ -538,7 +538,7 @@ export default function DappProfile() {
         </View>
 
         {/* 收益统计卡片 - 黄色边框 */}
-        <View className="px-4 mt-4">
+        <View className="px-4 mt-4" style={{ display: 'none' }}>
           <View
             className="rounded-2xl p-4"
             style={{ backgroundColor: BG_CARD_SOLID, borderWidth: 2, borderColor: YELLOW }}
@@ -595,7 +595,7 @@ export default function DappProfile() {
                 </Text>
                 <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>{t('common.peopleUnit')}</Text>
               </View>
-              <View>
+              <View style={{ display: 'none' }}>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('profile.personalInvest')}</Text>
                 <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>
                   {userLoading ? '...' : userData.totalInvest}

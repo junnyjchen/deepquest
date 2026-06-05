@@ -65,7 +65,7 @@ export default function RewardsScreen() {
   const router = useSafeRouter();
   const { wallet, isConnected } = useWallet();
   const { t } = useLanguage();
-  const showSolRewards = false;
+  const showSolRewards = true;
 
   const [activeTab, setActiveTab] = useState<'rewards' | 'withdrawals'>('rewards');
   const [recordType, setRecordType] = useState<'claim' | 'withdraw'>('claim');

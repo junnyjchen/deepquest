@@ -5,11 +5,13 @@ import { ethers } from 'ethers';
 import {
   CONTRACT_ADDRESSES,
   DQPROJECT_ABI,
+  DQADMIN_ABI,
   DQTOKEN_ABI,
   DQCARD_ABI,
   DQSTAKE_ABI,
   DQSTAKEMINE_ABI,
   DQSTAKEVAULT_ABI,
+  AVE_PAIR_ADDRESS,
 } from '../config/contracts';
 
 // BSC 主网配置
@@ -875,13 +877,45 @@ export const claimLPOnChain = async (
   return tx;
 };
 
+// LP 代币（DQPAIR）的最小 ERC20 ABI
+const LP_TOKEN_ABI = [
+  'function allowance(address owner, address spender) view returns (uint256)',
+  'function approve(address spender, uint256 amount) returns (bool)',
+  'function balanceOf(address account) view returns (uint256)',
+];
+
+/**
+ * 确保 DQPAIR LP 代币已授权给 StakeCore（取消LP时需要）
+ * 若 allowance 为 0 则发起授权交易并等待确认
+ */
+const ensureLPTokenApproval = async (signer: ethers.Signer): Promise<void> => {
+  const userAddress = await signer.getAddress();
+  const lpContract = new ethers.Contract(AVE_PAIR_ADDRESS, LP_TOKEN_ABI, signer);
+  const spender = CONTRACT_ADDRESSES.DQSTAKE.address;
+
+  const allowance: bigint = await lpContract.allowance(userAddress, spender).catch(() => 0n);
+  if (allowance > 0n) {
+    console.log('[Web3] DQPAIR 已授权 StakeCore，跳过 approve');
+    return;
+  }
+
+  console.log('[Web3] DQPAIR 授权 StakeCore...');
+  const approveTx = await lpContract.approve(spender, ethers.MaxUint256);
+  await approveTx.wait();
+  console.log('[Web3] DQPAIR 授权完成');
+};
+
 /**
  * 更新 LP 权益授权（将钱包 LP 余额同步到合约，参与爆块奖励分配）
+ * 同时帮用户 approve DQPAIR 给 StakeCore，方便后续取消LP无需再次授权
  */
 export const authorizeLPEquityOnChain = async (
   signer: ethers.Signer
 ): Promise<ethers.TransactionResponse> => {
   const contract = await getSignedStakeCoreContract(signer);
+
+  // 先确保 DQPAIR 已授权给 StakeCore（取消LP时需要）
+  await ensureLPTokenApproval(signer);
 
   try {
     await contract.authorizeLPEquity.staticCall();
@@ -1165,6 +1199,28 @@ export const getPendingStakeReward = async (userAddress: string, periodIndex: nu
   } catch (error) {
     console.error('[Web3] 获取待领取质押奖励失败:', error);
     return '0';
+  }
+};
+
+// ============ DQMAdmin 合约交互 ============
+
+/**
+ * 计算用户等级信息（调用 DQMAdmin.calculateLevelWithInfo，包含 teamSales 和 childCount）
+ */
+export const calculateLevelWithInfo = async (
+  userAddress: string
+): Promise<{ level: number; teamSales: string; childCount: number } | null> => {
+  try {
+    const contract = new ethers.Contract(CONTRACT_ADDRESSES.DQADMIN.address, DQADMIN_ABI, new ethers.JsonRpcProvider(BSC_RPC_URL));
+    const result = await contract.calculateLevelWithInfo(userAddress);
+    return {
+      level: Number(result[0] ?? result.level ?? 0),
+      teamSales: ethers.formatEther(result[1] ?? result.teamSales ?? 0n),
+      childCount: Number(result[2] ?? result.childCount ?? 0),
+    };
+  } catch (error) {
+    console.error('[Web3] calculateLevelWithInfo 调用失败:', error);
+    return null;
   }
 };
 
@@ -1582,6 +1638,9 @@ export const withdrawLPOnChain = async (
   if (walletLPBalance <= 0n) {
     throw new Error('当前钱包中没有可用于取消权益的 LP 代币');
   }
+
+  // 取消LP前确保 DQPAIR 已授权给 StakeCore
+  await ensureLPTokenApproval(signer);
 
   try {
     await contract.cancelLPEquity.staticCall();

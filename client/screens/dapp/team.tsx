@@ -16,6 +16,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dappTeamApi, dappApi } from '@/utils/api';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { showToast } from '@/utils/toast';
+import {
+  getBNBBalance,
+  getDQTokenBalance,
+  getSOLTokenBalance,
+  getPendingSOL,
+  getLPReward,
+  getDLevelReward,
+  getUserFromChain,
+  getUserDLevel,
+} from '@/utils/web3';
 
 // 精确匹配参考图的颜色体系
 const BG_DARK = '#0A0A12';
@@ -82,10 +92,12 @@ export default function DappTeam() {
       setTeamLoading(true);
       
       // 并行获取团队统计和推荐信息
-      const [statsRes, referralRes, directListRes] = await Promise.all([
+      // 通过 getUserFromChain 获取推荐人地址，兼容链上数据和后端数据不一致的情况
+      const [statsRes, referralRes, directListRes, chainUserRes] = await Promise.all([
         dappTeamApi.getStats(address),
         dappApi.getReferral(address),
         dappTeamApi.getDirectList(address, 1, 50),
+        getUserFromChain(address), // 获取链上用户信息，包含推荐人地址
       ]);
 
       if (statsRes.code === 0 && statsRes.data) {
@@ -96,7 +108,7 @@ export default function DappTeam() {
           teamRewards: '0.0', // 需要从奖励接口获取
           myRewards: statsRes.data.referral_rewards || '0.0',
           myDirectRewards: statsRes.data.referral_rewards || '0.0',
-          referrerAddress: referralRes.data?.referrer_address || null,
+          referrerAddress: chainUserRes ? chainUserRes.referrer : referralRes.data?.referrer || null, // 优先使用链上数据
           directCount: statsRes.data.direct_count || 0,
           teamCount: statsRes.data.team_count || 0,
           teamInvest: statsRes.data.team_invest || '0.0',
@@ -239,14 +251,14 @@ export default function DappTeam() {
                 </Text>
                 <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>{t('common.peopleUnit')}</Text>
               </View>
-              <View>
+              <View style={{ display: 'none' }}>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('team.teamPerformance')}</Text>
                 <Text className="text-xl font-bold" style={{ color: YELLOW }}>
                   {teamLoading ? '...' : teamData.teamInvest}
                 </Text>
                 <Text className="text-xs mt-1" style={{ color: TEXT_MUTED }}>SOL</Text>
               </View>
-              <View>
+              <View style={{ display: 'none' }}>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('team.teamRewards')}</Text>
                 <Text className="text-xl font-bold" style={{ color: TEXT_WHITE }}>
                   {teamLoading ? '...' : teamData.referralRewards}
@@ -269,7 +281,7 @@ export default function DappTeam() {
               <Text className="text-base font-bold" style={{ color: TEXT_WHITE }}>{t('team.myPromotionEarnings')}</Text>
             </View>
 
-            <View className="grid grid-cols-2 gap-x-4 gap-y-4 mb-4">
+            <View className="grid grid-cols-2 gap-x-4 gap-y-4 mb-4" style={{ display: 'none' }}>
               <View>
                 <Text className="text-xs mb-1" style={{ color: TEXT_MUTED }}>{t('team.directRewards')}</Text>
                 <Text className="text-xl font-bold" style={{ color: YELLOW }}>
