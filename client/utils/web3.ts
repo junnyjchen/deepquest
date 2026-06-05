@@ -1584,15 +1584,15 @@ export const withdrawLPOnChain = async (
   }
 
   try {
-    await contract.cancelAllLPEquity.staticCall();
+    await contract.cancelLPEquity.staticCall();
   } catch (error) {
-    console.error('[Web3] cancelAllLPEquity staticCall 失败:', error);
+    console.error('[Web3] cancelLPEquity staticCall 失败:', error);
     throw error;
   }
 
   console.log('[Web3] 从 StakeCore 取消全部 LP 权益');
 
-  const tx = await contract.cancelAllLPEquity();
+  const tx = await contract.cancelLPEquity();
   console.log('[Web3] 取消 LP 交易已发送:', tx.hash);
 
   return tx;

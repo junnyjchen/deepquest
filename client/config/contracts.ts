@@ -8,23 +8,23 @@
 // 主合约地址
 export const CONTRACT_ADDRESSES = {
   DQADMIN: {
-    address: '0xf6E4ab5e212cACC52dF1927F8AF9d99B2b7590b5',
+    address: '0xeb616F19cdE155d6D0D1DC651E184909C37Df1CA',
     name: 'DQMAdmin',
   },
   DQPROJECT: {
-    address: '0xc99C923703D1dAb41B92ABF59D5a35d3a9375B34',
+    address: '0xF2c09006310941539070bd909B5625284F72D9C9',
     name: 'DQMCore'
   },
   DQSTAKE: {
-    address: '0xa261563844F240D2e2B68BA1aB38Ae05d52D50De',
+    address: '0xed22AD46B0E167A678822fC29644b21B7619fc21',
     name: 'DQStakeCore'
   },
   DQSTAKEMINE: {
-    address: '0x0dD91BcC60c6f6f9BC565ad222a91dC84CD84853',
+    address: '0x82631029312a92C405f1AB3A87396E1aB992a6EB',
     name: 'DQStakeMine'
   },
   DQSTAKEVAULT: {
-    address: '0x0f5C99794E164e68233EdAc63266F463C4601652',
+    address: '0x64C62bbfDa90294b1E246b7337bDF39078EAcc34',
     name: 'DQStakeVault'
   },
   DQTOKEN: {
