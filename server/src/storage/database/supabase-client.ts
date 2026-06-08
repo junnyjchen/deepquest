@@ -189,6 +189,7 @@ const REQUIRED_TABLES = [
   'users',
   'deposits',
   'rewards',
+  'withdraw_rewards',
   'sol_rewards',
   'withdrawals',
   'lp_stakes',
@@ -331,6 +332,21 @@ async function initializeDatabase(): Promise<boolean> {
         tx_hash VARCHAR(128),
         created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
       )`,
+
+      `CREATE TABLE IF NOT EXISTS withdraw_rewards (
+        id SERIAL PRIMARY KEY,
+        user_address VARCHAR(64) NOT NULL,
+        reward_type VARCHAR(30) NOT NULL,
+        amount NUMERIC(20, 9) NOT NULL,
+        from_address VARCHAR(64),
+        tx_hash VARCHAR(128),
+        block_number BIGINT,
+        token_type VARCHAR(16),
+        created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS withdraw_rewards_user_idx ON withdraw_rewards(user_address)`,
+      `CREATE INDEX IF NOT EXISTS withdraw_rewards_type_idx ON withdraw_rewards(reward_type)`,
+      `CREATE INDEX IF NOT EXISTS withdraw_rewards_tx_idx ON withdraw_rewards(tx_hash)`,
 
       `CREATE TABLE IF NOT EXISTS sol_rewards (
         id SERIAL PRIMARY KEY,
@@ -645,6 +661,19 @@ CREATE TABLE IF NOT EXISTS rewards (
     tx_hash VARCHAR(128),
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
+
+  -- Withdraw rewards table
+  CREATE TABLE IF NOT EXISTS withdraw_rewards (
+    id SERIAL PRIMARY KEY,
+    user_address VARCHAR(64) NOT NULL,
+    reward_type VARCHAR(30) NOT NULL,
+    amount NUMERIC(20, 9) NOT NULL,
+    from_address VARCHAR(64),
+    tx_hash VARCHAR(128),
+    block_number BIGINT,
+    token_type VARCHAR(16),
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+  );
 
 -- SOL rewards table
 CREATE TABLE IF NOT EXISTS sol_rewards (

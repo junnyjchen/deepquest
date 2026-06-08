@@ -138,6 +138,28 @@ export const withdrawals = pgTable(
   ]
 );
 
+// ============ 提现奖励同步表 ============
+export const withdrawRewards = pgTable(
+  "withdraw_rewards",
+  {
+    id: serial().primaryKey(),
+    user_address: varchar("user_address", { length: 64 }).notNull(),
+    reward_type: varchar("reward_type", { length: 30 }).notNull(),
+    amount: numeric("amount", { precision: 20, scale: 9 }).notNull(),
+    from_address: varchar("from_address", { length: 64 }),
+    tx_hash: varchar("tx_hash", { length: 128 }),
+    block_number: numeric("block_number", { precision: 20, scale: 0 }),
+    token_type: varchar("token_type", { length: 16 }),
+    created_at: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("withdraw_rewards_user_idx").on(table.user_address),
+    index("withdraw_rewards_type_idx").on(table.reward_type),
+    index("withdraw_rewards_tx_idx").on(table.tx_hash),
+    index("withdraw_rewards_created_idx").on(table.created_at),
+  ]
+);
+
 // ============ LP质押记录表 ============
 export const lpStakes = pgTable(
   "lp_stakes",

@@ -10,6 +10,7 @@ import path from 'path';
 // 状态文件路径（存储在项目根目录的 .sync-state 文件）
 const STATE_FILE = path.join(process.cwd(), '.sync-state.json');
 const STAKE_STATE_FILE = path.join(process.cwd(), '.stake-sync-state.json');
+const REWARD_STATE_FILE = path.join(process.cwd(), '.reward-sync-state.json');
 
 /**
  * 同步状态接口
@@ -43,6 +44,14 @@ export interface StakeSyncState {
   version: number;
 }
 
+export interface RewardSyncState {
+  lastProcessedBlock: number;
+  lastSyncTime: string | null;
+  lastError: string | null;
+  recentEventIds: string[];
+  version: number;
+}
+
 /**
  * 默认状态
  */
@@ -60,6 +69,14 @@ const defaultStakeState: StakeSyncState = {
   lastError: null,
   recentEventIds: [],
   positions: {},
+  version: 1,
+};
+
+const defaultRewardState: RewardSyncState = {
+  lastProcessedBlock: 0,
+  lastSyncTime: null,
+  lastError: null,
+  recentEventIds: [],
   version: 1,
 };
 
@@ -102,6 +119,24 @@ export function loadStakeSyncState(): StakeSyncState {
   return { ...defaultStakeState };
 }
 
+export function loadRewardSyncState(): RewardSyncState {
+  try {
+    if (fs.existsSync(REWARD_STATE_FILE)) {
+      const content = fs.readFileSync(REWARD_STATE_FILE, 'utf-8');
+      const state = JSON.parse(content) as Partial<RewardSyncState>;
+      return {
+        ...defaultRewardState,
+        ...state,
+        recentEventIds: Array.isArray(state.recentEventIds) ? state.recentEventIds : [],
+      };
+    }
+  } catch (error) {
+    console.error('[SyncState] 加载奖励同步状态文件失败:', error);
+  }
+
+  return { ...defaultRewardState };
+}
+
 /**
  * 保存同步状态到文件
  */
@@ -123,6 +158,15 @@ export function saveStakeSyncState(state: StakeSyncState): void {
   }
 }
 
+export function saveRewardSyncState(state: RewardSyncState): void {
+  try {
+    fs.writeFileSync(REWARD_STATE_FILE, JSON.stringify(state, null, 2), 'utf-8');
+    console.log('[SyncState] 奖励同步状态已保存');
+  } catch (error) {
+    console.error('[SyncState] 保存奖励同步状态文件失败:', error);
+  }
+}
+
 /**
  * 获取上次同步的索引
  */
@@ -135,6 +179,10 @@ export function getStakeSyncState(): StakeSyncState {
   return loadStakeSyncState();
 }
 
+export function getRewardSyncState(): RewardSyncState {
+  return loadRewardSyncState();
+}
+
 export function updateStakeSyncState(statePatch: Partial<StakeSyncState>): StakeSyncState {
   const state = loadStakeSyncState();
   const nextState: StakeSyncState = {
@@ -144,6 +192,17 @@ export function updateStakeSyncState(statePatch: Partial<StakeSyncState>): Stake
     positions: statePatch.positions ?? state.positions,
   };
   saveStakeSyncState(nextState);
+  return nextState;
+}
+
+export function updateRewardSyncState(statePatch: Partial<RewardSyncState>): RewardSyncState {
+  const state = loadRewardSyncState();
+  const nextState: RewardSyncState = {
+    ...state,
+    ...statePatch,
+    recentEventIds: statePatch.recentEventIds ?? state.recentEventIds,
+  };
+  saveRewardSyncState(nextState);
   return nextState;
 }
 
@@ -180,6 +239,11 @@ export function resetStakeSyncState(): void {
   saveStakeSyncState({ ...defaultStakeState });
 }
 
+export function resetRewardSyncState(): void {
+  console.log('[SyncState] 重置奖励同步状态');
+  saveRewardSyncState({ ...defaultRewardState });
+}
+
 /**
  * 获取完整的同步状态
  */
@@ -189,6 +253,10 @@ export function getFullSyncState(): SyncState {
 
 export function getFullStakeSyncState(): StakeSyncState {
   return loadStakeSyncState();
+}
+
+export function getFullRewardSyncState(): RewardSyncState {
+  return loadRewardSyncState();
 }
 
 /**
@@ -207,6 +275,13 @@ export function updateStakeSyncError(error: string | null): void {
   saveStakeSyncState(state);
 }
 
+export function updateRewardSyncError(error: string | null): void {
+  const state = loadRewardSyncState();
+  state.lastError = error;
+  state.lastSyncTime = new Date().toISOString();
+  saveRewardSyncState(state);
+}
+
 /**
  * 初始化状态文件（如果不存在）
  */
@@ -219,5 +294,10 @@ export function initSyncStateFile(): void {
   if (!fs.existsSync(STAKE_STATE_FILE)) {
     console.log('[SyncState] 初始化质押同步状态文件');
     saveStakeSyncState({ ...defaultStakeState });
+  }
+
+  if (!fs.existsSync(REWARD_STATE_FILE)) {
+    console.log('[SyncState] 初始化奖励同步状态文件');
+    saveRewardSyncState({ ...defaultRewardState });
   }
 }
