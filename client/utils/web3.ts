@@ -578,17 +578,17 @@ export const depositSOLOnChain = async (
       throw new Error(`入金失败：SOL 授权额度不足，请先授权主合约（allow=${ethers.formatEther(solAllowance)}）`);
     }
 
-    if (!isWhitelisted) {
-      const [daily, limit] = await Promise.all([
-        contract.dailyDeposit(userAddress).catch(() => 0n),
-        contract.currentDepositLimit().catch(() => 0n),
-      ]);
-      if (typeof daily === 'bigint' && typeof limit === 'bigint' && daily + amountInWei > limit) {
-        throw new Error(
-          `入金失败：超过当日限额（!lim），已入金=${ethers.formatEther(daily)}，限额=${ethers.formatEther(limit)}`
-        );
-      }
-    }
+    // if (!isWhitelisted) {
+    //   const [daily, limit] = await Promise.all([
+    //     contract.dailyDeposit(userAddress).catch(() => 0n),
+    //     contract.currentDepositLimit().catch(() => 0n),
+    //   ]);
+    //   if (typeof daily === 'bigint' && typeof limit === 'bigint' && daily + amountInWei > limit) {
+    //     throw new Error(
+    //       `入金失败：超过当日限额（!lim），已入金=${ethers.formatEther(daily)}，限额=${ethers.formatEther(limit)}`
+    //     );
+    //   }
+    // }
   } catch (preflightError) {
     console.error('[Web3] 入金预检查失败:', preflightError);
     throw preflightError;
