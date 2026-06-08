@@ -2286,6 +2286,66 @@ router.post('/sync/stakes/incremental', async (req, res) => {
 });
 
 /**
+ * 获取奖励事件增量同步状态
+ * GET /api/v1/dapp/sync/rewards/status
+ */
+router.get('/sync/rewards/status', async (req, res) => {
+  try {
+    const { getRewardSyncStatus } = await import('../utils/sync-chain-reward');
+    const status = getRewardSyncStatus();
+
+    res.json({
+      code: 0,
+      data: status,
+    });
+  } catch (error: any) {
+    console.error('获取奖励同步状态失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: error.message || '获取奖励同步状态失败',
+    });
+  }
+});
+
+/**
+ * 触发奖励事件增量同步
+ * POST /api/v1/dapp/sync/rewards/incremental
+ * Header: X-API-Key (可选的 API 密钥验证)
+ *
+ * 说明:
+ * - 直接通过 eth_getLogs 拉取 LPRewardClaimed、StakeRewardClaimed、WithdrawSOL、WithdrawDQ
+ * - 将结果增量写入 withdraw_rewards
+ */
+router.post('/sync/rewards/incremental', async (req, res) => {
+  try {
+    const apiKey = req.headers['x-api-key'];
+    const expectedApiKey = process.env.SYNC_API_KEY;
+
+    if (expectedApiKey && apiKey !== expectedApiKey) {
+      return res.status(401).json({
+        code: 401,
+        message: '无效的 API Key',
+      });
+    }
+
+    const { syncRewardDataIncremental } = await import('../utils/sync-chain-reward');
+    const result = await syncRewardDataIncremental();
+
+    res.json({
+      code: 0,
+      message: '奖励增量同步完成',
+      data: result,
+    });
+  } catch (error: any) {
+    console.error('奖励增量同步失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: error.message || '奖励增量同步失败',
+    });
+  }
+});
+
+/**
  * 重置同步索引（重新开始完整同步）
  * DELETE /api/v1/dapp/sync/index
  * Header: X-API-Key (可选的 API 密钥验证)
@@ -2365,6 +2425,39 @@ router.delete('/sync/stakes/index', async (req, res) => {
     res.status(500).json({
       code: 500,
       message: error.message || '重置质押同步索引失败',
+    });
+  }
+});
+
+/**
+ * 重置奖励事件同步索引
+ * DELETE /api/v1/dapp/sync/rewards/index
+ * Header: X-API-Key (可选的 API 密钥验证)
+ */
+router.delete('/sync/rewards/index', async (req, res) => {
+  try {
+    const apiKey = req.headers['x-api-key'];
+    const expectedApiKey = process.env.SYNC_API_KEY;
+
+    if (expectedApiKey && apiKey !== expectedApiKey) {
+      return res.status(401).json({
+        code: 401,
+        message: '无效的 API Key',
+      });
+    }
+
+    const { resetRewardSyncIndex } = await import('../utils/sync-chain-reward');
+    resetRewardSyncIndex();
+
+    res.json({
+      code: 0,
+      message: '奖励同步索引已重置，下次会从起始区块重新扫描',
+    });
+  } catch (error: any) {
+    console.error('重置奖励同步索引失败:', error);
+    res.status(500).json({
+      code: 500,
+      message: error.message || '重置奖励同步索引失败',
     });
   }
 });
