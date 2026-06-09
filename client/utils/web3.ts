@@ -1086,11 +1086,18 @@ export const claimPartnerOnChain = async (
 export const claimSOLOnChain = async (
   signer: ethers.Signer
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedCardContract(signer);
+  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
+  const userAddress = await signer.getAddress();
+  const stakeContract = getStakeCoreContract();
+  const pending = await stakeContract.userPendingSOL(userAddress).catch(() => 0n);
 
-  console.log('[Web3] 通过 DQCard 领取节点 SOL 奖励');
+  if (BigInt(pending) <= 0n) {
+    throw new Error('当前没有可领取的 SOL 奖励');
+  }
 
-  const tx = await contract.claimNodeSOLReward();
+  console.log('[Web3] 通过 DQMCore 提取 SOL 奖励（直推+见点+管理）');
+
+  const tx = await contract.withdrawSOL(pending);
   console.log('[Web3] 交易已发送:', tx.hash);
 
   return tx;
