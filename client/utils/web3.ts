@@ -1038,17 +1038,8 @@ export const sellDQForSOL = async (
 export const claimNFTOnChain = async (
   signer: ethers.Signer
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedStakeCoreContract(signer);
-  const userAddress = await signer.getAddress();
-
-  const nodeLevel = Number(await contract.userNodeLevel(userAddress).catch(() => 0));
-  if (nodeLevel <= 0) {
-    throw new Error('当前地址没有可领取节点奖励的节点等级');
-  }
-
-  console.log('[Web3] 通过 StakeCore 领取节点奖励（当前奖励池为 A 桶）');
-
-  const tx = await contract.claimNodeReward(0);
+  const contract = await getSignedCardContract(signer);
+  const tx = await contract.claimNodeDQReward();
   console.log('[Web3] 交易已发送:', tx.hash);
 
   return tx;
@@ -1097,7 +1088,7 @@ export const claimSOLOnChain = async (
 
   console.log('[Web3] 通过 DQMCore 提取 SOL 奖励（直推+见点+管理）');
 
-  const tx = await contract.withdrawSOL(pending);
+    const tx = await contract.withdrawSOL(pending);
   console.log('[Web3] 交易已发送:', tx.hash);
 
   return tx;
@@ -1111,9 +1102,9 @@ export const claimFeeOnChain = async (
 ): Promise<ethers.TransactionResponse> => {
   const contract = await getSignedCardContract(signer);
 
-  console.log('[Web3] 通过 DQCard 领取节点 DQ 奖励');
+  console.log('[Web3] 通过 DQCard 领取节点 SOL 奖励');
 
-  const tx = await contract.claimNodeDQReward();
+  const tx = await contract.claimNodeSOLReward();
   console.log('[Web3] 交易已发送:', tx.hash);
 
   return tx;
