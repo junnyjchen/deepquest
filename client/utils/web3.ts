@@ -236,6 +236,10 @@ const getSignedStakeCoreContract = async (
   signer: ethers.Signer
 ): Promise<ethers.Contract> => getSignedStakeContractByRole('core', signer);
 
+const getSignedCardContract = async (
+  signer: ethers.Signer
+): Promise<ethers.Contract> => getSignedContract(CONTRACT_ADDRESSES.DQCARD.address, DQCARD_ABI, signer);
+
 const callProjectDepositStatic = async (
   contract: ethers.Contract,
   amountInWei: bigint
@@ -1082,18 +1086,11 @@ export const claimPartnerOnChain = async (
 export const claimSOLOnChain = async (
   signer: ethers.Signer
 ): Promise<ethers.TransactionResponse> => {
-  const contract = await getSignedContract(CONTRACT_ADDRESSES.DQPROJECT.address, DQPROJECT_ABI, signer);
-  const userAddress = await signer.getAddress();
-  const stakeContract = getStakeCoreContract();
-  const pending = await stakeContract.userPendingSOL(userAddress).catch(() => 0n);
+  const contract = await getSignedCardContract(signer);
 
-  if (BigInt(pending) <= 0n) {
-    throw new Error('当前没有可领取的 SOL 奖励');
-  }
+  console.log('[Web3] 通过 DQCard 领取节点 SOL 奖励');
 
-  console.log('[Web3] 通过 DQMCore 提取 SOL 奖励（直推+见点+管理）');
-
-  const tx = await contract.withdrawSOL(pending);
+  const tx = await contract.claimNodeSOLReward();
   console.log('[Web3] 交易已发送:', tx.hash);
 
   return tx;
@@ -1105,8 +1102,14 @@ export const claimSOLOnChain = async (
 export const claimFeeOnChain = async (
   signer: ethers.Signer
 ): Promise<ethers.TransactionResponse> => {
-  void signer;
-  throw new Error('当前新版合约未提供独立的 claimFee 入口，旧版节点手续费分红接口已废弃。');
+  const contract = await getSignedCardContract(signer);
+
+  console.log('[Web3] 通过 DQCard 领取节点 DQ 奖励');
+
+  const tx = await contract.claimNodeDQReward();
+  console.log('[Web3] 交易已发送:', tx.hash);
+
+  return tx;
 };
 
 /**
@@ -1167,11 +1170,17 @@ export const getPendingReward = async (userAddress: string): Promise<string> => 
 
 /**
  * 获取待领取节点手续费分红（SOL）
- * 新版合约已移除独立 feePool 口径，保留兼容返回 0
+ * 从 DQCard 读取节点 SOL 奖励
  */
 export const getPendingFee = async (userAddress: string): Promise<string> => {
-  void userAddress;
-  return '0';
+  try {
+    const contract = getContract(CONTRACT_ADDRESSES.DQCARD.address, DQCARD_ABI);
+    const pending = await contract.pendingNodeSOL(userAddress);
+    return ethers.formatEther(pending);
+  } catch (error) {
+    console.error('[Web3] 获取待领取节点 SOL 奖励失败:', error);
+    return '0';
+  }
 };
 
 /**
@@ -1493,29 +1502,15 @@ export const getLPReward = async (address: string): Promise<{ lpShare: string; p
 /**
  * 查询用户 NFT 分红
  * @param address 用户地址
- * @returns string 待领取的NFT分红(DQ)
+ * @returns string 待领取的节点 DQ 分红
  */
 export const getNFTReward = async (address: string): Promise<string> => {
   try {
-    const stakeContract = getStakeCoreContract();
-    const nodeLevel = Number(await stakeContract.userNodeLevel(address));
-    if (nodeLevel <= 0) {
-      return '0';
-    }
-
-    const [accReward, claimedReward] = await Promise.all([
-      stakeContract.nA(0),
-      stakeContract.userNftF(address, 0),
-    ]);
-
-    const reward = BigInt(accReward) > BigInt(claimedReward)
-      ? BigInt(accReward) - BigInt(claimedReward)
-      : 0n;
-
-    return ethers.formatEther(reward);
-    
+    const contract = getContract(CONTRACT_ADDRESSES.DQCARD.address, DQCARD_ABI);
+    const pending = await contract.pendingNodeDQ(address);
+    return ethers.formatEther(pending);
   } catch (error) {
-    console.error('[Web3] 查询NFT分红失败:', error);
+    console.error('[Web3] 查询节点 DQ 分红失败:', error);
     return '0';
   }
 };

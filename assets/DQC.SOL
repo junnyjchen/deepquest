@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 // 质押核心合约接口（用于自动设置L等级）
 interface IDQMiningStakeCore {
@@ -18,21 +19,18 @@ interface IDQMCoreForCard {
 }
 
 /**
- * @title DQ Card V2
- * @notice DQC NFT节点卡合约
+ * @title DQ Card V2 + 节点DQ/SOL奖励
+ * @notice DQC NFT节点卡合约 + 节点奖励分发
  * 
  * 卡片类型:
- * - A卡: 500 USDT, 限1000张
- * - B卡: 1500 USDT, 限500张
- * - C卡: 5000 USDT, 限100张
+ * - A卡: 500 USDT
+ * - B卡: 1500 USDT
+ * - C卡: 5000 USDT
  * 
- * 功能:
- * 1. 用户使用USDT购买
- * 2. 管理员铸造
- * 3. 节点业绩追踪
- * 4. NFT转移时更新业绩
+ * 节点DQ奖励(爆块15%): A卡4% : B卡5% : C卡6% (比例4:5:6)
+ * 节点SOL奖励(提现手续费40%): A卡10% : B卡15% : C卡15% (比例10:15:15)
  */
-contract DQCard is ERC721Enumerable, Ownable {
+contract DQCard is ERC721Enumerable, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     
     // ============ USDT合约地址 ============
@@ -71,7 +69,26 @@ contract DQCard is ERC721Enumerable, Ownable {
     mapping(uint256 => uint256) public cardType;           // tokenId -> 卡片类型
     mapping(address => uint256) public userNodePerformance; // 用户节点业绩
     
-    // ============ 事件 ============
+    // ============ 节点DQ奖励（新增） ============
+    address public DQ_TOKEN;
+    uint256[3] public nDQ;                               // DQ累积器: nDQ[idx] = 每卡累计应得DQ
+    mapping(address => mapping(uint8 => uint256)) public userNodeDQDebt;
+    uint256 public nodeDQRatioA = 4;
+    uint256 public nodeDQRatioB = 5;
+    uint256 public nodeDQRatioC = 6;
+    
+    // ============ 节点SOL奖励（新增） ============
+    address public SOL_TOKEN;
+    uint256[3] public nSOL;                              // SOL累积器: nSOL[idx] = 每卡累计应得SOL
+    mapping(address => mapping(uint8 => uint256)) public userNodeSOLDebt;
+    uint256 public nodeSOLRatioA = 10;
+    uint256 public nodeSOLRatioB = 15;
+    uint256 public nodeSOLRatioC = 15;
+    
+    // ============ 紧急暂停（新增） ============
+    bool public paused;
+    
+    // ============ 事件（旧版保留） ============
     event CardMinted(address indexed to, uint256 indexed tokenId, uint256 cardType);
     event CardPurchased(address indexed buyer, uint256 indexed tokenId, uint256 cardType, uint256 price);
     event NodePerformanceUpdated(address indexed user, uint256 performance);
@@ -79,7 +96,15 @@ contract DQCard is ERC721Enumerable, Ownable {
     event MaxSupplyUpdated(uint8 cardType, uint256 newMax);
     event TreasuryUpdated(address indexed treasury);
     
-    // ============ 修饰器 ============
+    // ============ 事件（新增） ============
+    event NodeDQDistributed(uint8 cardType, uint256 amountPerCard);
+    event NodeDQClaimed(address indexed user, uint8 cardType, uint256 amount);
+    event NodeSOLDistributed(uint8 cardType, uint256 amountPerCard);
+    event NodeSOLClaimed(address indexed user, uint8 cardType, uint256 amount);
+    event Paused();
+    event Unpaused();
+    
+    // ============ 修饰器（旧版保留） ============
     modifier onlyM() {
         require(msg.sender == stakeContract || msg.sender == owner(), "!m");
         _;
@@ -90,10 +115,15 @@ contract DQCard is ERC721Enumerable, Ownable {
         _;
     }
     
-    // ============ 构造函数 ============
-    constructor() ERC721("DQ Card", "DQC") Ownable(0x274aCc6397349F21179ed6258A54B2a11B28faF5) {}
+    modifier whenNotPaused() {
+        require(!paused, "paused");
+        _;
+    }
     
-    // ============ 设置函数 ============
+    // ============ 构造函数 ============
+    constructor() ERC721("DQ Card", "DQC") Ownable(msg.sender) {}
+    
+    // ============ 设置函数（旧版保留，不做任何修改） ============
     
     function setTreasury(address _treasury) external onlyOwnerOrAdmin {
         treasury = _treasury;
@@ -132,7 +162,7 @@ contract DQCard is ERC721Enumerable, Ownable {
         emit MaxSupplyUpdated(3, _max);
     }
     
-    // ============ 铸造函数 ============
+    // ============ 铸造函数（旧版保留，不做任何修改） ============
     
     /**
      * @notice 铸造卡片
@@ -255,37 +285,43 @@ contract DQCard is ERC721Enumerable, Ownable {
         emit CardMinted(_to, tokenId, _type);
     }
     
-    // ============ 转移钩子 ============
+    // ============ 转移钩子（旧版逻辑保留 + 新增DQ/SOL debt更新） ============
     
     /**
-     * @notice 转移钩子(OZ 5.x) - 更新节点业绩
+     * @notice 转移钩子(OZ 5.x) - 更新节点业绩 + DQ/SOL debt
      */
     function _update(address to, uint256 tokenId, address auth) internal override returns (address) {
         address from = _ownerOf(tokenId);
         
-        // 从原持有者减去业绩
+        // 从原持有者减去业绩 + 结算debt
         if (from != address(0)) {
             uint256 _cardType = cardType[tokenId];
             uint256 price = getCardPrice(_cardType);
             userNodePerformance[from] -= price;
             emit NodePerformanceUpdated(from, userNodePerformance[from]);
+            // 新增：结算DQ/SOL debt
+            _updateNodeDebt(from, uint8(_cardType));
         }
         
         // 执行转移
         address previousOwner = super._update(to, tokenId, auth);
         
-        // 给新持有者增加业绩
+        // 给新持有者增加业绩 + 设置新debt
         if (to != address(0)) {
             uint256 _cardType = cardType[tokenId];
             uint256 price = getCardPrice(_cardType);
             userNodePerformance[to] += price;
             emit NodePerformanceUpdated(to, userNodePerformance[to]);
+            // 新增：设置DQ/SOL debt（仅转移时，铸造时在_mintCard后单独处理）
+            if (from != address(0)) {
+                _updateNodeDebt(to, uint8(_cardType));
+            }
         }
         
         return previousOwner;
     }
     
-    // ============ 查询函数 ============
+    // ============ 查询函数（旧版保留） ============
     
     /**
      * @notice 获取卡片价格
@@ -340,4 +376,218 @@ contract DQCard is ERC721Enumerable, Ownable {
             IERC20(_token).safeTransfer(_to, _amount);
         }
     }
+    
+    // ============================================================
+    // 以下为新增功能，不修改任何旧版逻辑
+    // ============================================================
+    
+    // ============ 新增：代币地址设置 ============
+    
+    function setDQToken(address _dq) external onlyOwnerOrAdmin {
+        DQ_TOKEN = _dq;
+    }
+    
+    function setSOLToken(address _sol) external onlyOwnerOrAdmin {
+        SOL_TOKEN = _sol;
+    }
+    
+    function setMaxSupply(uint256 _maxA, uint256 _maxB, uint256 _maxC) external onlyOwnerOrAdmin {
+        MAX_A = _maxA;
+        MAX_B = _maxB;
+        MAX_C = _maxC;
+    }
+    
+    /// @notice 设置DQ节点分配比例，总和必须=15
+    function setNodeDQRatios(uint256 _a, uint256 _b, uint256 _c) external onlyOwnerOrAdmin {
+        require(_a + _b + _c == 15, "!15");
+        nodeDQRatioA = _a;
+        nodeDQRatioB = _b;
+        nodeDQRatioC = _c;
+    }
+    
+    /// @notice 设置SOL节点分配比例，总和必须=40
+    function setNodeSOLRatios(uint256 _a, uint256 _b, uint256 _c) external onlyOwnerOrAdmin {
+        require(_a + _b + _c == 40, "!40");
+        nodeSOLRatioA = _a;
+        nodeSOLRatioB = _b;
+        nodeSOLRatioC = _c;
+    }
+    
+    // ============ 新增：节点DQ奖励分发 ============
+    
+    /// @notice 管理员手动填入DQ分发数量，先转DQ到本合约再调用
+    function distributeNodeDQ(uint256 _amount) external onlyOwnerOrAdmin {
+        require(_amount > 0, "0 DQ");
+        require(IERC20(DQ_TOKEN).balanceOf(address(this)) >= _amount, "!bal");
+        _distributeNodeDQ(_amount);
+    }
+    
+    function _distributeNodeDQ(uint256 _amount) internal {
+        if (_amount == 0) return;
+        
+        uint256 _total = nodeDQRatioA + nodeDQRatioB + nodeDQRatioC;
+        uint256 shareA = _amount * nodeDQRatioA / _total;
+        uint256 shareB = _amount * nodeDQRatioB / _total;
+        uint256 shareC = _amount - shareA - shareB;
+        
+        if (totalA > 0) nDQ[0] += shareA / totalA;
+        if (totalB > 0) nDQ[1] += shareB / totalB;
+        if (totalC > 0) nDQ[2] += shareC / totalC;
+        
+        emit NodeDQDistributed(0, totalA > 0 ? shareA / totalA : 0);
+        emit NodeDQDistributed(1, totalB > 0 ? shareB / totalB : 0);
+        emit NodeDQDistributed(2, totalC > 0 ? shareC / totalC : 0);
+    }
+    
+    /// @notice 用户一次性领取所有卡类型的节点DQ奖励
+    function claimNodeDQReward() external nonReentrant whenNotPaused {
+        uint256 totalReward;
+        for (uint8 i = 0; i < 3; i++) {
+            uint256 count = _getCardCount(msg.sender, i);
+            if (count > 0) {
+                uint256 pending = count * nDQ[i];
+                uint256 reward = pending - userNodeDQDebt[msg.sender][i];
+                if (reward > 0) {
+                    userNodeDQDebt[msg.sender][i] = pending;
+                    totalReward += reward;
+                    emit NodeDQClaimed(msg.sender, i, reward);
+                }
+            }
+        }
+        require(totalReward > 0, "!reward");
+        IERC20(DQ_TOKEN).safeTransfer(msg.sender, totalReward);
+    }
+    
+    /// @notice 查询用户待领取节点DQ奖励(所有卡类型合计)
+    function pendingNodeDQ(address _user) external view returns (uint256) {
+        uint256 total;
+        for (uint8 i = 0; i < 3; i++) {
+            uint256 count = _getCardCount(_user, i);
+            total += count * nDQ[i] - userNodeDQDebt[_user][i];
+        }
+        return total;
+    }
+    
+    // ============ 新增：节点SOL奖励分发 ============
+    
+    /// @notice 管理员手动填入SOL分发数量，先转SOL到本合约再调用
+    function distributeNodeSOL(uint256 _amount) external onlyOwnerOrAdmin {
+        require(_amount > 0, "0 SOL");
+        require(IERC20(SOL_TOKEN).balanceOf(address(this)) >= _amount, "!bal");
+        _distributeNodeSOL(_amount);
+    }
+    
+    function _distributeNodeSOL(uint256 _amount) internal {
+        if (_amount == 0) return;
+        
+        uint256 _total = nodeSOLRatioA + nodeSOLRatioB + nodeSOLRatioC;
+        uint256 shareA = _amount * nodeSOLRatioA / _total;
+        uint256 shareB = _amount * nodeSOLRatioB / _total;
+        uint256 shareC = _amount - shareA - shareB;
+        
+        if (totalA > 0) nSOL[0] += shareA / totalA;
+        if (totalB > 0) nSOL[1] += shareB / totalB;
+        if (totalC > 0) nSOL[2] += shareC / totalC;
+        
+        emit NodeSOLDistributed(0, totalA > 0 ? shareA / totalA : 0);
+        emit NodeSOLDistributed(1, totalB > 0 ? shareB / totalB : 0);
+        emit NodeSOLDistributed(2, totalC > 0 ? shareC / totalC : 0);
+    }
+    
+    /// @notice 用户一次性领取所有卡类型的节点SOL奖励
+    function claimNodeSOLReward() external nonReentrant whenNotPaused {
+        uint256 totalReward;
+        for (uint8 i = 0; i < 3; i++) {
+            uint256 count = _getCardCount(msg.sender, i);
+            if (count > 0) {
+                uint256 pending = count * nSOL[i];
+                uint256 reward = pending - userNodeSOLDebt[msg.sender][i];
+                if (reward > 0) {
+                    userNodeSOLDebt[msg.sender][i] = pending;
+                    totalReward += reward;
+                    emit NodeSOLClaimed(msg.sender, i, reward);
+                }
+            }
+        }
+        require(totalReward > 0, "!reward");
+        IERC20(SOL_TOKEN).safeTransfer(msg.sender, totalReward);
+    }
+    
+    /// @notice 查询用户待领取节点SOL奖励(所有卡类型合计)
+    function pendingNodeSOL(address _user) external view returns (uint256) {
+        uint256 total;
+        for (uint8 i = 0; i < 3; i++) {
+            uint256 count = _getCardCount(_user, i);
+            total += count * nSOL[i] - userNodeSOLDebt[_user][i];
+        }
+        return total;
+    }
+    
+    // ============ 新增：内部工具 ============
+    
+    function _getCardCount(address _user, uint8 _type) internal view returns (uint256) {
+        uint256 count;
+        uint256 balance = balanceOf(_user);
+        for (uint256 i = 0; i < balance; i++) {
+            uint256 tokenId = tokenOfOwnerByIndex(_user, i);
+            if (cardType[tokenId] == _type + 1) {  // _type 0=A, 1=B, 2=C; cardType存1,2,3
+                count++;
+            }
+        }
+        return count;
+    }
+    
+    /// @notice 更新用户指定卡类型的DQ/SOL debt
+    function _updateNodeDebt(address _user, uint8 _cardType) internal {
+        uint8 idx = _cardType - 1;  // cardType 1,2,3 → idx 0,1,2
+        uint256 count = _getCardCount(_user, idx);
+        userNodeDQDebt[_user][idx] = count * nDQ[idx];
+        userNodeSOLDebt[_user][idx] = count * nSOL[idx];
+    }
+    
+    // ============ 新增：查询 ============
+    
+    function cardCount(uint256 _type) external view returns (uint256) {
+        if (_type == 0) return totalA;
+        if (_type == 1) return totalB;
+        if (_type == 2) return totalC;
+        return 0;
+    }
+    
+    /// @notice 查询用户全部待领取节点奖励(DQ+SOL)
+    function pendingAllNodeRewards(address _user) external view returns (uint256 dq, uint256 sol) {
+        for (uint8 i = 0; i < 3; i++) {
+            uint256 count = _getCardCount(_user, i);
+            dq += count * nDQ[i] - userNodeDQDebt[_user][i];
+            sol += count * nSOL[i] - userNodeSOLDebt[_user][i];
+        }
+    }
+    
+    // ============ 新增：紧急操作 ============
+    
+    function setPaused(bool _paused) external onlyOwnerOrAdmin {
+        paused = _paused;
+        if (_paused) emit Paused();
+        else emit Unpaused();
+    }
+    
+    /// @notice 紧急提取合约中指定代币的全部余额
+    function emergencyWithdraw(address _token, address _to) external onlyOwnerOrAdmin {
+        require(_to != address(0), "!zero");
+        if (_token == address(0)) {
+            uint256 bal = address(this).balance;
+            if (bal > 0) {
+                (bool success, ) = payable(_to).call{value: bal}("");
+                require(success, "transfer failed");
+            }
+        } else {
+            uint256 bal = IERC20(_token).balanceOf(address(this));
+            if (bal > 0) {
+                IERC20(_token).safeTransfer(_to, bal);
+            }
+        }
+    }
+    
+    // ============ 接收BNB(备用) ============
+    receive() external payable {}
 }

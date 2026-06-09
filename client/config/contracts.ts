@@ -32,7 +32,7 @@ export const CONTRACT_ADDRESSES = {
     name: 'DQToken'
   },
   DQCARD: {
-    address: '0xbe5a39720fDB02fDf744F592350bAB9cd882e785',
+    address: '0x6F431d4F748dc99a21c690A503dbcE429D65EcB5',
     name: 'DQCard'
   },
   SOL: {
